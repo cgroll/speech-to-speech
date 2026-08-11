@@ -13,8 +13,6 @@ hotkey) evdev lets this same process listen for the button itself.
 """
 
 import logging
-import queue
-import re
 import threading
 
 from speech_to_speech import audio_io, input_button, toggle_socket
@@ -23,12 +21,6 @@ from speech_to_speech.stt import SpeechToText
 from speech_to_speech.tts import TextToSpeech
 
 logger = logging.getLogger(__name__)
-
-_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
-
-
-def _split_sentences(text: str) -> list[str]:
-    return [s for s in _SENTENCE_SPLIT_RE.split(text.strip()) if s]
 
 
 class App:
@@ -104,35 +96,12 @@ class App:
         reply = self._llm.send(text)
 
         self._state = "speaking"
-        self._speak_streaming(reply)
+        self._speak(reply)
 
         self._state = "idle"
 
-    def _speak_streaming(self, reply: str) -> None:
-        """Synthesizes and plays sentence-by-sentence: a producer thread
-        generates each sentence's audio while the main thread plays the
-        previous one, so playback of sentence 1 starts as soon as it's
-        ready instead of after the whole (possibly long) reply has been
-        generated. Same producer/consumer shape as _consume_segments, just
-        audio flowing the other way (generation -> playback instead of
-        mic -> transcription)."""
-        sentences = _split_sentences(reply)
-        audio_queue: queue.Queue[tuple | None] = queue.Queue(maxsize=1)
-
-        def _generate() -> None:
-            for sentence in sentences:
-                audio_queue.put(self._tts.synthesize(sentence))
-            audio_queue.put(None)
-
-        producer = threading.Thread(target=_generate, daemon=True)
-        producer.start()
-        while True:
-            item = audio_queue.get()
-            if item is None:
-                break
-            samples, sample_rate = item
-            audio_io.play_audio(samples, sample_rate)
-        producer.join()
+    def _speak(self, reply: str) -> None:
+        audio_io.play_audio_streaming(self._tts.synthesize_streaming(reply))
 
     def run(self) -> None:
         threading.Thread(

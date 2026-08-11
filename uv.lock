@@ -520,6 +520,23 @@ wheels = [
 ]
 
 [[package]]
+name = "faster-qwen3-tts"
+version = "0.3.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "huggingface-hub" },
+    { name = "numpy" },
+    { name = "qwen-tts" },
+    { name = "soundfile" },
+    { name = "torch" },
+    { name = "transformers" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/27/ea/03a22ef4befde982111b509e89b371b2b3066b658f0e43eb5b6de553ea0d/faster_qwen3_tts-0.3.2.tar.gz", hash = "sha256:8fb853b2b896e14858f342245780814c522d3ae06babc717ac926399ad8c3e6f", size = 93311, upload-time = "2026-07-17T11:53:32.064Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ea/c7/49525c63af1644d6706d415c61558c8013c675fbd5ef50bc5e4b7c2641dc/faster_qwen3_tts-0.3.2-py3-none-any.whl", hash = "sha256:b17b2839d56cb178f5c382d85214ae62852b5728830bfeda066e6a15c832a364", size = 42924, upload-time = "2026-07-17T11:53:30.583Z" },
+]
+
+[[package]]
 name = "filelock"
 version = "3.32.2"
 source = { registry = "https://pypi.org/simple" }
@@ -2138,13 +2155,13 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "evdev" },
+    { name = "faster-qwen3-tts" },
     { name = "google-genai" },
     { name = "llvmlite" },
     { name = "numba" },
     { name = "numpy" },
     { name = "onnx-asr", extra = ["cpu", "hub"] },
     { name = "python-dotenv" },
-    { name = "qwen-tts" },
     { name = "setuptools" },
     { name = "sounddevice" },
     { name = "torch" },
@@ -2154,13 +2171,13 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "evdev", specifier = ">=1.9.3" },
+    { name = "faster-qwen3-tts", specifier = ">=0.3.2" },
     { name = "google-genai", specifier = ">=2.17.0" },
     { name = "llvmlite", specifier = ">=0.43" },
     { name = "numba", specifier = ">=0.60" },
     { name = "numpy", specifier = ">=2.4.6" },
     { name = "onnx-asr", extras = ["cpu", "hub"], specifier = ">=0.12.0" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
-    { name = "qwen-tts", specifier = ">=0.1.1" },
     { name = "setuptools", specifier = "<81" },
     { name = "sounddevice", specifier = ">=0.5.5" },
     { name = "torch", specifier = ">=2.13.0" },

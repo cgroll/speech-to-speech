@@ -15,7 +15,7 @@ dependencies = [
     "numpy>=2.4.6",
     "onnx-asr[cpu,hub]>=0.12.0",
     "python-dotenv>=1.2.2",
-    "qwen-tts>=0.1.1",
+    "faster-qwen3-tts>=0.3.2",
     "setuptools<81",
     "sounddevice>=0.5.5",
     "torch>=2.13.0",
