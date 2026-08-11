@@ -9,7 +9,7 @@ authors = [
 requires-python = ">=3.12"
 dependencies = [
     "evdev>=1.9.3",
-    "google-genai>=2.17.0",
+    "claude-agent-sdk>=0.0.16",
     "llvmlite>=0.43",
     "numba>=0.60",
     "numpy>=2.4.6",

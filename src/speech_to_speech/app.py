@@ -16,7 +16,7 @@ import logging
 import threading
 
 from speech_to_speech import audio_io, input_button, toggle_socket
-from speech_to_speech.llm import GeminiConversation
+from speech_to_speech.llm import ClaudeCodeConversation
 from speech_to_speech.stt import SpeechToText
 from speech_to_speech.tts import TextToSpeech
 
@@ -30,13 +30,13 @@ class App:
         self._recorder = audio_io.Recorder()
         self._stt = SpeechToText()
         self._tts = TextToSpeech()
-        self._llm: GeminiConversation | None = None
+        self._llm: ClaudeCodeConversation | None = None
         self._worker: threading.Thread | None = None
         self._transcribed: list[str] = []
 
     def load(self) -> None:
         # Fail fast on a missing API key before spending time loading models.
-        self._llm = GeminiConversation()
+        self._llm = ClaudeCodeConversation()
         self._stt.load()
         self._tts.load()
         logger.info("Ready. Press the Jabra button (or the local toggle hotkey) to start recording.")
