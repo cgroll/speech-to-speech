@@ -1,0 +1,31 @@
+[project]
+name = "speech-to-speech"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "cgroll", email = "groll.christian.edu@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "evdev>=1.9.3",
+    "google-genai>=2.17.0",
+    "llvmlite>=0.43",
+    "numba>=0.60",
+    "numpy>=2.4.6",
+    "onnx-asr[cpu,hub]>=0.12.0",
+    "python-dotenv>=1.2.2",
+    "qwen-tts>=0.1.1",
+    "setuptools<81",
+    "sounddevice>=0.5.5",
+    "torch>=2.13.0",
+    "webrtcvad>=2.0.10",
+]
+
+[project.scripts]
+speech-to-speech = "speech_to_speech:main"
+speech-to-speech-toggle = "speech_to_speech.cli:main_toggle"
+
+[build-system]
+requires = ["uv_build>=0.11.21,<0.12.0"]
+build-backend = "uv_build"
