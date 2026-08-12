@@ -26,6 +26,7 @@ from speech_to_speech.config import STT_MODEL_NAME
 from speech_to_speech.dictate import feedback
 from speech_to_speech.dictate.audio import SAMPLE_RATE, Recorder
 from speech_to_speech.dictate.keymap import fix_for_de_layout
+from speech_to_speech.dictate.protocol import decode_audio
 from speech_to_speech.dictate.protocol import socket_path as _socket_path
 from speech_to_speech.dictate.typing_backend import TypingError, type_text
 
@@ -72,6 +73,13 @@ class Daemon:
             return self._start_recording()
         if name == "stop_recording":
             return self._stop_recording()
+        # transcribe: bypasses Recorder/VAD entirely -- the caller (Telegram
+        # bot, see docs/telegram-bot-proposal.md) already has finished audio
+        # (a downloaded, ffmpeg-decoded voice message) and just wants it run
+        # through the model once, synchronously, like `status` rather than
+        # like a live recording.
+        if name == "transcribe":
+            return self._transcribe_command(cmd)
         return {"ok": False, "error": f"unknown command: {name}"}
 
     def _start_recording(self) -> dict:
@@ -98,6 +106,18 @@ class Daemon:
             self._state = "idle"
         text = " ".join(self._typed).strip()
         return {"ok": True, "text": text}
+
+    def _transcribe_command(self, cmd: dict) -> dict:
+        # Same busy-guard as start_recording -- one desktop user, one mic,
+        # one model instance, so a transcribe request while a live
+        # recording is in progress is refused rather than queued.
+        if self._state != "idle":
+            return {"ok": False, "error": f"busy: {self._state}"}
+        try:
+            audio = decode_audio(cmd["audio"])
+        except (KeyError, ValueError) as exc:
+            return {"ok": False, "error": f"invalid audio payload: {exc}"}
+        return {"ok": True, "text": self._transcribe(audio)}
 
     def _toggle_record(self) -> dict:
         if self._state == "idle":
@@ -173,10 +193,23 @@ def main() -> None:
             conn, _ = server.accept()
             with conn:
                 try:
-                    data = conn.recv(4096)
-                    if not data:
+                    # A single recv(4096) used to be enough -- every command
+                    # was a tiny JSON object. The `transcribe` command's
+                    # audio payload (base64, easily >100KB for a few
+                    # seconds) no longer fits in one read, so loop until the
+                    # client's sock.shutdown(SHUT_WR) signals EOF (see
+                    # protocol.py's send_command), same pattern already used
+                    # below for reading the response back on the client
+                    # side.
+                    chunks = []
+                    while True:
+                        chunk = conn.recv(65536)
+                        if not chunk:
+                            break
+                        chunks.append(chunk)
+                    if not chunks:
                         continue
-                    cmd = json.loads(data.decode())
+                    cmd = json.loads(b"".join(chunks).decode())
                     response = daemon.handle_command(cmd)
                 except Exception as exc:  # noqa: BLE001 - report to client, keep serving
                     logger.exception("Error handling command")

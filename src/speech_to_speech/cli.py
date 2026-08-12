@@ -1,3 +1,4 @@
+import argparse
 import logging
 import sys
 
@@ -8,6 +9,21 @@ logging.basicConfig(
 )
 
 
+def _parse_args() -> argparse.Namespace:
+    # Imported here rather than at module level for the same reason as the
+    # lazy imports in main() below -- main_toggle() doesn't need this either.
+    from speech_to_speech.agent_backend import AGENT_LABELS, DEFAULT_AGENT
+
+    parser = argparse.ArgumentParser(prog="speech-to-speech")
+    parser.add_argument(
+        "--agent",
+        choices=sorted(AGENT_LABELS),
+        default=DEFAULT_AGENT,
+        help=f"LLM backend for the first session (default: {DEFAULT_AGENT}).",
+    )
+    return parser.parse_args()
+
+
 def main() -> None:
     # Imported lazily so `main_toggle` (bound to a hotkey, called often)
     # doesn't pay for torch/model-related imports it never needs.
@@ -15,8 +31,9 @@ def main() -> None:
 
     from speech_to_speech.app import App
 
+    args = _parse_args()
     load_dotenv()
-    app = App()
+    app = App(default_agent=args.agent)
     try:
         app.load()
         app.run()

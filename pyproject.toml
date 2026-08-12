@@ -21,6 +21,7 @@ dependencies = [
     "sounddevice>=0.5.5",
     "torch>=2.13.0",
     "webrtcvad>=2.0.10",
+    "python-telegram-bot>=22.8",
 ]
 
 [project.scripts]
@@ -31,6 +32,8 @@ parakeet-dictate = "speech_to_speech.dictate.cli:main"
 parakeet-dictate-daemon = "speech_to_speech.dictate.daemon:main"
 qwen-tts = "speech_to_speech.tts_daemon.cli:main"
 qwen-tts-daemon = "speech_to_speech.tts_daemon.daemon:main"
+speech-to-speech-telegram-bot = "speech_to_speech.telegram_bot.cli:main"
+speech-to-speech-telegram-bot-daemon = "speech_to_speech.telegram_bot.daemon:main"
 
 [build-system]
 requires = ["uv_build>=0.11.21,<0.12.0"]

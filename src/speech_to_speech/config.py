@@ -3,6 +3,12 @@ and setup (Jabra Link 390 keycode, chosen voice) rather than made
 configurable -- this is a single-user PoC, not a distributable tool."""
 
 import os
+from pathlib import Path
+
+# Repo root, derived from this file's location rather than the process's cwd
+# (which may differ, e.g. when launched via systemd) -- used to scope past
+# Claude Agent SDK sessions to this project (see sessions.py).
+PROJECT_DIR = Path(__file__).resolve().parents[2]
 
 # -- Jabra push-to-talk button -----------------------------------------
 JABRA_DEVICE_NAME = "Jabra Link 390"
@@ -52,6 +58,17 @@ GEMINI_SYSTEM_INSTRUCTION = (
     "keine Überschriften -- deine Antwort wird direkt per Text-to-Speech "
     "vorgelesen."
 )
+
+# -- Telegram-Bot (docs/telegram-bot-proposal.md) ------------------------
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+# Comma-separated chat ids allowed to talk to the bot; every other chat is
+# silently ignored (telegram_bot/daemon.py). Kept as strings since that's
+# what update.effective_chat.id gets compared against after str()'ing it.
+TELEGRAM_ALLOWED_CHAT_IDS = {
+    chat_id.strip()
+    for chat_id in os.environ.get("TELEGRAM_ALLOWED_CHAT_IDS", "").split(",")
+    if chat_id.strip()
+}
 
 # -- Web-Cockpit (Gradio) -------------------------------------------------
 # Bound to localhost only -- the LLM backend runs with bypassPermissions and

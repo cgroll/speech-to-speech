@@ -17,8 +17,8 @@ import logging
 import threading
 import time
 
-from speech_to_speech import cockpit, input_button, stt_client, toggle_socket, tts_client
-from speech_to_speech.llm import ClaudeCodeConversation
+from speech_to_speech import cockpit, input_button, sessions, stt_client, toggle_socket, tts_client
+from speech_to_speech.agent_backend import AGENT_LABELS, AgentConversation, DEFAULT_AGENT, create_conversation
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ STATE_LABELS = {
 
 
 class App:
-    def __init__(self) -> None:
+    def __init__(self, default_agent: str = DEFAULT_AGENT) -> None:
         self._state = "idle"
         self._state_lock = threading.Lock()
         # Mic capture/STT and TTS synthesis/playback both live in shared
@@ -39,7 +39,14 @@ class App:
         # speech_to_speech.tts_daemon.daemon -- docs/architecture-proposal.md
         # "Daemon-Aufspaltung"). stt_client/tts_client just talk to them over
         # Unix sockets, no model state to hold here anymore.
-        self._llm: ClaudeCodeConversation | None = None
+        self._llm: AgentConversation | None = None
+        # Which backend `_llm` currently is (agent_backend.AGENT_CLAUDE /
+        # AGENT_PI) -- set alongside every `self._llm =` assignment below.
+        # Drives the cockpit's current-agent display and the tag a new
+        # session is recorded under (docs/backlog.md, "Mehrere
+        # Agent-Backends", decision 1: sessions carry an agent label).
+        self._default_agent = default_agent
+        self._agent_name = default_agent
         # Replaced with a fresh Event each time a recording is stopped
         # (recording -> thinking); shared by the thinking and speaking
         # phases of that same turn. A barge-in sets it to tell whichever
@@ -63,7 +70,8 @@ class App:
     def load(self) -> None:
         # Fail fast on a missing API key or an unreachable STT/TTS daemon
         # before the app starts listening for a toggle.
-        self._llm = ClaudeCodeConversation()
+        self._llm = create_conversation(self._default_agent)
+        self._agent_name = self._default_agent
         stt_client.ensure_available()
         tts_client.ensure_available()
         logger.info("Ready. Press the Jabra button (or the local toggle hotkey) to start recording.")
@@ -257,7 +265,9 @@ class App:
             value = stats[key]
             return f"{value:.1f}s" if value is not None else "–"
 
+        agent_label = AGENT_LABELS.get(self._agent_name, self._agent_name)
         return (
+            f"Agent: {agent_label}  |  "
             f"Runden: {stats['turns']}  |  "
             f"STT-Zeit (ab Mikro-Stopp): {_fmt('last_stt_s')}  |  "
             f"Letzte Antwortzeit: {_fmt('last_response_s')}  |  "
@@ -265,18 +275,18 @@ class App:
             f"Letzte Sprechzeit: {_fmt('last_speaking_s')}"
         )
 
-    def reset(self) -> None:
-        """Starts a fresh session (cockpit's "Neue Session" button): aborts
-        whatever's in flight, reconnects a new Claude Agent SDK client so no
-        conversation memory carries over, and clears history + stats.
+    def get_agent_name(self) -> str:
+        return self._agent_name
 
-        Deliberately reuses the same interrupt/cancel plumbing as barge-in
-        (self._interrupt, ClaudeCodeConversation.cancel()) instead of adding
-        a separate abort path -- a reset is just "barge-in, then also wipe
-        the history" from the in-flight handler thread's point of view, so
-        its existing "discard reply if interrupted" / "don't touch state if
-        someone else already claimed it" checks apply unchanged.
-        """
+    def _abort_current_turn(self) -> AgentConversation | None:
+        """Shared first half of reset() and resume_session(): claims idle,
+        aborts whatever's in flight (same interrupt/cancel plumbing as
+        barge-in -- self._interrupt, ClaudeCodeConversation.cancel() --
+        rather than a separate abort path, so the in-flight handler
+        thread's existing "discard reply if interrupted" / "don't touch
+        state if someone else already claimed it" checks apply unchanged),
+        and hands back the old LLM client (still open) for the caller to
+        replace and close once its replacement is ready."""
         with self._state_lock:
             state = self._state
             if state in ("thinking", "speaking"):
@@ -291,7 +301,22 @@ class App:
         old_llm = self._llm
         if old_llm is not None and state in ("thinking", "speaking"):
             old_llm.cancel()
-        self._llm = ClaudeCodeConversation()
+        return old_llm
+
+    def reset(self, agent: str | None = None) -> None:
+        """Starts a fresh session (cockpit's "Neue Session" button): aborts
+        whatever's in flight, connects a fresh backend client so no
+        conversation memory carries over, and clears history + stats.
+
+        `agent` picks the backend for the new session (docs/backlog.md,
+        "Mehrere Agent-Backends", decision 3: chosen per new session, not
+        just once at app start) -- defaults to whichever backend was active,
+        so calling reset() with no argument (e.g. any future non-cockpit
+        caller) keeps today's behaviour of just restarting the same one."""
+        agent = agent or self._agent_name
+        old_llm = self._abort_current_turn()
+        self._llm = create_conversation(agent)
+        self._agent_name = agent
         if old_llm is not None:
             old_llm.close()
 
@@ -305,6 +330,43 @@ class App:
                 "last_speaking_s": None,
             }
         logger.info("Session reset.")
+
+    def resume_session(self, choice: str | None) -> None:
+        """Resumes a past session picked in the cockpit's session list
+        (docs/backlog.md, "Frühere Sessions wieder aufnehmen können"/"Mehrere
+        Agent-Backends"): same abort/teardown as reset(), but the fresh
+        backend client is told to `resume` the given session_id instead of
+        starting empty, and the cockpit history is rebuilt from that
+        session's own transcript (sessions.load_session_history()) so the
+        chat pane reflects the restored context too -- not just the LLM's
+        internal memory of it.
+
+        `choice` is a session-list value from sessions.session_choices(),
+        packed as "<agent>:<session_id>" -- resuming always continues with
+        whichever backend originally created that session (no backend
+        switch mid-session), which is exactly what picking it back out of
+        the tagged list means."""
+        if not choice or ":" not in choice:
+            return
+        agent, session_id = choice.split(":", 1)
+
+        old_llm = self._abort_current_turn()
+        self._llm = create_conversation(agent, resume=session_id)
+        self._agent_name = agent
+        if old_llm is not None:
+            old_llm.close()
+
+        restored = sessions.load_session_history(agent, session_id)
+        with self._history_lock:
+            self._history = restored
+            self._stats = {
+                "turns": sum(1 for turn in restored if turn["role"] == "assistant"),
+                "last_stt_s": None,
+                "last_response_s": None,
+                "last_ttfa_s": None,
+                "last_speaking_s": None,
+            }
+        logger.info("Resumed session %s (%d restored turns).", session_id, len(restored))
 
     def run(self) -> None:
         threading.Thread(

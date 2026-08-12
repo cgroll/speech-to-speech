@@ -151,6 +151,11 @@ danach weiter, unabhängig von der App).
 - `tts_daemon/` -- gemeinsamer TTS-Daemon (Daemon + CLI), siehe eigener
   Abschnitt unten. Einziger Ort, an dem das Qwen3-TTS-Modell lädt und
   Wiedergabe stattfindet.
+- `telegram_bot/` -- Telegram-Bot-Daemon (Daemon + CLI), siehe eigener
+  Abschnitt unten. Eigenständiger Prozess, nutzt denselben STT-Daemon
+  (`stt_client.transcribe()`) und dieselbe Agent-Anbindung
+  (`agent_backend.py`) wie die App, aber komplett unabhängig von `app.py`
+  selbst (kein TTS, kein Jabra/Hotkey-Bezug).
 - `app.py` -- State Machine: `idle -> recording -> thinking -> speaking -> idle`,
   angestoßen von beiden Toggle-Quellen (Jabra-Thread + Socket-Thread), gegen
   Races per Lock beim State-Übergang abgesichert.
@@ -269,6 +274,54 @@ Bewusst ohne `[Install]`-Sektion -- der Service startet nie automatisch, nur
 qwen-tts enable     # lädt Modell (ein paar Sekunden)
 qwen-tts status
 qwen-tts disable    # gibt GPU-Speicher wieder frei
+```
+
+## Telegram-Bot (Handy-Zugang)
+
+Vom Handy aus per Telegram eine Text- oder Sprachnachricht an den Agenten
+schicken, Antwort als Text zurück -- kein TTS-Rückkanal, bewusst text-only
+(siehe `docs/telegram-bot-proposal.md` für die Architektur-Entscheidungen).
+Long-Polling, kein offener Port. Sprachnachrichten werden per `ffmpeg` von
+Ogg/Opus nach PCM dekodiert und über den bestehenden STT-Daemon
+transkribiert (`transcribe`-Kommando, `dictate/daemon.py`); das Transkript
+kommt zuerst als eigene Nachricht zurück, danach die Antwort. Pro Chat-ID
+läuft eine eigene `AgentConversation` (Default-Backend `claude`, siehe
+`agent_backend.py`) für Kontext über mehrere Nachrichten -- nicht über
+Neustarts des Bot-Prozesses hinweg persistiert.
+
+### Setup
+
+1. Neuen Bot bei [@BotFather](https://t.me/BotFather) anlegen (eigener Bot
+   empfohlen statt Wiederverwendung des Erinnerungs-Bots, damit sich
+   Erinnerungen und Assistenten-Antworten nicht vermischen), Token notieren.
+2. Eigene Chat-ID herausfinden: dem neuen Bot einmal schreiben, dann
+   `https://api.telegram.org/bot<TOKEN>/getUpdates` aufrufen.
+3. `TELEGRAM_BOT_TOKEN` und `TELEGRAM_ALLOWED_CHAT_IDS` in `.env` eintragen
+   (siehe `.env.example`) -- alle anderen Chat-IDs werden stillschweigend
+   ignoriert.
+4. `parakeet-dictate enable` muss laufen (Sprachnachrichten brauchen den
+   STT-Daemon; reiner Text-Betrieb würde ohne ihn gehen, der Bot verlangt
+   ihn aber beim Start, siehe `telegram_bot/daemon.py`).
+5. systemd-User-Service installieren -- **im Unterschied** zu den beiden
+   Daemons oben startet dieser Service bewusst automatisch beim Login
+   (`[Install]`-Sektion), da der ganze Zweck ist, jederzeit vom Handy aus
+   erreichbar zu sein:
+
+```bash
+mkdir -p ~/.config/systemd/user
+cp systemd/telegram-bot.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now telegram-bot.service
+```
+
+### Nutzung
+
+Läuft nach dem Setup dauerhaft im Hintergrund. Für manuelle Kontrolle:
+
+```bash
+speech-to-speech-telegram-bot status
+speech-to-speech-telegram-bot stop
+speech-to-speech-telegram-bot start
 ```
 
 ## Bekannte Grenzen (PoC-Stand)

@@ -1,0 +1,25 @@
+[Unit]
+Description=Telegram bot bridge for the speech-to-speech agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=PYTHONUNBUFFERED=1
+WorkingDirectory=%h/research/speech-to-speech
+# Calls the venv's installed binary directly rather than `uv run` -- uv is
+# snap-packaged on this machine, and snap re-parents the process into its
+# own snap.astral-uv.*.scope cgroup, which breaks `journalctl -u` filtering
+# for this unit. Run `uv sync` in the project after dependency changes.
+ExecStart=%h/research/speech-to-speech/.venv/bin/speech-to-speech-telegram-bot-daemon
+Restart=on-failure
+RestartSec=5
+
+# Unlike parakeet-dictate.service/qwen-tts.service, this one *is* meant to
+# auto-start at login (`systemctl --user enable telegram-bot.service`,
+# done once during setup) -- the whole point is being reachable from a
+# phone even when nobody is sitting at the machine. It only needs the
+# network (long-polling to Telegram's servers), not a graphical session, so
+# it doesn't wait on graphical-session.target like the other two.
+[Install]
+WantedBy=default.target

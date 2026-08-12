@@ -7,10 +7,11 @@ Kontext für Agenten, die an diesem Projekt arbeiten.
 `speech-to-speech` ist ein Proof-of-Concept für ein Sprach-Interface: Sprache
 rein, Sprache raus. Ein Knopf am Jabra-Headset (oder eine lokale
 Tastenkombination) startet/stoppt eine Aufnahme, das Gesagte wird lokal per
-Parakeet (ONNX, CPU) transkribiert, an ein LLM-Backend geschickt (aktuell der
-Claude Agent SDK, siehe `src/speech_to_speech/llm.py`) und die Antwort wird
-lokal per Qwen3-TTS (GPU, fester Sprecher "aiden") vorgelesen. Ein einziger
-Prozess hält STT- und TTS-Modell warm und läuft im Vordergrund
+Parakeet (ONNX, CPU) transkribiert, an ein LLM-Backend geschickt (Claude Agent
+SDK oder Pi Coding Agent, austauschbar über `--agent`/Cockpit-Auswahl, siehe
+`src/speech_to_speech/agent_backend.py`) und die Antwort wird lokal per
+Qwen3-TTS (GPU, fester Sprecher "aiden") vorgelesen. Ein einziger Prozess
+hält STT- und TTS-Modell warm und läuft im Vordergrund
 (`uv run speech-to-speech`).
 
 Details zu Setup, Architektur der einzelnen Module (`audio_io.py`, `stt.py`,
@@ -20,18 +21,20 @@ sich durch den Code sucht.
 
 ## Wo Roadmap / Backlog / offene Themen stehen
 
-Es gibt (noch) kein separates Backlog-Dokument. Größere, noch nicht
-umgesetzte Architektur-Vorschläge und offene Fragen werden unter `docs/`
-als einzelne Markdown-Dateien festgehalten, mit Status-Zeile am Anfang
-(z.B. "Diskussionsstand, noch nicht umgesetzt") und einem Abschnitt
+Kleinere offene Punkte stehen gesammelt in `docs/backlog.md`. Größere, noch
+nicht umgesetzte Architektur-Vorschläge und offene Fragen werden stattdessen
+als eigene Markdown-Dateien unter `docs/` festgehalten, mit Status-Zeile am
+Anfang (z.B. "Diskussionsstand, noch nicht umgesetzt") und einem Abschnitt
 "Nächste Schritte" am Ende. Aktuell:
 
 - `docs/architecture-proposal.md` -- Vorschlag, STT und TTS als geteilte
   Daemons zu betreiben (analog zum Schwesterprojekt `parakeet-dictate`),
   statt sie fest in diesen monolithischen Prozess eingebaut zu lassen.
 
-Bevor man an Architektur-Änderungen arbeitet: `docs/` auf vorhandene
-Vorschläge prüfen, statt Entscheidungen doppelt zu treffen.
+Bevor man an Architektur-Änderungen arbeitet: `docs/backlog.md` und `docs/`
+auf vorhandene Vorschläge/Entscheidungen prüfen, statt sie doppelt zu
+treffen -- z.B. hält `docs/backlog.md`s Abschnitt "Mehrere Agent-Backends"
+die noch offene Workspace-Eingrenzungsfrage für beide Backends fest.
 
 ## Verwandte Projekte
 

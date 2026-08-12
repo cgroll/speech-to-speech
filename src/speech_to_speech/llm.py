@@ -16,34 +16,27 @@ from claude_agent_sdk import (
     TextBlock,
 )
 
+from speech_to_speech.agent_backend import SYSTEM_PROMPT
+
 logger = logging.getLogger(__name__)
-
-SYSTEM_PROMPT = """\
-You are a voice assistant. Your responses will be read aloud via text-to-speech,
-so format them accordingly:
-- Use plain prose, no markdown, no bullet lists, no tables, no code blocks.
-- Keep responses concise — a spoken answer should rarely exceed a few sentences
-  unless detail is explicitly requested.
-- For numbers and symbols, spell them out in a way that sounds natural when read
-  aloud (e.g. "fifty percent" instead of "50%").
-
-You have full tool access (Bash, file read/write, web search, etc.) with all
-permission checks bypassed. Before executing any command that is destructive or
-hard to reverse — deleting files, overwriting data, pushing to remote — pause and
-ask the user for explicit confirmation, since there is no automated approval UI.
-"""
 
 
 class ClaudeCodeConversation:
-    def __init__(self) -> None:
+    def __init__(self, resume: str | None = None) -> None:
+        # `resume` is a past session_id (see sessions.py / docs/backlog.md,
+        # "Frühere Sessions wieder aufnehmen können") -- the SDK loads that
+        # session's history from its own on-disk JSONL transcript and
+        # continues it, so no conversation state needs to be reconstructed
+        # here beyond what App.resume_session() rebuilds for cockpit display.
         self._loop = asyncio.new_event_loop()
         threading.Thread(target=self._loop.run_forever, daemon=True).start()
-        asyncio.run_coroutine_threadsafe(self._start(), self._loop).result(timeout=30)
+        asyncio.run_coroutine_threadsafe(self._start(resume), self._loop).result(timeout=30)
 
-    async def _start(self) -> None:
+    async def _start(self, resume: str | None) -> None:
         options = ClaudeAgentOptions(
             permission_mode="bypassPermissions",
             system_prompt=SYSTEM_PROMPT,
+            resume=resume,
         )
         self._mgr = ClaudeSDKClient(options=options)
         self._client = await self._mgr.__aenter__()

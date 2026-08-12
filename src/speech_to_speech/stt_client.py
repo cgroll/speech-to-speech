@@ -1,19 +1,23 @@
 """Client for the shared STT daemon (speech_to_speech.dictate.daemon),
-used by the voice-chat pipeline (app.py) instead of loading its own
-Parakeet model and owning the mic directly -- see
-docs/architecture-proposal.md, "Daemon-Aufspaltung" step 4.
+used by the voice-chat pipeline (app.py) and the Telegram bot
+(telegram_bot/daemon.py) instead of loading their own Parakeet model and
+owning the mic directly -- see docs/architecture-proposal.md,
+"Daemon-Aufspaltung" step 4, and docs/telegram-bot-proposal.md.
 
 The daemon must already be running (`parakeet-dictate enable`); this
 module never starts or stops it itself, same "explicit control, no
 auto-start" principle as dictate/cli.py's toggle command. It talks to the
 daemon's "silent" start_recording/stop_recording commands (see
 dictate/daemon.py), which mirror the hotkey's toggle_record mechanics but
-return the transcript instead of typing it via ydotool.
+return the transcript instead of typing it via ydotool, plus `transcribe`
+for already-recorded audio (no live mic involved at all).
 """
 
 import logging
 
-from speech_to_speech.dictate.protocol import send_command
+import numpy as np
+
+from speech_to_speech.dictate.protocol import encode_audio, send_command
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +25,12 @@ logger = logging.getLogger(__name__)
 # seconds after the mic is stopped; generous timeout so a slow final
 # segment doesn't get mistaken for a dead daemon.
 _STOP_TIMEOUT_S = 60.0
+
+# transcribe() is a single already-recorded utterance (a Telegram voice
+# message), not an open-ended live recording -- much shorter than
+# _STOP_TIMEOUT_S covers, but still generous relative to typical inference
+# time for a few seconds/minutes of audio.
+_TRANSCRIBE_TIMEOUT_S = 60.0
 
 
 class DaemonUnavailableError(RuntimeError):
@@ -50,6 +60,18 @@ def start_recording() -> None:
 
 def stop_recording() -> str:
     result = send_command({"cmd": "stop_recording"}, timeout=_STOP_TIMEOUT_S)
+    if result is None:
+        raise DaemonUnavailableError("STT daemon not running -- run `parakeet-dictate enable`.")
+    if not result.get("ok"):
+        raise RuntimeError(f"STT daemon error: {result.get('error')}")
+    return result.get("text", "")
+
+
+def transcribe(audio: np.ndarray) -> str:
+    """Transcribes already-recorded 16 kHz mono float32 audio -- no live
+    mic/VAD involved (see dictate/daemon.py's `transcribe` command). Used by
+    the Telegram bot for downloaded, ffmpeg-decoded voice messages."""
+    result = send_command({"cmd": "transcribe", "audio": encode_audio(audio)}, timeout=_TRANSCRIBE_TIMEOUT_S)
     if result is None:
         raise DaemonUnavailableError("STT daemon not running -- run `parakeet-dictate enable`.")
     if not result.get("ok"):
