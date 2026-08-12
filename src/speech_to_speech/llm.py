@@ -66,6 +66,22 @@ class ClaudeCodeConversation:
         future = asyncio.run_coroutine_threadsafe(self._client.interrupt(), self._loop)
         future.add_done_callback(_log_if_failed)
 
+    def close(self) -> None:
+        """Tears down the SDK client and stops this instance's event-loop
+        thread. Used by the cockpit's "new session" reset, which replaces
+        `App._llm` with a freshly-constructed `ClaudeCodeConversation` and
+        closes the old one afterwards -- best-effort, since by the time this
+        runs nothing should still be calling into the old instance."""
+
+        async def _stop() -> None:
+            await self._mgr.__aexit__(None, None, None)
+
+        try:
+            asyncio.run_coroutine_threadsafe(_stop(), self._loop).result(timeout=10)
+        except Exception:
+            logger.warning("Error closing Claude client during reset", exc_info=True)
+        self._loop.call_soon_threadsafe(self._loop.stop)
+
     async def _query(self, text: str) -> str:
         await self._client.query(text)
         parts: list[str] = []

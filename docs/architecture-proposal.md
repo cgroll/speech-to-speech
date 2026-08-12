@@ -121,8 +121,9 @@ ist, nicht Modell-Serving:
 
 ## Zusatz-Feature: Unterbrechbare Sprachausgabe (Barge-in)
 
-Status: Diskussionsstand, noch nicht umgesetzt. Festgehalten am 2026-08-12,
-im selben Kontext wie der Daemon-Vorschlag oben entstanden.
+Status: Umgesetzt (Commit "Add barge-in support to interrupt
+thinking/speaking"). Festgehalten am 2026-08-12, im selben Kontext wie der
+Daemon-Vorschlag oben entstanden.
 
 ### Problem
 
@@ -178,7 +179,10 @@ sie sich später fast unverändert in den Daemon übernehmen lässt.
 
 ## Zusatz-Feature: Web-Cockpit als drittes Steuer-Interface
 
-Status: Diskussionsstand, noch nicht umgesetzt. Festgehalten am 2026-08-12.
+Status: Umgesetzt (Chatverlauf, Unterbrechen-Button, Kennzahlen,
+Neue-Session-Reset -- `src/speech_to_speech/cockpit.py`, läuft lokal auf
+`http://127.0.0.1:7860`). Festgehalten am 2026-08-12. Offen bleibt nur der
+mobile Zugriff, siehe Abschnitt unten.
 
 ### Motivation
 
@@ -282,10 +286,10 @@ Daemon-Aufspaltung zuletzt.
 
 ## Nächste Schritte (Ergänzung, für die spätere Session)
 
-7. Abbruch-Event in `audio_io.play_audio_streaming` und `llm.cancel()`
+7. ~~Abbruch-Event in `audio_io.play_audio_streaming` und `llm.cancel()`
    umsetzen, Zustandsmaschine in `app.py` um die Abbruch-Übergänge
-   erweitern.
-8. Chatverlauf-State und `reset()` in `App` ergänzen, dann Gradio-Cockpit
-   als dritten Trigger-Thread aufsetzen.
+   erweitern.~~ Erledigt.
+8. ~~Chatverlauf-State und `reset()` in `App` ergänzen, dann Gradio-Cockpit
+   als dritten Trigger-Thread aufsetzen.~~ Erledigt.
 9. Entscheidung zu mobilem Zugriff treffen (Browser vs. Flutter), erst
-   danach ggf. VPN/Tunnel-Absicherung einrichten.
+   danach ggf. VPN/Tunnel-Absicherung einrichten. Weiterhin offen.

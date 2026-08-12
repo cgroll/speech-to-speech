@@ -14,13 +14,21 @@ hotkey) evdev lets this same process listen for the button itself.
 
 import logging
 import threading
+import time
 
-from speech_to_speech import audio_io, input_button, toggle_socket
+from speech_to_speech import audio_io, cockpit, input_button, toggle_socket
 from speech_to_speech.llm import ClaudeCodeConversation
 from speech_to_speech.stt import SpeechToText
 from speech_to_speech.tts import TextToSpeech
 
 logger = logging.getLogger(__name__)
+
+STATE_LABELS = {
+    "idle": "Bereit",
+    "recording": "Aufnahme läuft…",
+    "thinking": "Denkt nach…",
+    "speaking": "Spricht…",
+}
 
 
 class App:
@@ -38,6 +46,14 @@ class App:
         # phases of that same turn. A barge-in sets it to tell whichever
         # phase is currently in flight to abort instead of continuing.
         self._interrupt = threading.Event()
+        # Chat history + timing stats for the web cockpit (docs/architecture
+        # -proposal.md, "Web-Cockpit"). Guarded by their own lock, separate
+        # from _state_lock, since cockpit reads/writes here don't need to
+        # participate in the (short, latency-sensitive) state-transition
+        # locking above.
+        self._history_lock = threading.Lock()
+        self._history: list[dict[str, str]] = []
+        self._stats = {"turns": 0, "last_response_s": None, "last_speaking_s": None}
 
     def load(self) -> None:
         # Fail fast on a missing API key before spending time loading models.
@@ -133,12 +149,20 @@ class App:
             return
 
         logger.info("Transcribed: %s", text)
+        self._append_history("user", text)
         assert self._llm is not None
+        t0 = time.monotonic()
         reply = self._llm.send(text)
+        response_s = time.monotonic() - t0
 
         if interrupt.is_set():
             logger.info("Interrupted while thinking -- discarding reply.")
             return
+
+        with self._history_lock:
+            self._stats["turns"] += 1
+            self._stats["last_response_s"] = response_s
+        self._append_history("assistant", reply)
 
         with self._state_lock:
             if self._state != "thinking":
@@ -151,16 +175,79 @@ class App:
                 self._state = "idle"
 
     def _speak(self, reply: str, interrupt: threading.Event) -> None:
+        t0 = time.monotonic()
         audio_io.play_audio_streaming(self._tts.synthesize_streaming(reply), stop_event=interrupt)
+        with self._history_lock:
+            self._stats["last_speaking_s"] = time.monotonic() - t0
+
+    def _append_history(self, role: str, content: str) -> None:
+        with self._history_lock:
+            self._history.append({"role": role, "content": content})
+
+    # -- Cockpit-facing read/write API ------------------------------------
+    # Called from cockpit.py's Gradio callbacks, which run on Gradio's own
+    # request threads -- everything here either takes a lock already used
+    # elsewhere (state_lock, history_lock) or, for on_toggle()/reset(), was
+    # already designed to be called from more than one trigger thread.
+
+    def get_state(self) -> str:
+        return STATE_LABELS.get(self._state, self._state)
+
+    def get_history(self) -> list[dict[str, str]]:
+        with self._history_lock:
+            return list(self._history)
+
+    def get_stats_text(self) -> str:
+        with self._history_lock:
+            stats = dict(self._stats)
+        response = f"{stats['last_response_s']:.1f}s" if stats["last_response_s"] is not None else "–"
+        speaking = f"{stats['last_speaking_s']:.1f}s" if stats["last_speaking_s"] is not None else "–"
+        return f"Runden: {stats['turns']}  |  Letzte Antwortzeit: {response}  |  Letzte Sprechzeit: {speaking}"
+
+    def reset(self) -> None:
+        """Starts a fresh session (cockpit's "Neue Session" button): aborts
+        whatever's in flight, reconnects a new Claude Agent SDK client so no
+        conversation memory carries over, and clears history + stats.
+
+        Deliberately reuses the same interrupt/cancel plumbing as barge-in
+        (self._interrupt, ClaudeCodeConversation.cancel()) instead of adding
+        a separate abort path -- a reset is just "barge-in, then also wipe
+        the history" from the in-flight handler thread's point of view, so
+        its existing "discard reply if interrupted" / "don't touch state if
+        someone else already claimed it" checks apply unchanged.
+        """
+        with self._state_lock:
+            state = self._state
+            if state in ("thinking", "speaking"):
+                self._interrupt.set()
+            self._state = "idle"
+
+        if state == "recording":
+            self._recorder.stop()
+            if self._worker is not None:
+                self._worker.join()
+
+        old_llm = self._llm
+        if old_llm is not None and state in ("thinking", "speaking"):
+            old_llm.cancel()
+        self._llm = ClaudeCodeConversation()
+        if old_llm is not None:
+            old_llm.close()
+
+        with self._history_lock:
+            self._history = []
+            self._stats = {"turns": 0, "last_response_s": None, "last_speaking_s": None}
+        logger.info("Session reset.")
 
     def run(self) -> None:
         threading.Thread(
             target=toggle_socket.serve, args=(self.on_toggle,), daemon=True
         ).start()
         threading.Thread(target=self._run_jabra_listener, daemon=True).start()
-        # Both triggers run in background threads; block here until Ctrl+C
-        # so the app still works via the local hotkey alone if the Jabra
-        # isn't plugged in.
+        threading.Thread(target=self._run_cockpit, daemon=True).start()
+        # All triggers run in background threads; block here until Ctrl+C so
+        # the app still works via the local hotkey alone if e.g. the Jabra
+        # isn't plugged in or the cockpit's port is already taken.
         threading.Event().wait()
 
     def _run_jabra_listener(self) -> None:
@@ -168,3 +255,9 @@ class App:
             input_button.listen_for_toggle(self.on_toggle)
         except RuntimeError as exc:
             logger.warning("Jabra button unavailable (%s). Local toggle hotkey still works.", exc)
+
+    def _run_cockpit(self) -> None:
+        try:
+            cockpit.run(self)
+        except OSError as exc:
+            logger.warning("Web cockpit unavailable (%s). Jabra button/local hotkey still work.", exc)

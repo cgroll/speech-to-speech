@@ -103,6 +103,13 @@ Ctrl+C.
 - `input_button.py` -- `evdev`-Listener für den Jabra-Knopf.
 - `toggle_socket.py` -- Unix-Socket-Server/-Client für den optionalen
   lokalen Hotkey (GNOME-Shortcut -> `speech-to-speech-toggle` -> Socket).
+- `cockpit.py` -- Gradio-Web-Cockpit, drittes Steuer-Interface neben Jabra
+  und lokalem Hotkey: Chatverlauf, Unterbrechen-Button (ruft dieselbe
+  `on_toggle()` wie die anderen zwei Trigger), Kennzahlen (Antwort-/
+  Sprechzeit), "Neue Session"-Reset. Läuft als eigener Hintergrund-Thread im
+  selben Prozess, standardmäßig nur auf `http://127.0.0.1:7860` erreichbar
+  (siehe `docs/architecture-proposal.md` zum Sicherheitsgrund und zu
+  offenem mobilem Zugriff).
 - `app.py` -- State Machine: `idle -> recording -> thinking -> speaking -> idle`,
   angestoßen von beiden Toggle-Quellen (Jabra-Thread + Socket-Thread), gegen
   Races per Lock beim State-Übergang abgesichert.

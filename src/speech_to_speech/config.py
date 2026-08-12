@@ -51,3 +51,12 @@ GEMINI_SYSTEM_INSTRUCTION = (
     "keine Überschriften -- deine Antwort wird direkt per Text-to-Speech "
     "vorgelesen."
 )
+
+# -- Web-Cockpit (Gradio) -------------------------------------------------
+# Bound to localhost only -- the LLM backend runs with bypassPermissions and
+# full tool access, so exposing this beyond the local machine needs a VPN or
+# access-gated tunnel (see docs/architecture-proposal.md), not a config flag.
+COCKPIT_HOST = "127.0.0.1"
+COCKPIT_PORT = 7860
+# Poll interval for the cockpit's live state/chat/stats refresh.
+COCKPIT_POLL_SECONDS = 0.3
