@@ -54,6 +54,18 @@ class ClaudeCodeConversation:
             self._query(text), self._loop
         ).result(timeout=300)
 
+    def cancel(self) -> None:
+        """Best-effort interrupt of an in-flight query (e.g. on barge-in).
+
+        Fire-and-forget: does not block on the result, so it never delays the
+        caller -- typically a button-press thread that needs to move on to
+        starting a new recording right away. Safe to call even if nothing is
+        in flight (e.g. barge-in during "speaking", after the query already
+        finished); the SDK just has nothing to interrupt.
+        """
+        future = asyncio.run_coroutine_threadsafe(self._client.interrupt(), self._loop)
+        future.add_done_callback(_log_if_failed)
+
     async def _query(self, text: str) -> str:
         await self._client.query(text)
         parts: list[str] = []
@@ -70,3 +82,9 @@ class ClaudeCodeConversation:
         reply = "".join(parts).strip()
         logger.info("Claude Code reply: %s", reply[:200])
         return reply
+
+
+def _log_if_failed(future: asyncio.Future) -> None:
+    exc = future.exception()
+    if exc is not None:
+        logger.warning("Interrupt failed: %s", exc)

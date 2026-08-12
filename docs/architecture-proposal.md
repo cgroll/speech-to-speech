@@ -118,3 +118,174 @@ ist, nicht Modell-Serving:
 6. `speech-to-speech`: `tts.py`/Playback-Teil durch `tts-daemon`-Client
    ersetzen; `app.py` wird zum reinen Orchestrator (Toggle -> stt-daemon ->
    Claude -> tts-daemon).
+
+## Zusatz-Feature: Unterbrechbare Sprachausgabe (Barge-in)
+
+Status: Diskussionsstand, noch nicht umgesetzt. Festgehalten am 2026-08-12,
+im selben Kontext wie der Daemon-Vorschlag oben entstanden.
+
+### Problem
+
+Der Toggle-Handler in `app.py` kennt aktuell nur zwei aktive Zustände
+sinnvoll: `idle` (Knopfdruck startet Aufnahme) und `recording` (Knopfdruck
+stoppt und löst LLM+TTS aus). Ein Knopfdruck während `thinking` oder
+`speaking` wird komplett ignoriert ("Busy, ignoring toggle"). Der Nutzer
+muss eine unpassende oder zu lange Antwort deshalb immer vollständig
+anhören, bevor er neu sprechen kann.
+
+### Vorschlag
+
+Konsistentes Prinzip für alle Zustände: ein Knopfdruck gibt dem Nutzer
+jederzeit die Kontrolle zurück, statt nur in `idle`/`recording` zu wirken.
+
+- `speaking` -> Knopfdruck bricht die laufende Wiedergabe sofort ab und
+  startet direkt eine neue Aufnahme (kein Umweg über `idle`).
+- `thinking` -> Knopfdruck bricht den laufenden Claude-Query ab (der Claude
+  Agent SDK Client bietet dafür bereits eine eingebaute `interrupt()`-Methode,
+  siehe `ClaudeSDKClient.interrupt()` in `client.py`) und startet ebenfalls
+  direkt eine neue Aufnahme.
+
+Technisch:
+
+- `audio_io.play_audio_streaming` bekommt ein `threading.Event` als
+  Abbruch-Signal, das zwischen den einzelnen Audio-Chunks geprüft wird. Wird
+  es gesetzt, wird der Output-Stream geschlossen und ein laufender
+  ffmpeg-Zeitraffer-Prozess terminiert.
+- Weil `tts.py`s `synthesize_streaming` ein Generator ist, der Chunks erst
+  bei Bedarf von der GPU erzeugt, stoppt allein das Nicht-mehr-Abrufen aus
+  der Konsum-Schleife automatisch auch die weitere Sprachsynthese -- kein
+  separater Cancel-Pfad in `tts.py` nötig.
+- `llm.py` bekommt eine `cancel()`-Methode, die über den bestehenden
+  Event-Loop-Thread `ClaudeSDKClient.interrupt()` aufruft.
+- Ein kurzer Sound-Hinweis beim Abbruch (Muster wie `feedback.py` in
+  `parakeet-dictate`) bestätigt dem Nutzer akustisch, dass der Abbruch
+  angekommen ist.
+
+Bewusst nicht vorgesehen: automatische Sprachaktivitätserkennung während
+der Wiedergabe (echtes "Reinreden" ohne Knopfdruck). Das würde ein offenes
+Mikrofon parallel zur Lautsprecherausgabe erfordern, und ohne
+Echo-Unterdrückung würde die eigene TTS-Ausgabe als Nutzer-Sprache
+missinterpretiert -- deutlich höherer Aufwand, passt auch nicht zum
+bestehenden Push-to-toggle-Muster.
+
+### Bezug zur Daemon-Architektur
+
+Der `tts-daemon` aus dem Vorschlag oben braucht von Anfang an ein
+`stop`/`cancel`-Kommando im Protokoll, nicht erst nachträglich ergänzt --
+sonst müsste das Protokoll später erneut angefasst werden. Die
+Chunk-Abbruchlogik sollte deshalb so prozessunabhängig gebaut werden, dass
+sie sich später fast unverändert in den Daemon übernehmen lässt.
+
+## Zusatz-Feature: Web-Cockpit als drittes Steuer-Interface
+
+Status: Diskussionsstand, noch nicht umgesetzt. Festgehalten am 2026-08-12.
+
+### Motivation
+
+Zusätzlich zu Jabra-Knopf und lokalem Hotkey eine kleine Weboberfläche als
+drittes Trigger-Interface: schönere Anzeige des Chatverlaufs, ein
+Unterbrechen-Button als Alternative zum physischen Knopf, Anzeige von
+Kennzahlen wie Antwort-/Sprechdauer, und eine "Neue Session"-Funktion.
+
+### Technischer Ansatz
+
+Gradio statt Dash, weil `gr.Chatbot` fertige Chat-Bubble-Darstellung
+mitbringt und Dash eher auf Analytics-Dashboards mit Graphen zugeschnitten
+ist -- für eine Chat-Optik wäre mit Dash deutlich mehr Handarbeit nötig.
+
+Die Gradio-App läuft im selben Prozess wie `app.py`, als weiterer
+Hintergrund-Thread neben Jabra-Listener und Socket-Server (analog zu
+`_run_jabra_listener`). Der Unterbrechen-Button ruft direkt dieselbe
+`on_toggle`/Cancel-Logik der `App`-Instanz auf -- normaler Python-Aufruf,
+kein neues Netzwerkprotokoll. Das bestehende Locking um die
+Zustandsübergänge deckt automatisch auch Klicks aus der Weboberfläche ab.
+
+Für Live-Anzeige von Zustand und Chatverlauf reicht Gradios eingebaute
+Timer-Komponente (Polling alle paar hundert Millisekunden), echtes
+Websocket-Pushing ist für eine Status-Cockpit-Anzeige nicht nötig -- die
+eigentliche Sprachausgabe läuft ja weiterhin über die lokalen Lautsprecher.
+
+Zwei Ergänzungen an `App` werden dafür ohnehin gebraucht (unabhängig vom
+UI-Framework):
+
+- Eine Liste, die den Chatverlauf strukturiert mitschreibt (aktuell nur im
+  Log, nicht im State).
+- Eine `reset()`-Funktion für eine neue Session (Claude-Client neu
+  verbinden, Chatverlauf leeren).
+
+Die Zeitmessungen für Antwort- und Sprechdauer existieren größtenteils
+schon (`time.monotonic()` in `tts.py`/`audio_io.py`), müssten aber
+zusätzlich in ein kleines Statistik-Objekt geschrieben werden statt nur
+ins Log.
+
+### Offene Frage: mobiler Zugriff (Handy)
+
+Naheliegender Folgewunsch: dieselbe Oberfläche auch vom Handy aus nutzen.
+Hier unterscheidet sich die Aufgabe grundlegend vom lokalen Cockpit, weil
+das Handy kein direktes Mikrofon-/Lautsprecher-Passthrough zur laufenden
+App hat -- Audio muss über das Netz geschickt und empfangen werden, und
+zwar gestreamt (Chunk für Chunk), nicht als Datei nach Aufnahmeende, sonst
+geht der bereits erarbeitete Time-to-first-audio-Vorteil der
+Streaming-Wiedergabe verloren.
+
+Zwei Optionen, noch nicht entschieden:
+
+1. **Gradio-Cockpit auch im mobilen Browser öffnen.** Gradio unterstützt
+   inzwischen streamendes Audio-Input/-Output (`gr.Audio(streaming=True)`),
+   das im mobilen Safari/Chrome über die normale Mikrofon-Berechtigung
+   funktioniert. Kein zweiter Code-Stack, schnellster Weg.
+2. **Eigene Flutter-App.** Vorarbeit dazu existiert bereits im
+   Nachbarprojekt `~/research/flutter_voice_stream` (dort allerdings mit
+   Gemini + Geräte-eigenem STT/TTS, nicht mit dieser Pipeline -- kein
+   direkt wiederverwendbarer Code, aber Erfahrung mit dem Tooling
+   vorhanden). Nativeres Gefühl, Hintergrundbetrieb möglich, aber eine
+   zweite UI, die bei jeder Cockpit-Änderung (Unterbrechen-Button,
+   Chatverlauf, Statistiken) separat nachgezogen werden muss.
+
+Tendenz: erst Option 1 versuchen, Flutter erst dann angehen, wenn konkrete
+Grenzen des Browser-Wegs (Hintergrundbetrieb, Latenz, Bedienkomfort) im
+echten Gebrauch tatsächlich stören, statt von Anfang an zwei Frontends zu
+pflegen.
+
+**Sicherheitsvoraussetzung, unabhängig von der gewählten Option:** Das
+LLM-Backend läuft mit `permission_mode="bypassPermissions"` und vollem
+Tool-Zugriff (Bash, Dateisystem, Websuche). Erreichbarkeit übers freie
+Internet ohne Zugriffsschutz ist damit kein rein kosmetisches Risiko --
+jede erreichte Stimme könnte beliebige Shell-Kommandos auslösen. Mobiler
+Zugriff braucht deshalb in jedem Fall entweder ein privates VPN (z.B.
+Tailscale) oder einen Tunnel mit Zugriffsschutz (z.B. Cloudflare Tunnel mit
+Access-Regel) -- ein offener Port mit bloßer URL reicht nicht.
+
+## Priorisierte Reihenfolge über alle drei Vorschläge
+
+Festgehalten am 2026-08-12. Reihenfolge: zuerst Barge-in, dann Web-Cockpit,
+Daemon-Aufspaltung zuletzt.
+
+- **1. Barge-in.** Kleinster Aufwand (drei Dateien: `app.py`, `audio_io.py`,
+  `llm.py`), sofort spürbarer Nutzen im Alltag, und harte Voraussetzung für
+  Schritt 2 -- der Unterbrechen-Button im Cockpit soll dieselbe
+  Abbruch-Logik aufrufen, die es ohne diesen Schritt noch gar nicht gibt.
+- **2. Web-Cockpit.** Läuft im selben Prozess, ruft bestehende (und die neu
+  aus Schritt 1 entstandenen) Funktionen direkt auf -- überschaubarer
+  Aufwand, schnell sichtbarer Mehrwert (Chatverlauf, Kennzahlen,
+  Session-Reset).
+- **3. Daemon-Aufspaltung.** Größter Aufwand, mit noch offenen
+  Grundsatzfragen (Repo-Zuschnitt, Protokoll-Details), und bringt kein
+  neues Nutzer-Feature, sondern behebt vor allem doppeltes Modell-Laden und
+  langsame Iteration bei Codeänderungen -- ein Investment in die eigene
+  Entwicklungsgeschwindigkeit, kein User-Feature. Nebeneffekt der späten
+  Reihenfolge: das Daemon-Protokoll (inkl. `stop`/`cancel`-Kommando für
+  Barge-in) wird erst entworfen, wenn die tatsächlichen Anforderungen aus
+  Schritt 1 und 2 bekannt sind, statt es vorab zu erraten. Wird angegangen,
+  sobald doppeltes Modell-Laden oder langsame Iteration im Alltag wirklich
+  stören.
+
+## Nächste Schritte (Ergänzung, für die spätere Session)
+
+7. Abbruch-Event in `audio_io.play_audio_streaming` und `llm.cancel()`
+   umsetzen, Zustandsmaschine in `app.py` um die Abbruch-Übergänge
+   erweitern.
+8. Chatverlauf-State und `reset()` in `App` ergänzen, dann Gradio-Cockpit
+   als dritten Trigger-Thread aufsetzen.
+9. Entscheidung zu mobilem Zugriff treffen (Browser vs. Flutter), erst
+   danach ggf. VPN/Tunnel-Absicherung einrichten.

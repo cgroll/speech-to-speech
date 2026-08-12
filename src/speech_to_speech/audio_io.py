@@ -162,13 +162,22 @@ def play_audio(samples: np.ndarray, sample_rate: int) -> None:
     logger.info("Playback finished in %.1fs", time.monotonic() - t0)
 
 
-def play_audio_streaming(chunks: Iterator[tuple[np.ndarray, int]]) -> None:
+def play_audio_streaming(
+    chunks: Iterator[tuple[np.ndarray, int]],
+    stop_event: threading.Event | None = None,
+) -> None:
     """Stream TTS audio chunks to playback with pitch-preserving time-stretch.
 
     Feeds each chunk into a persistent ffmpeg atempo process as it arrives and
     plays the stretched output immediately, so the first sound is heard as soon
     as the first TTS chunk is ready (~160ms with GGML) rather than after the
     full synthesis completes.
+
+    If `stop_event` is set (e.g. on barge-in), playback stops within about one
+    chunk's worth of audio, and no further chunks are pulled from `chunks`.
+    Since `tts.py`'s generator only produces the next chunk when asked, that
+    also halts the underlying GPU generation, not just the already-produced
+    audio -- no separate cancellation path into the TTS model is needed.
     """
     t0 = time.monotonic()
     it = iter(chunks)
@@ -179,8 +188,12 @@ def play_audio_streaming(chunks: Iterator[tuple[np.ndarray, int]]) -> None:
 
     def _all() -> Iterator[np.ndarray]:
         yield first_chunk
-        for c, _ in it:
-            yield c
+        while stop_event is None or not stop_event.is_set():
+            try:
+                chunk, _ = next(it)
+            except StopIteration:
+                return
+            yield chunk
 
     if TTS_PLAYBACK_SPEED == 1.0:
         with sd.OutputStream(samplerate=sample_rate, channels=1, dtype="float32") as stream:
@@ -206,8 +219,13 @@ def play_audio_streaming(chunks: Iterator[tuple[np.ndarray, int]]) -> None:
         try:
             for chunk in _all():
                 proc.stdin.write(chunk.astype(np.float32).tobytes())
+        except BrokenPipeError:
+            pass  # ffmpeg already gone (e.g. terminated after a barge-in)
         finally:
-            proc.stdin.close()
+            try:
+                proc.stdin.close()
+            except OSError:
+                pass
 
     feeder = threading.Thread(target=_feed, daemon=True)
     feeder.start()
@@ -216,6 +234,11 @@ def play_audio_streaming(chunks: Iterator[tuple[np.ndarray, int]]) -> None:
     with sd.OutputStream(samplerate=sample_rate, channels=1, dtype="float32") as stream:
         while data := os.read(stdout_fd, 4096):
             stream.write(np.frombuffer(data, dtype=np.float32).reshape(-1, 1))
+            if stop_event is not None and stop_event.is_set():
+                break
+
+    if stop_event is not None and stop_event.is_set():
+        proc.terminate()  # don't wait for ffmpeg to drain its input on its own
 
     feeder.join()
     logger.info("Streaming playback finished in %.1fs", time.monotonic() - t0)
