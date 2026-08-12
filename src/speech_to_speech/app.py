@@ -53,7 +53,13 @@ class App:
         # locking above.
         self._history_lock = threading.Lock()
         self._history: list[dict[str, str]] = []
-        self._stats = {"turns": 0, "last_response_s": None, "last_speaking_s": None}
+        self._stats = {
+            "turns": 0,
+            "last_stt_s": None,
+            "last_response_s": None,
+            "last_ttfa_s": None,
+            "last_speaking_s": None,
+        }
 
     def load(self) -> None:
         # Fail fast on a missing API key before spending time loading models.
@@ -132,9 +138,16 @@ class App:
         # will point at a *different* Event once the next turn starts, so a
         # local reference is what makes the checks below race-safe.
         interrupt = self._interrupt
+        stop_t0 = time.monotonic()
         self._recorder.stop()
         assert self._worker is not None
         self._worker.join()
+        # Mic-stop-to-text delay: stop() itself returns fast, so this is
+        # dominated by _consume_segments() finishing off whatever speech
+        # segments (including the final flushed one) hadn't been transcribed
+        # yet -- the lag a user actually feels between letting go of the
+        # button and something happening.
+        stt_s = time.monotonic() - stop_t0
         # Known narrow gap: a barge-in landing exactly here (before the LLM
         # call below starts) races with the next _start_recording()'s reset
         # of self._transcribed. Accepted for now -- this feature targets the
@@ -149,11 +162,14 @@ class App:
             return
 
         logger.info("Transcribed: %s", text)
+        with self._history_lock:
+            self._stats["last_stt_s"] = stt_s
         self._append_history("user", text)
         assert self._llm is not None
         t0 = time.monotonic()
         reply = self._llm.send(text)
-        response_s = time.monotonic() - t0
+        reply_ready = time.monotonic()
+        response_s = reply_ready - t0
 
         if interrupt.is_set():
             logger.info("Interrupted while thinking -- discarding reply.")
@@ -168,15 +184,27 @@ class App:
             if self._state != "thinking":
                 return  # a barge-in already claimed the state for a new recording
             self._state = "speaking"
-        self._speak(reply, interrupt)
+        self._speak(reply, interrupt, reply_ready)
 
         with self._state_lock:
             if self._state == "speaking":
                 self._state = "idle"
 
-    def _speak(self, reply: str, interrupt: threading.Event) -> None:
+    def _speak(self, reply: str, interrupt: threading.Event, reply_ready: float) -> None:
         t0 = time.monotonic()
-        audio_io.play_audio_streaming(self._tts.synthesize_streaming(reply), stop_event=interrupt)
+
+        def _on_first_chunk() -> None:
+            # Time from "reply text is ready" to "first audio sample actually
+            # written to the output stream" -- covers TTS-synthesis latency
+            # for the first chunk *and* the ffmpeg atempo round-trip, so it's
+            # the number that matches what a listener actually experiences
+            # as the pause before the reply starts.
+            with self._history_lock:
+                self._stats["last_ttfa_s"] = time.monotonic() - reply_ready
+
+        audio_io.play_audio_streaming(
+            self._tts.synthesize_streaming(reply), stop_event=interrupt, on_first_chunk=_on_first_chunk
+        )
         with self._history_lock:
             self._stats["last_speaking_s"] = time.monotonic() - t0
 
@@ -200,9 +228,18 @@ class App:
     def get_stats_text(self) -> str:
         with self._history_lock:
             stats = dict(self._stats)
-        response = f"{stats['last_response_s']:.1f}s" if stats["last_response_s"] is not None else "–"
-        speaking = f"{stats['last_speaking_s']:.1f}s" if stats["last_speaking_s"] is not None else "–"
-        return f"Runden: {stats['turns']}  |  Letzte Antwortzeit: {response}  |  Letzte Sprechzeit: {speaking}"
+
+        def _fmt(key: str) -> str:
+            value = stats[key]
+            return f"{value:.1f}s" if value is not None else "–"
+
+        return (
+            f"Runden: {stats['turns']}  |  "
+            f"STT-Zeit (ab Mikro-Stopp): {_fmt('last_stt_s')}  |  "
+            f"Letzte Antwortzeit: {_fmt('last_response_s')}  |  "
+            f"Zeit bis erste Sprachausgabe: {_fmt('last_ttfa_s')}  |  "
+            f"Letzte Sprechzeit: {_fmt('last_speaking_s')}"
+        )
 
     def reset(self) -> None:
         """Starts a fresh session (cockpit's "Neue Session" button): aborts
@@ -236,7 +273,13 @@ class App:
 
         with self._history_lock:
             self._history = []
-            self._stats = {"turns": 0, "last_response_s": None, "last_speaking_s": None}
+            self._stats = {
+                "turns": 0,
+                "last_stt_s": None,
+                "last_response_s": None,
+                "last_ttfa_s": None,
+                "last_speaking_s": None,
+            }
         logger.info("Session reset.")
 
     def run(self) -> None:

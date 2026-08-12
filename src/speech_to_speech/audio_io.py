@@ -13,7 +13,7 @@ import subprocess
 import threading
 import time
 from collections import deque
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 
 import numpy as np
 import sounddevice as sd
@@ -165,6 +165,7 @@ def play_audio(samples: np.ndarray, sample_rate: int) -> None:
 def play_audio_streaming(
     chunks: Iterator[tuple[np.ndarray, int]],
     stop_event: threading.Event | None = None,
+    on_first_chunk: Callable[[], None] | None = None,
 ) -> None:
     """Stream TTS audio chunks to playback with pitch-preserving time-stretch.
 
@@ -178,6 +179,11 @@ def play_audio_streaming(
     Since `tts.py`'s generator only produces the next chunk when asked, that
     also halts the underlying GPU generation, not just the already-produced
     audio -- no separate cancellation path into the TTS model is needed.
+
+    `on_first_chunk`, if given, fires once, exactly when the first sample is
+    written to the output stream -- i.e. after ffmpeg's atempo stretch when
+    TTS_PLAYBACK_SPEED != 1.0, not just once the first raw TTS chunk exists.
+    Used by the cockpit's "time to first speech" stat.
     """
     t0 = time.monotonic()
     it = iter(chunks)
@@ -197,7 +203,11 @@ def play_audio_streaming(
 
     if TTS_PLAYBACK_SPEED == 1.0:
         with sd.OutputStream(samplerate=sample_rate, channels=1, dtype="float32") as stream:
+            first = True
             for chunk in _all():
+                if first and on_first_chunk is not None:
+                    on_first_chunk()
+                    first = False
                 stream.write(chunk.astype(np.float32).reshape(-1, 1))
         logger.info("Streaming playback finished in %.1fs", time.monotonic() - t0)
         return
@@ -232,7 +242,11 @@ def play_audio_streaming(
 
     stdout_fd = proc.stdout.fileno()
     with sd.OutputStream(samplerate=sample_rate, channels=1, dtype="float32") as stream:
+        first = True
         while data := os.read(stdout_fd, 4096):
+            if first and on_first_chunk is not None:
+                on_first_chunk()
+                first = False
             stream.write(np.frombuffer(data, dtype=np.float32).reshape(-1, 1))
             if stop_event is not None and stop_event.is_set():
                 break
