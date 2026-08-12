@@ -20,6 +20,17 @@ TTS_MODEL_ID = "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice"
 TTS_SPEAKER = "aiden"
 TTS_LANGUAGE = "german"
 
+# faster-qwen3-tts defaults both of these to 2048 if left unset, which caps
+# generation at ~2048 codec frames (12Hz model -> well under 2048/12 = 170s,
+# since max_seq_len also has to cover the text prefill). Hitting that ceiling
+# is NOT an error -- the library's decode loop just stops and returns
+# whatever audio it has, silently truncating mid-sentence. Raised here to
+# give a few minutes of headroom; TTS_MAX_SEQ_LEN sizes the CUDA graph's
+# static KV cache (paid once at warmup as extra GPU memory + a bit more
+# capture time), so don't inflate it further than needed.
+TTS_MAX_SEQ_LEN = 4096
+TTS_MAX_NEW_TOKENS = 3900
+
 # Playback tempo for the synthesized reply (pitch-preserving time-stretch,
 # not raw resampling -- 1.0 = natural speed).
 TTS_PLAYBACK_SPEED = 1.5

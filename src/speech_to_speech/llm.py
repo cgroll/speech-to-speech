@@ -18,6 +18,21 @@ from claude_agent_sdk import (
 
 logger = logging.getLogger(__name__)
 
+SYSTEM_PROMPT = """\
+You are a voice assistant. Your responses will be read aloud via text-to-speech,
+so format them accordingly:
+- Use plain prose, no markdown, no bullet lists, no tables, no code blocks.
+- Keep responses concise — a spoken answer should rarely exceed a few sentences
+  unless detail is explicitly requested.
+- For numbers and symbols, spell them out in a way that sounds natural when read
+  aloud (e.g. "fifty percent" instead of "50%").
+
+You have full tool access (Bash, file read/write, web search, etc.) with all
+permission checks bypassed. Before executing any command that is destructive or
+hard to reverse — deleting files, overwriting data, pushing to remote — pause and
+ask the user for explicit confirmation, since there is no automated approval UI.
+"""
+
 
 class ClaudeCodeConversation:
     def __init__(self) -> None:
@@ -26,7 +41,10 @@ class ClaudeCodeConversation:
         asyncio.run_coroutine_threadsafe(self._start(), self._loop).result(timeout=30)
 
     async def _start(self) -> None:
-        options = ClaudeAgentOptions(permission_mode="bypassPermissions")
+        options = ClaudeAgentOptions(
+            permission_mode="bypassPermissions",
+            system_prompt=SYSTEM_PROMPT,
+        )
         self._mgr = ClaudeSDKClient(options=options)
         self._client = await self._mgr.__aenter__()
 
