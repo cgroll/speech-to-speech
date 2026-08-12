@@ -12,8 +12,9 @@ JABRA_DEVICE_NAME = "Jabra Link 390"
 JABRA_TOGGLE_KEY = "KEY_PLAY"
 
 # -- STT (Parakeet, CPU) -------------------------------------------------
+# Used by the STT daemon (dictate/daemon.py) that now owns the model and mic
+# -- see docs/architecture-proposal.md, "Daemon-Aufspaltung" step 4.
 STT_MODEL_NAME = "nemo-parakeet-tdt-0.6b-v3"
-STT_SAMPLE_RATE = 16_000
 
 # -- TTS (Qwen3-TTS CustomVoice, GPU) ------------------------------------
 TTS_MODEL_ID = "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice"

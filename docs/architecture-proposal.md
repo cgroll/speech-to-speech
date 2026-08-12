@@ -106,18 +106,122 @@ ist, nicht Modell-Serving:
 
 ## Nächste Schritte (für die spätere Session)
 
-1. Entscheidung Repo-Zuschnitt und Reihenfolge (siehe offene Fragen).
-2. `stt-daemon` aus `parakeet-dictate/src/parakeet_dictate/daemon.py` +
-   `audio.py` extrahieren, Protokoll auf reines Transkript-Ergebnis
-   reduzieren (kein `type_text` im Daemon).
-3. `parakeet-dictate` auf Client umbauen, gegen `stt-daemon` testen.
-4. `speech-to-speech`: `stt.py`/Recorder-Teil von `audio_io.py` durch
-   `stt-daemon`-Client ersetzen.
-5. `tts-daemon` analog aus `speech-to-speech/src/speech_to_speech/tts.py` +
-   Playback-Teil von `audio_io.py` extrahieren.
-6. `speech-to-speech`: `tts.py`/Playback-Teil durch `tts-daemon`-Client
-   ersetzen; `app.py` wird zum reinen Orchestrator (Toggle -> stt-daemon ->
-   Claude -> tts-daemon).
+1. ~~Entscheidung Repo-Zuschnitt und Reihenfolge (siehe offene Fragen).~~
+   Erledigt am 2026-08-12, abweichend von der ursprünglich geplanten
+   Reihenfolge unten (vorgezogen, weil konkret gebraucht): Repo-Zuschnitt
+   ist **kein neues `voice-daemons`-Repo**, sondern das komplette
+   `parakeet-dictate`-Projekt wandert nach `speech-to-speech` (als
+   `src/speech_to_speech/dictate/`) -- Wunsch war, künftig nur noch ein
+   Repo zu pflegen und `parakeet-dictate` irgendwann löschen zu können.
+2. ~~`stt-daemon` aus `parakeet-dictate/src/parakeet_dictate/daemon.py` +
+   `audio.py` extrahieren~~ -- stattdessen 1:1 nach
+   `speech_to_speech/dictate/daemon.py` + `audio.py` verschoben (Namespace
+   angepasst, Modellname jetzt aus `config.STT_MODEL_NAME` statt eigener
+   Konstante). Protokoll unverändert (`toggle_record` tippt weiterhin selbst
+   via `ydotool` -- die geplante Reduktion auf reines
+   Transkript-Ergebnis ohne `type_text` im Daemon ist **noch offen**, siehe
+   Punkt 4.
+3. ~~`parakeet-dictate` auf Client umbauen~~ -- CLI (`dictate/cli.py`), Daemon,
+   `typing_backend.py`, `keymap.py`, `feedback.py`, systemd-Unit und
+   `setup_ydotool.sh` sind jetzt Teil von `speech-to-speech`
+   (`project.scripts`: `parakeet-dictate`, `parakeet-dictate-daemon`). Das
+   alte `parakeet-dictate`-Repo läuft unverändert weiter (eigener
+   systemd-Service, eigener GNOME-Hotkey auf `<Super>d`) und wird erst nach
+   Verifikation der neuen Variante manuell abgeschaltet/gelöscht.
+4. ~~`speech-to-speech`: `stt.py`/Recorder-Teil von `audio_io.py` durch einen
+   `dictate`-Daemon-Client ersetzen~~ Erledigt am 2026-08-12. Protokoll-
+   Reduktion wie in Punkt 2 als offen vermerkt: statt den Daemon komplett auf
+   reine Text-Rückgabe umzustellen (hätte `toggle_record`/`ydotool` für den
+   Diktier-Hotkey gebrochen), bekam er ein zweites Kommandopaar,
+   `start_recording`/`stop_recording` -- dieselbe Aufnahme-/
+   Transkriptions-Mechanik wie `toggle_record`, aber ohne `type_text`, weil
+   `speech-to-speech` den Text an Claude weiterreicht statt ihn zu tippen.
+   Neuer dünner Client `speech_to_speech/stt_client.py`; `app.py` hält kein
+   eigenes Parakeet-Modell und keinen eigenen `Recorder` mehr, `audio_io.py`
+   ist jetzt reines Wiedergabe-Modul, `stt.py` entfernt. Die doppelte
+   Speicherlast ist damit behoben -- Voraussetzung bleibt, dass der Daemon
+   vorher läuft (`parakeet-dictate enable`); `App.load()` bricht mit klarer
+   Fehlermeldung ab, wenn er nicht erreichbar ist, statt ihn selbst zu
+   starten (bewusst kein Auto-Start, wie beim Diktier-Pfad). Mic-Exklusivität
+   (offene Frage oben) ist damit real: Diktieren und Sprach-Dialog können
+   nicht mehr gleichzeitig laufen, weil beide denselben Daemon-Zustand
+   beanspruchen.
+5. ~~`tts-daemon` analog aus `tts.py` + Playback-Teil von `audio_io.py`
+   extrahieren.~~ Erledigt am 2026-08-12. Namensgebung analog
+   `parakeet-dictate`: CLI/systemd-Service/Socket heißen `qwen-tts`
+   (Modellname statt Funktionsname). Neues Paket
+   `speech_to_speech/tts_daemon/` (Struktur wie `dictate/`): `tts.py`
+   (Modell-Klasse, 1:1 aus dem alten Top-Level-`tts.py`), `playback.py`
+   (`play_audio_streaming`, 1:1 aus `audio_io.py` -- die dort schon
+   unbenutzte blockierende `play_audio`/`_time_stretch`-Variante wurde beim
+   Verschieben als toter Code gestrichen), `protocol.py` (Kopie von
+   `dictate/protocol.py` mit eigenem Socket-Namen), `daemon.py`, `cli.py`
+   (nur `enable`/`disable`/`status`, kein `toggle` -- es gibt keinen
+   Hotkey-Nutzer dieses Daemons).
+
+   Eine strukturelle Abweichung vom STT-Daemon war nötig: `speak` läuft
+   serverseitig ab (blockiert für die gesamte Sprechdauer, siehe Schritt 6
+   unten), und ein Barge-in muss ein laufendes `speak` per `stop` von einer
+   *zweiten*, gleichzeitig offenen Verbindung abbrechen können -- der
+   STT-Daemon bearbeitet dagegen eine Verbindung nach der anderen
+   synchron, weil alle seine Kommandos schnell zurückkehren. Der
+   TTS-Daemon startet deshalb pro Verbindung einen eigenen Thread. Die
+   Abbruchlogik selbst ist unverändert die schon vorhandene
+   `stop_event`-Unterstützung in `play_audio_streaming` -- wie im Abschnitt
+   "Bezug zur Daemon-Architektur" unten vorausgesehen, ließ sie sich nahezu
+   unverändert übernehmen, nur hält jetzt der Daemon das Event statt
+   `app.py`. Die "Zeit bis erste Sprachausgabe" (`first_chunk_s`) muss
+   dafür nicht live während der Wiedergabe zurückgemeldet werden -- der
+   Cockpit-Stat wird ohnehin erst nach dem Turn gelesen, daher reicht ein
+   normales Request/Response mit dem Wert in der finalen `speak`-Antwort,
+   kein Streaming-Protokoll.
+
+   **Nachtrag (noch am 2026-08-12, beim Live-Test entdeckt):** `stop_event`
+   wird in `play_audio_streaming` nur *zwischen* Chunks geprüft, nie während
+   eines laufenden Chunk-Aufrufs -- normalerweise unter einer Sekunde, aber
+   ein Testsatz brachte den Daemon einmal für über vier Minuten in
+   `state=speaking`, ohne dass `stop()` griff (das Problem gab es
+   identisch schon im alten Ein-Prozess-Code, wurde dort aber nie sichtbar,
+   weil `app.py`s eigener State sofort weiterschaltete). Im Daemon ist das
+   folgenreicher: eine hängende Generierung blockiert den *gemeinsamen*
+   Prozess für alle künftigen Anfragen (`busy: speaking`), nicht nur eine
+   App-Instanz. Da ein blockierender GPU-Aufruf aus einem anderen Thread
+   heraus nicht abbrechbar ist, bekam `_speak()` einen Watchdog: läuft die
+   Wiedergabe länger als `_SPEAK_WATCHDOG_S` (90s, siehe `daemon.py`),
+   beendet sich der Daemon-Prozess selbst (`os._exit`), und
+   `systemd/qwen-tts.service`s `Restart=on-failure` startet ihn neu (~10s
+   Modell-Ladezeit statt unbegrenztem Hängen). `tts_daemon/protocol.py`s
+   `send_command` behandelt eine mitten in der Antwort abgebrochene
+   Verbindung seither wie "Daemon nicht erreichbar" statt eine unbehandelte
+   Exception zu werfen. Die Watchdog-Logik selbst ist isoliert getestet
+   (Fake-Generator, gepatchtes kurzes Timeout); der ursprüngliche
+   4-Minuten-Hänger ließ sich mit demselben Testsatz auf einem frisch
+   neugestarteten Daemon nicht reproduzieren -- die genaue Ursache auf
+   TTS-Bibliotheksebene bleibt offen, der Watchdog begrenzt aber in jedem
+   Fall den Schaden, falls es wieder passiert.
+
+   Bekannte, bewusst nicht behobene Lücke: `app.py` fängt in `_respond()`
+   keine Exceptions von `stt_client`/`tts_client`-Aufrufen ab -- stirbt der
+   Daemon-Aufruf mitten im Turn (z.B. durch den Watchdog-Neustart), bleibt
+   auch `app.py`s eigener State auf `speaking`/`thinking` hängen, bis die
+   App neu gestartet wird. Betrifft symmetrisch auch den STT-Pfad und
+   existierte in der Form schon vorher; nicht Teil dieser Härtung.
+6. ~~`speech-to-speech`: `tts.py`/Playback-Teil durch `tts-daemon`-Client
+   ersetzen; `app.py` wird zum reinen Orchestrator.~~ Erledigt am
+   2026-08-12. Neuer dünner Client `speech_to_speech/tts_client.py`
+   (`ensure_available()`/`speak()`/`stop()`), analog `stt_client.py`. `App`
+   hält kein `TextToSpeech`-Objekt mehr; `load()` prüft beide Daemons vorab
+   (`stt_client.ensure_available()` und `tts_client.ensure_available()`),
+   bricht mit klarer Fehlermeldung ab statt später beim ersten Knopfdruck
+   zu hängen. Barge-in während `speaking` (drei Stellen: `on_toggle`,
+   `submit_text`, `reset()`) ruft jetzt zusätzlich `tts_client.stop()` --
+   vorher reichte dafür das lokal geteilte `threading.Event`, das ging mit
+   dem Umzug der Wiedergabe in einen eigenen Prozess nicht mehr.
+   `audio_io.py` und das Top-Level-`tts.py` sind komplett entfernt, ihr
+   Inhalt lebt nur noch im `tts_daemon`-Paket. Damit ist auch die zweite
+   Hälfte der doppelten GPU-Modelllast behoben (analog zur STT-Seite in
+   Schritt 4) -- `app.py` selbst hält jetzt kein Modell mehr, weder STT
+   noch TTS.
 
 ## Zusatz-Feature: Unterbrechbare Sprachausgabe (Barge-in)
 
@@ -280,9 +384,10 @@ Daemon-Aufspaltung zuletzt.
   Entwicklungsgeschwindigkeit, kein User-Feature. Nebeneffekt der späten
   Reihenfolge: das Daemon-Protokoll (inkl. `stop`/`cancel`-Kommando für
   Barge-in) wird erst entworfen, wenn die tatsächlichen Anforderungen aus
-  Schritt 1 und 2 bekannt sind, statt es vorab zu erraten. Wird angegangen,
-  sobald doppeltes Modell-Laden oder langsame Iteration im Alltag wirklich
-  stören.
+  Schritt 1 und 2 bekannt sind, statt es vorab zu erraten. ~~Wird
+  angegangen, sobald doppeltes Modell-Laden oder langsame Iteration im
+  Alltag wirklich stören.~~ Umgesetzt am 2026-08-12 (siehe Schritte 5+6
+  oben) -- `app.py` hält jetzt kein Modell mehr selbst, weder STT noch TTS.
 
 ## Nächste Schritte (Ergänzung, für die spätere Session)
 

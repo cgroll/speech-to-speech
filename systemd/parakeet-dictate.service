@@ -1,0 +1,19 @@
+[Unit]
+Description=Parakeet system-wide dictation daemon (CPU-resident STT, ONNX int8)
+After=graphical-session.target
+
+[Service]
+Type=simple
+Environment=PYTHONUNBUFFERED=1
+WorkingDirectory=%h/research/speech-to-speech
+# Calls the venv's installed binary directly rather than `uv run` -- uv is
+# snap-packaged on this machine, and snap re-parents the process into its
+# own snap.astral-uv.*.scope cgroup, which breaks `journalctl -u` filtering
+# for this unit. Run `uv sync` in the project after dependency changes.
+ExecStart=%h/research/speech-to-speech/.venv/bin/parakeet-dictate-daemon
+Restart=no
+
+# Intentionally no [Install] section: this service is never enabled to
+# start at login. It is only ever started/stopped explicitly via
+# `parakeet-dictate enable` / `disable`, so memory is only allocated
+# when the user asks for it.

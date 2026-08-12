@@ -27,6 +27,38 @@ def main() -> None:
         sys.exit(1)
 
 
+def main_start() -> None:
+    """Convenience entry point: starts both shared daemons via systemctl
+    (idempotent -- a no-op if one is already running) and waits until each
+    is actually reachable over its socket, not just until `systemctl start`
+    returns -- model loading takes a few seconds to a couple minutes after
+    that. Then launches the app. One command instead of the usual three
+    (`parakeet-dictate enable`, `qwen-tts enable`, `speech-to-speech`)."""
+    import subprocess
+    import time
+
+    from speech_to_speech.dictate.cli import SERVICE_NAME as STT_SERVICE
+    from speech_to_speech.dictate.protocol import send_command as stt_status
+    from speech_to_speech.tts_daemon.cli import SERVICE_NAME as TTS_SERVICE
+    from speech_to_speech.tts_daemon.protocol import send_command as tts_status
+
+    def _start_and_wait(label: str, service: str, status_check, timeout_s: float) -> None:
+        subprocess.run(["systemctl", "--user", "start", service], check=True)
+        print(f"Waiting for {label} to finish loading...")
+        deadline = time.monotonic() + timeout_s
+        while time.monotonic() < deadline:
+            if status_check({"cmd": "status"}) is not None:
+                print(f"{label} ready.")
+                return
+            time.sleep(1)
+        print(f"Error: {label} didn't come up within {timeout_s:.0f}s.", file=sys.stderr)
+        sys.exit(1)
+
+    _start_and_wait("STT daemon (parakeet-dictate)", STT_SERVICE, stt_status, timeout_s=60)
+    _start_and_wait("TTS daemon (qwen-tts)", TTS_SERVICE, tts_status, timeout_s=120)
+    main()
+
+
 def main_toggle() -> None:
     """Entry point for the local hotkey (e.g. a numpad key via a GNOME
     custom shortcut): sends a toggle command to the already-running

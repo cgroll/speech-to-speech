@@ -25,7 +25,12 @@ dependencies = [
 
 [project.scripts]
 speech-to-speech = "speech_to_speech:main"
+speech-to-speech-start = "speech_to_speech.cli:main_start"
 speech-to-speech-toggle = "speech_to_speech.cli:main_toggle"
+parakeet-dictate = "speech_to_speech.dictate.cli:main"
+parakeet-dictate-daemon = "speech_to_speech.dictate.daemon:main"
+qwen-tts = "speech_to_speech.tts_daemon.cli:main"
+qwen-tts-daemon = "speech_to_speech.tts_daemon.daemon:main"
 
 [build-system]
 requires = ["uv_build>=0.11.21,<0.12.0"]

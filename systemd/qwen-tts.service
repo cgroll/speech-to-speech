@@ -1,0 +1,26 @@
+[Unit]
+Description=Qwen3-TTS speech-synthesis daemon (GPU-resident)
+After=graphical-session.target
+
+[Service]
+Type=simple
+Environment=PYTHONUNBUFFERED=1
+WorkingDirectory=%h/research/speech-to-speech
+# Calls the venv's installed binary directly rather than `uv run` -- uv is
+# snap-packaged on this machine, and snap re-parents the process into its
+# own snap.astral-uv.*.scope cgroup, which breaks `journalctl -u` filtering
+# for this unit. Run `uv sync` in the project after dependency changes.
+ExecStart=%h/research/speech-to-speech/.venv/bin/qwen-tts-daemon
+# on-failure (not the default "no"): the daemon deliberately self-terminates
+# (os._exit) if a speak() call is still running past its watchdog deadline --
+# a hung generation can't be cancelled from another thread, only the process
+# it runs in can be killed. This restart is what turns that into "~10s model
+# reload" instead of "daemon stuck in `speaking` forever" (see daemon.py).
+Restart=on-failure
+RestartSec=2
+
+# Intentionally no [Install] section: this service is never enabled to
+# start at login. It is only ever started/stopped explicitly via
+# `qwen-tts enable` / `disable`, so GPU memory is only allocated when the
+# user asks for it. Restart=on-failure only applies while it's already
+# running -- it does not make the service auto-start.

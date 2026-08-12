@@ -6,20 +6,19 @@ automatically once a recording is stopped.
 Two independent trigger sources call the same on_toggle(): the Jabra
 button (evdev, read directly by this process) and a local Unix socket
 (toggle_socket.py) that a GNOME-hotkey-bound CLI command talks to, for
-toggling from the keyboard when you're at the desk. Single long-running
-process holds both models warm and reacts to both directly -- no
-daemon/socket split needed for the Jabra path, since (unlike a GNOME
-hotkey) evdev lets this same process listen for the button itself.
+toggling from the keyboard when you're at the desk. This process holds no
+models itself -- STT and TTS both live in shared daemons (stt_client.py,
+tts_client.py) -- and reacts to both trigger sources directly; no
+daemon/socket split was needed for the Jabra path itself, since (unlike a
+GNOME hotkey) evdev lets this same process listen for the button.
 """
 
 import logging
 import threading
 import time
 
-from speech_to_speech import audio_io, cockpit, input_button, toggle_socket
+from speech_to_speech import cockpit, input_button, stt_client, toggle_socket, tts_client
 from speech_to_speech.llm import ClaudeCodeConversation
-from speech_to_speech.stt import SpeechToText
-from speech_to_speech.tts import TextToSpeech
 
 logger = logging.getLogger(__name__)
 
@@ -35,12 +34,12 @@ class App:
     def __init__(self) -> None:
         self._state = "idle"
         self._state_lock = threading.Lock()
-        self._recorder = audio_io.Recorder()
-        self._stt = SpeechToText()
-        self._tts = TextToSpeech()
+        # Mic capture/STT and TTS synthesis/playback both live in shared
+        # daemons now (speech_to_speech.dictate.daemon,
+        # speech_to_speech.tts_daemon.daemon -- docs/architecture-proposal.md
+        # "Daemon-Aufspaltung"). stt_client/tts_client just talk to them over
+        # Unix sockets, no model state to hold here anymore.
         self._llm: ClaudeCodeConversation | None = None
-        self._worker: threading.Thread | None = None
-        self._transcribed: list[str] = []
         # Replaced with a fresh Event each time a recording is stopped
         # (recording -> thinking); shared by the thinking and speaking
         # phases of that same turn. A barge-in sets it to tell whichever
@@ -62,10 +61,11 @@ class App:
         }
 
     def load(self) -> None:
-        # Fail fast on a missing API key before spending time loading models.
+        # Fail fast on a missing API key or an unreachable STT/TTS daemon
+        # before the app starts listening for a toggle.
         self._llm = ClaudeCodeConversation()
-        self._stt.load()
-        self._tts.load()
+        stt_client.ensure_available()
+        tts_client.ensure_available()
         logger.info("Ready. Press the Jabra button (or the local toggle hotkey) to start recording.")
 
     def on_toggle(self) -> None:
@@ -116,22 +116,15 @@ class App:
         else:
             logger.info("Barge-in: interrupting %s, starting new recording.", state)
             self._start_recording()
+            if state == "speaking":
+                tts_client.stop()
             if self._llm is not None:
                 self._llm.cancel()
 
     def _start_recording(self) -> None:
-        self._transcribed = []
-        self._recorder.start()
+        stt_client.start_recording()
         self._state = "recording"
-        self._worker = threading.Thread(target=self._consume_segments, daemon=True)
-        self._worker.start()
         logger.info("Recording... press the button again to stop.")
-
-    def _consume_segments(self) -> None:
-        for audio in self._recorder.segments():
-            text = self._stt.transcribe(audio)
-            if text:
-                self._transcribed.append(text)
 
     def _stop_recording_and_respond(self) -> None:
         # Capture the Event on_toggle created for this turn -- self._interrupt
@@ -139,21 +132,14 @@ class App:
         # local reference is what makes the checks below race-safe.
         interrupt = self._interrupt
         stop_t0 = time.monotonic()
-        self._recorder.stop()
-        assert self._worker is not None
-        self._worker.join()
-        # Mic-stop-to-text delay: stop() itself returns fast, so this is
-        # dominated by _consume_segments() finishing off whatever speech
-        # segments (including the final flushed one) hadn't been transcribed
-        # yet -- the lag a user actually feels between letting go of the
-        # button and something happening.
+        # Mic-stop-to-text delay: the daemon's stop_recording call blocks
+        # until it's drained whatever speech segments (including the final
+        # flushed one) hadn't been transcribed yet -- the lag a user
+        # actually feels between letting go of the button and something
+        # happening.
+        text = stt_client.stop_recording().strip()
         stt_s = time.monotonic() - stop_t0
-        # Known narrow gap: a barge-in landing exactly here (before the LLM
-        # call below starts) races with the next _start_recording()'s reset
-        # of self._transcribed. Accepted for now -- this feature targets the
-        # multi-second "thinking"/"speaking" waits, not this sub-second one.
 
-        text = " ".join(self._transcribed).strip()
         if not text:
             logger.info("No speech detected.")
             with self._state_lock:
@@ -164,6 +150,48 @@ class App:
         logger.info("Transcribed: %s", text)
         with self._history_lock:
             self._stats["last_stt_s"] = stt_s
+        self._respond(text, interrupt)
+
+    def submit_text(self, text: str) -> None:
+        """Text-input path for the cockpit: lets you type or paste text
+        instead of speaking (handy for quickly dropping in a chunk of text
+        that would be awkward to dictate). Skips recording/STT entirely and
+        jumps straight to "thinking", but otherwise follows the exact same
+        thinking -> speaking -> idle flow -- including barge-in semantics --
+        as a voice turn, by sharing _respond() with
+        _stop_recording_and_respond().
+        """
+        text = text.strip()
+        if not text:
+            return
+
+        with self._state_lock:
+            state = self._state
+            if state == "idle":
+                self._interrupt = threading.Event()
+                self._state = "thinking"
+            elif state in ("thinking", "speaking"):
+                # Barge-in, same idea as on_toggle()'s: flag whatever's in
+                # flight to abort. Unlike the mic path there's no "recording"
+                # phase for this turn to create its own fresh Event at the
+                # end of, so it's created here instead, right away.
+                self._interrupt.set()
+                self._interrupt = threading.Event()
+                self._state = "thinking"
+            else:
+                logger.info("Busy (%s), ignoring text submit", state)
+                return
+            interrupt = self._interrupt
+
+        logger.info("Text input: %s", text)
+        if state in ("thinking", "speaking"):
+            assert self._llm is not None
+            if state == "speaking":
+                tts_client.stop()
+            self._llm.cancel()
+        threading.Thread(target=self._respond, args=(text, interrupt), daemon=True).start()
+
+    def _respond(self, text: str, interrupt: threading.Event) -> None:
         self._append_history("user", text)
         assert self._llm is not None
         t0 = time.monotonic()
@@ -182,30 +210,26 @@ class App:
 
         with self._state_lock:
             if self._state != "thinking":
-                return  # a barge-in already claimed the state for a new recording
+                return  # a barge-in already claimed the state for a new turn
             self._state = "speaking"
-        self._speak(reply, interrupt, reply_ready)
+        self._speak(reply)
 
         with self._state_lock:
             if self._state == "speaking":
                 self._state = "idle"
 
-    def _speak(self, reply: str, interrupt: threading.Event, reply_ready: float) -> None:
+    def _speak(self, reply: str) -> None:
+        # Synthesis and playback both happen inside the TTS daemon now
+        # (speech_to_speech.tts_daemon.daemon) -- this call blocks until
+        # playback finishes or a barge-in's tts_client.stop() cancels it.
+        # "Time to first audio" is measured daemon-side and returned once
+        # the call completes, since the cockpit stat is only read after the
+        # fact anyway.
         t0 = time.monotonic()
-
-        def _on_first_chunk() -> None:
-            # Time from "reply text is ready" to "first audio sample actually
-            # written to the output stream" -- covers TTS-synthesis latency
-            # for the first chunk *and* the ffmpeg atempo round-trip, so it's
-            # the number that matches what a listener actually experiences
-            # as the pause before the reply starts.
-            with self._history_lock:
-                self._stats["last_ttfa_s"] = time.monotonic() - reply_ready
-
-        audio_io.play_audio_streaming(
-            self._tts.synthesize_streaming(reply), stop_event=interrupt, on_first_chunk=_on_first_chunk
-        )
+        first_chunk_s = tts_client.speak(reply)
         with self._history_lock:
+            if first_chunk_s is not None:
+                self._stats["last_ttfa_s"] = first_chunk_s
             self._stats["last_speaking_s"] = time.monotonic() - t0
 
     def _append_history(self, role: str, content: str) -> None:
@@ -260,9 +284,9 @@ class App:
             self._state = "idle"
 
         if state == "recording":
-            self._recorder.stop()
-            if self._worker is not None:
-                self._worker.join()
+            stt_client.stop_recording()  # discard text, just stop+drain the daemon
+        if state == "speaking":
+            tts_client.stop()
 
         old_llm = self._llm
         if old_llm is not None and state in ("thinking", "speaking"):

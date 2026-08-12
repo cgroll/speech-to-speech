@@ -6,12 +6,19 @@ Proof of concept: Sprache rein, Sprache raus. Ein Knopf am Jabra-Headset
 transkribiert (Parakeet/CPU), an Gemini geschickt, und die Antwort wird
 lokal per Qwen3-TTS (GPU, Stimme "aiden") vorgelesen.
 
-Ein einziger Prozess hält beide Modelle warm und nimmt Toggle-Auslöser aus
-zwei Quellen entgegen: `evdev` liest den Jabra-Knopf direkt, und ein
-schlanker Unix-Socket (`toggle_socket.py`) nimmt Kommandos von einem
-optionalen lokalen Hotkey entgegen (siehe Setup Schritt 5). Fehlt der Jabra
-(nicht angeschlossen), läuft die App trotzdem weiter -- nur über den
-Socket-Pfad.
+Die App selbst hält kein Modell mehr warm -- STT (Parakeet) und TTS
+(Qwen3-TTS) laufen beide in eigenen Hintergrund-Daemons, die App spricht sie
+nur noch über ihre jeweiligen Unix-Sockets an (`stt_client.py`,
+`tts_client.py`; siehe Abschnitte "Eigenständige Diktier-Funktion" und
+"TTS-Daemon" unten sowie `docs/architecture-proposal.md`). Beide Daemons
+müssen vorher gestartet sein (`parakeet-dictate enable` und `qwen-tts
+enable`) -- kein Auto-Start durch die App.
+
+Toggle-Auslöser kommen aus zwei Quellen: `evdev` liest den Jabra-Knopf
+direkt, und ein schlanker Unix-Socket (`toggle_socket.py`) nimmt Kommandos
+von einem optionalen lokalen Hotkey entgegen (siehe Setup Schritt 5). Fehlt
+der Jabra (nicht angeschlossen), läuft die App trotzdem weiter -- nur über
+den Socket-Pfad.
 
 ## Setup
 
@@ -82,20 +89,48 @@ Befehl das auf stderr und tut sonst nichts.
 ## Nutzung
 
 ```bash
+uv run speech-to-speech-start
+```
+
+Startet beide Daemons per `systemctl --user start` (idempotent -- ein No-op,
+falls einer schon läuft), wartet bis beide tatsächlich über ihren Socket
+erreichbar sind (nicht nur bis `systemctl start` zurückkehrt -- das
+Modell-Laden dauert danach noch ein paar Sekunden bis über eine Minute),
+und startet dann die App. Ein Befehl statt der sonst nötigen drei
+(`parakeet-dictate enable`, `qwen-tts enable`, `speech-to-speech`).
+Voraussetzung: die systemd-User-Services beider Daemons sind installiert
+(siehe "Eigenständige Diktier-Funktion" und "TTS-Daemon" unten).
+
+Alternativ, wenn du die Daemons unabhängig von der App steuern willst (z.B.
+länger laufen lassen als die App selbst):
+
+```bash
+parakeet-dictate enable
+qwen-tts enable
 uv run speech-to-speech
 ```
 
-Wartet, bis beide Modelle geladen sind ("Ready."), dann: Knopf drücken
-(Jabra oder lokaler Hotkey), sprechen, nochmal drücken -> Transkript +
-Gemini-Antwort erscheinen im Log, die Antwort wird gesprochen. Beenden mit
-Ctrl+C.
+`speech-to-speech` allein bricht mit einer klaren Fehlermeldung ab, statt
+später beim ersten Knopfdruck zu hängen, falls einer der beiden Daemons
+nicht läuft. Zeigt sonst "Ready.", dann: Knopf drücken (Jabra oder lokaler
+Hotkey), sprechen, nochmal drücken -> Transkript + Antwort erscheinen im
+Log, die Antwort wird gesprochen. Beenden mit Ctrl+C (die Daemons laufen
+danach weiter, unabhängig von der App).
 
 ## Architektur
 
-- `audio_io.py` -- Mikrofonaufnahme mit VAD-Segmentierung (adaptiert aus
-  `parakeet-dictate/src/parakeet_dictate/audio.py`) + Wiedergabe.
-- `stt.py` -- Parakeet (ONNX, int8, CPU).
-- `tts.py` -- Qwen3-TTS CustomVoice (GPU, fester Sprecher "aiden").
+- `stt_client.py` -- dünner Client für den gemeinsamen STT-Daemon
+  (`dictate/daemon.py`): `start_recording()`/`stop_recording()` über dessen
+  Unix-Socket, kein eigenes Parakeet-Modell mehr im App-Prozess. Der Daemon
+  muss vorher separat gestartet sein (`parakeet-dictate enable`) -- kein
+  Auto-Start durch die App.
+- `tts_client.py` -- dünner Client für den gemeinsamen TTS-Daemon
+  (`tts_daemon/daemon.py`, siehe eigener Abschnitt unten):
+  `speak()`/`stop()` über dessen Unix-Socket. Synthese *und* Wiedergabe
+  laufen serverseitig im Daemon (fester Sprecher "aiden"), `speak()`
+  blockiert entsprechend bis die Wiedergabe fertig ist oder per `stop()`
+  abgebrochen wird. Der Daemon muss vorher separat gestartet sein
+  (`qwen-tts enable`) -- kein Auto-Start durch die App.
 - `llm.py` -- Gemini-Chat-Session mit Konversationshistorie über die
   Laufzeit der App. Bewusst eine einzelne kleine `send()`-Funktion -- das
   ist der Punkt, an dem später ein anderes Backend (z.B. Claude Code)
@@ -110,6 +145,12 @@ Ctrl+C.
   selben Prozess, standardmäßig nur auf `http://127.0.0.1:7860` erreichbar
   (siehe `docs/architecture-proposal.md` zum Sicherheitsgrund und zu
   offenem mobilem Zugriff).
+- `dictate/` -- eigenständiger System-weiter Diktier-Modus (Daemon + CLI),
+  siehe eigener Abschnitt unten. Unabhängig vom Rest der App, teilt sich nur
+  das Parakeet-Modell.
+- `tts_daemon/` -- gemeinsamer TTS-Daemon (Daemon + CLI), siehe eigener
+  Abschnitt unten. Einziger Ort, an dem das Qwen3-TTS-Modell lädt und
+  Wiedergabe stattfindet.
 - `app.py` -- State Machine: `idle -> recording -> thinking -> speaking -> idle`,
   angestoßen von beiden Toggle-Quellen (Jabra-Thread + Socket-Thread), gegen
   Races per Lock beim State-Übergang abgesichert.
@@ -120,6 +161,115 @@ Ctrl+C.
   Producer/Consumer-Muster wie `_consume_segments` bei der Aufnahme, nur mit
   vertauschter Richtung (Generierung -> Wiedergabe statt Mikro ->
   Transkription).
+
+## Eigenständige Diktier-Funktion (`parakeet-dictate`)
+
+Zusätzlich zum Sprach-Dialog enthält dieses Projekt einen eigenständigen
+System-weiten Diktier-Modus (`src/speech_to_speech/dictate/`, vormals das
+getrennte `parakeet-dictate`-Repo): Hotkey drücken, sprechen, nochmal
+drücken -- der transkribierte Text wird direkt in das gerade fokussierte
+Textfeld getippt, unabhängig vom Gemini/Claude-Dialog oben. Der Daemon dieses
+Diktier-Modus ist inzwischen auch der einzige Ort, an dem das Parakeet-Modell
+lädt (`STT_MODEL_NAME` in `config.py`) -- der Sprach-Dialog (`app.py`) ist
+über `stt_client.py` nur noch Client desselben Daemons, kein zweites
+Modell-/Mikro-Handling mehr im App-Prozess (siehe
+`docs/architecture-proposal.md`, "Daemon-Aufspaltung").
+
+- Ein Daemon (`dictate/daemon.py`) lädt Parakeet und lauscht auf einem
+  eigenen Unix-Socket (`$XDG_RUNTIME_DIR/parakeet-dictate.sock`) auf
+  Toggle-/Status-Kommandos -- läuft nur, wenn explizit gestartet
+  (`parakeet-dictate enable`/`disable`), kein Auto-Start.
+- Der Hotkey ruft nur den dünnen CLI-Client (`dictate/cli.py`) auf:
+  `parakeet-dictate toggle`. Der getippte Text kommt über `toggle_record`
+  zurück.
+- Der Sprach-Dialog (`stt_client.py`) nutzt stattdessen die "stillen"
+  Kommandos `start_recording`/`stop_recording` desselben Daemons -- gleiche
+  Aufnahme-/Transkriptions-Mechanik, aber ohne `ydotool`-Tippen, da der Text
+  hier an Claude weitergereicht statt ins fokussierte Fenster getippt wird.
+- Tippen erfolgt über `ydotool` (`dictate/typing_backend.py`), inklusive
+  Tastatur-Layout-Fixup für DE/QWERTZ (`dictate/keymap.py`) und
+  Sound-/Notify-Feedback (`dictate/feedback.py`) -- nur auf dem
+  `toggle_record`-Pfad, nicht bei `start_recording`/`stop_recording`.
+- Mic-Exklusivität: Diktieren und Sprach-Dialog können nicht gleichzeitig
+  laufen, da beide dasselbe Mikrofon über denselben Daemon-Zustand
+  beanspruchen -- ein zweiter `start_recording`/`toggle_record`-Aufruf
+  während einer laufenden Aufnahme bekommt vom Daemon ein `busy` zurück.
+
+### Setup
+
+```bash
+uv sync   # falls noch nicht geschehen
+```
+
+**ydotool** (Text-Injection unter Wayland) einrichten -- Skript vorher
+anschauen, da es `sudo` braucht:
+
+```bash
+./scripts/setup_ydotool.sh
+```
+
+Danach einmal komplett aus- und wieder einloggen (siehe Skript-Ausgabe).
+
+**systemd-User-Service** installieren:
+
+```bash
+mkdir -p ~/.config/systemd/user
+cp systemd/parakeet-dictate.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+```
+
+Bewusst ohne `[Install]`-Sektion -- der Service startet nie automatisch,
+nur über `enable`/`disable`.
+
+**Hotkey binden** (GNOME Settings -> Keyboard -> View and Customize
+Shortcuts -> Custom Shortcuts):
+- Command: `/home/chris/research/speech-to-speech/.venv/bin/parakeet-dictate toggle`
+- Shortcut: z.B. `Super+D`
+
+### Nutzung
+
+```bash
+parakeet-dictate enable    # lädt Modell (ein paar Sekunden)
+# ... in ein Textfeld klicken, Hotkey drücken, sprechen, nochmal drücken ...
+parakeet-dictate status
+parakeet-dictate disable   # gibt Speicher wieder frei
+```
+
+## TTS-Daemon (`qwen-tts`)
+
+Analog zum Diktier-Daemon: ein Hintergrunddienst (`src/speech_to_speech/tts_daemon/`)
+hält das Qwen3-TTS-Modell warm und übernimmt auch die Wiedergabe selbst,
+direkt über die lokalen Lautsprecher -- der Sprach-Dialog (`app.py`) ist
+über `tts_client.py` nur noch Client, kein Modell-/Playback-Handling mehr im
+App-Prozess (siehe `docs/architecture-proposal.md`, "Daemon-Aufspaltung",
+Schritte 5+6). Im Unterschied zum Diktier-Daemon gibt es hier keinen
+Hotkey-Nutzer -- nur `app.py` spricht ihn an, über `speak`/`stop`.
+
+Ein `stop()` (Barge-in) kann eine bereits laufende Chunk-Generierung nicht
+sofort unterbrechen, nur zwischen zwei Chunks -- in seltenen Fällen kann
+eine Generierung hängen bleiben. Ein Watchdog in `daemon.py` beendet den
+Daemon-Prozess dann selbst, `Restart=on-failure` in der systemd-Unit startet
+ihn automatisch neu (~10s Modell-Ladezeit statt unbegrenztem Hängen). Siehe
+`docs/architecture-proposal.md`, Nachtrag zu Schritt 5.
+
+### Setup
+
+```bash
+mkdir -p ~/.config/systemd/user
+cp systemd/qwen-tts.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+```
+
+Bewusst ohne `[Install]`-Sektion -- der Service startet nie automatisch, nur
+über `enable`/`disable`.
+
+### Nutzung
+
+```bash
+qwen-tts enable     # lädt Modell (ein paar Sekunden)
+qwen-tts status
+qwen-tts disable    # gibt GPU-Speicher wieder frei
+```
 
 ## Bekannte Grenzen (PoC-Stand)
 
