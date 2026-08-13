@@ -16,14 +16,17 @@ actual audio still plays over the local speakers, not through the browser.
 """
 
 import logging
+import subprocess
 import warnings
 
 import gradio as gr
+import numpy as np
 from starlette.exceptions import StarletteDeprecationWarning
 
 from speech_to_speech import sessions
 from speech_to_speech.agent_backend import AGENT_LABELS
 from speech_to_speech.config import COCKPIT_HOST, COCKPIT_PORT, COCKPIT_POLL_SECONDS
+from speech_to_speech.dictate.audio import SAMPLE_RATE as STT_SAMPLE_RATE
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +42,33 @@ warnings.filterwarnings(
     category=StarletteDeprecationWarning,
     module="gradio.routes",
 )
+
+
+def _to_stt_pcm(sample_rate: int, data: np.ndarray) -> np.ndarray:
+    """Converts Gradio's raw microphone capture (native sample rate, int or
+    float samples, mono or stereo) into the 16 kHz mono float32 PCM the STT
+    daemon's `transcribe` command expects -- same target format as the
+    Telegram bot's Ogg/Opus decode (telegram_bot/daemon.py's
+    _decode_ogg_to_pcm), just a different source format on the way in."""
+    if data.dtype.kind in ("i", "u"):
+        data = data.astype(np.float32) / np.iinfo(data.dtype).max
+    else:
+        data = data.astype(np.float32)
+    if data.ndim > 1:
+        data = data.mean(axis=1)
+    if sample_rate == STT_SAMPLE_RATE:
+        return data
+    proc = subprocess.run(
+        [
+            "ffmpeg",
+            "-f", "f32le", "-ar", str(sample_rate), "-ac", "1", "-i", "pipe:0",
+            "-f", "f32le", "-ar", str(STT_SAMPLE_RATE), "-ac", "1", "pipe:1",
+        ],
+        input=data.tobytes(),
+        capture_output=True,
+        check=True,
+    )
+    return np.frombuffer(proc.stdout, dtype=np.float32)
 
 
 def _snapshot(app) -> tuple[str, list[dict[str, str]], str]:
@@ -78,6 +108,26 @@ def build(app) -> gr.Blocks:
             toggle_btn = gr.Button("Aufnehmen / Stoppen / Unterbrechen", variant="primary")
             reset_btn = gr.Button("Neue Session")
 
+        # Browser-Mikrofon-Ein-/Ausgabe -- erster, bewusst einfacher
+        # (nicht-gestreamter) Test-Roundtrip für den mobilen Zugriff
+        # (docs/architecture-proposal.md, "Offene Frage: mobiler Zugriff
+        # (Handy)"): unabhängig vom Jabra-/Hotkey-Pfad oben, kein Barge-in.
+        # Aufnahme endet automatisch (stop_recording-Event, wie beim
+        # Loslassen einer Sprachnachrichtentaste), dann läuft der ganze
+        # Turn synchron durch (App.voice_turn) und die Antwort landet als
+        # Audio-Clip zum Abspielen rechts daneben.
+        with gr.Row():
+            voice_input = gr.Audio(
+                label="Sprachnachricht aufnehmen (Test, für mobilen Zugriff)",
+                sources=["microphone"],
+                type="numpy",
+            )
+            voice_output = gr.Audio(
+                label="Antwort",
+                type="numpy",
+                autoplay=True,
+            )
+
         # Session-Verlauf/-Wiederaufnahme (docs/backlog.md, "Frühere
         # Sessions wieder aufnehmen können" / "Mehrere Agent-Backends").
         # Persistierung übernimmt bereits der jeweilige Backend selbst
@@ -110,10 +160,22 @@ def build(app) -> gr.Blocks:
         # Only reset/resume explicitly write agent_picker (see _snapshot's
         # comment on why the fast poll below must not touch it).
         agent_outputs = outputs + [agent_picker]
+        voice_outputs = outputs + [voice_output]
 
         def _toggle():
             app.on_toggle()
             return _snapshot(app)
+
+        def _voice_submit(audio: tuple[int, np.ndarray] | None):
+            if audio is None:
+                return (*_snapshot(app), None)
+            sample_rate, data = audio
+            pcm = _to_stt_pcm(sample_rate, data)
+            result = app.voice_turn(pcm)
+            if result is None:
+                return (*_snapshot(app), None)
+            reply_audio, reply_sample_rate = result
+            return (*_snapshot(app), (reply_sample_rate, reply_audio))
 
         def _reset(agent: str):
             app.reset(agent=agent)
@@ -131,6 +193,7 @@ def build(app) -> gr.Blocks:
             return (*_snapshot(app), app.get_agent_name())
 
         toggle_btn.click(_toggle, outputs=outputs)
+        voice_input.stop_recording(_voice_submit, inputs=voice_input, outputs=voice_outputs)
         reset_btn.click(_reset, inputs=agent_picker, outputs=agent_outputs)
         text_input.submit(_submit_text, inputs=text_input, outputs=text_outputs)
         send_btn.click(_submit_text, inputs=text_input, outputs=text_outputs)

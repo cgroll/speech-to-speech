@@ -34,6 +34,9 @@ import sys
 import threading
 import time
 
+import numpy as np
+
+from speech_to_speech.dictate.protocol import encode_audio
 from speech_to_speech.tts_daemon import playback
 from speech_to_speech.tts_daemon.protocol import socket_path as _socket_path
 from speech_to_speech.tts_daemon.tts import TextToSpeech
@@ -67,17 +70,55 @@ class Daemon:
             return {"ok": True, "state": self._state}
         if name == "speak":
             return self._speak(cmd.get("text", ""))
+        # synthesize: same generation as speak(), but returns the audio as
+        # base64 bytes instead of playing it on this machine's speakers --
+        # for remote callers (e.g. the Gradio cockpit reached over Tailscale
+        # from a phone) that need to hand the audio to a browser player
+        # instead of local playback. See docs/architecture-proposal.md,
+        # "Offene Frage: mobiler Zugriff (Handy)".
+        if name == "synthesize":
+            return self._synthesize(cmd.get("text", ""))
         if name == "stop":
             return self._stop()
         return {"ok": False, "error": f"unknown command: {name}"}
 
-    def _speak(self, text: str) -> dict:
+    def _claim_speaking(self) -> threading.Event | dict:
+        """Shared busy-guard + state-claim for speak()/synthesize(): both
+        drive the same GPU model and can't run concurrently with each other
+        or with themselves. Returns the fresh stop_event on success, or an
+        error response dict if the daemon wasn't idle."""
         with self._state_lock:
             if self._state != "idle":
                 return {"ok": False, "error": f"busy: {self._state}"}
             self._state = "speaking"
             self._stop_event = threading.Event()
-        stop_event = self._stop_event
+        return self._stop_event
+
+    def _run_with_watchdog(self, target) -> None:
+        """Runs `target` in a background thread and waits up to
+        `_SPEAK_WATCHDOG_S`. If it's still running past that, kills the
+        daemon process (`os._exit`) instead of staying wedged in `speaking`
+        forever and rejecting every request after it -- see the module
+        docstring and systemd/qwen-tts.service's `Restart=on-failure`. Shared
+        by speak() and synthesize(), which only differ in what they do with
+        each generated chunk."""
+        worker = threading.Thread(target=target, daemon=True)
+        worker.start()
+        worker.join(timeout=_SPEAK_WATCHDOG_S)
+
+        if worker.is_alive():
+            logger.error(
+                "TTS call still running after %.0fs with no natural stop -- "
+                "can't cancel a blocking GPU call from another thread, "
+                "restarting the daemon process instead.",
+                _SPEAK_WATCHDOG_S,
+            )
+            os._exit(1)
+
+    def _speak(self, text: str) -> dict:
+        stop_event = self._claim_speaking()
+        if isinstance(stop_event, dict):
+            return stop_event
 
         t0 = time.monotonic()
         first_chunk_s = None
@@ -97,18 +138,7 @@ class Daemon:
             except Exception as exc:  # noqa: BLE001 - reported to the client below
                 error.append(exc)
 
-        worker = threading.Thread(target=_run, daemon=True)
-        worker.start()
-        worker.join(timeout=_SPEAK_WATCHDOG_S)
-
-        if worker.is_alive():
-            logger.error(
-                "speak() still running after %.0fs with no natural stop -- "
-                "can't cancel a blocking GPU call from another thread, "
-                "restarting the daemon process instead.",
-                _SPEAK_WATCHDOG_S,
-            )
-            os._exit(1)
+        self._run_with_watchdog(_run)
 
         with self._state_lock:
             self._state = "idle"
@@ -119,6 +149,50 @@ class Daemon:
         return {
             "ok": True,
             "state": "cancelled" if stop_event.is_set() else "done",
+            "first_chunk_s": first_chunk_s,
+        }
+
+    def _synthesize(self, text: str) -> dict:
+        stop_event = self._claim_speaking()
+        if isinstance(stop_event, dict):
+            return stop_event
+
+        t0 = time.monotonic()
+        first_chunk_s = None
+        error: list[Exception] = []
+        chunks: list[np.ndarray] = []
+        sample_rate = 0
+
+        def _run() -> None:
+            nonlocal first_chunk_s, sample_rate
+            try:
+                for chunk, sr in self._tts.synthesize_streaming(text):
+                    if stop_event.is_set():
+                        break
+                    if first_chunk_s is None:
+                        first_chunk_s = time.monotonic() - t0
+                    sample_rate = sr
+                    chunks.append(chunk)
+            except Exception as exc:  # noqa: BLE001 - reported to the client below
+                error.append(exc)
+
+        self._run_with_watchdog(_run)
+
+        with self._state_lock:
+            self._state = "idle"
+
+        if error:
+            return {"ok": False, "error": str(error[0])}
+
+        # Concatenated once at the end rather than streamed back chunk by
+        # chunk -- fine for this first, simple (non-streaming) remote path;
+        # see docs/architecture-proposal.md for the later streaming option.
+        audio = np.concatenate(chunks).astype(np.float32) if chunks else np.zeros(0, dtype=np.float32)
+        return {
+            "ok": True,
+            "state": "cancelled" if stop_event.is_set() else "done",
+            "audio": encode_audio(audio),
+            "sample_rate": sample_rate,
             "first_chunk_s": first_chunk_s,
         }
 

@@ -10,6 +10,9 @@ as stt_client.py.
 
 import logging
 
+import numpy as np
+
+from speech_to_speech.dictate.protocol import decode_audio
 from speech_to_speech.tts_daemon.protocol import send_command
 
 logger = logging.getLogger(__name__)
@@ -47,6 +50,23 @@ def speak(text: str) -> float | None:
     if not result.get("ok"):
         raise RuntimeError(f"TTS daemon error: {result.get('error')}")
     return result.get("first_chunk_s")
+
+
+def synthesize(text: str) -> tuple[np.ndarray, int]:
+    """Synthesizes text to audio and returns it as (samples, sample_rate)
+    instead of playing it on this machine's speakers -- for remote callers
+    (e.g. the Gradio cockpit reached over Tailscale from a phone) that need
+    the audio bytes to hand to a browser player. Blocks until synthesis
+    finishes; unlike speak(), nothing is played here. A first, simple
+    (non-streaming) round trip -- see docs/architecture-proposal.md,
+    "Offene Frage: mobiler Zugriff (Handy)"."""
+    result = send_command({"cmd": "synthesize", "text": text}, timeout=_SPEAK_TIMEOUT_S)
+    if result is None:
+        raise DaemonUnavailableError("TTS daemon not running -- run `qwen-tts enable`.")
+    if not result.get("ok"):
+        raise RuntimeError(f"TTS daemon error: {result.get('error')}")
+    audio = decode_audio(result["audio"]) if result.get("audio") else np.zeros(0, dtype=np.float32)
+    return audio, result.get("sample_rate") or 0
 
 
 def stop() -> None:

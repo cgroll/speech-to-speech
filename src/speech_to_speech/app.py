@@ -17,6 +17,8 @@ import logging
 import threading
 import time
 
+import numpy as np
+
 from speech_to_speech import cockpit, input_button, sessions, stt_client, toggle_socket, tts_client
 from speech_to_speech.agent_backend import AGENT_LABELS, AgentConversation, DEFAULT_AGENT, create_conversation
 
@@ -239,6 +241,55 @@ class App:
             if first_chunk_s is not None:
                 self._stats["last_ttfa_s"] = first_chunk_s
             self._stats["last_speaking_s"] = time.monotonic() - t0
+
+    def voice_turn(self, audio: np.ndarray) -> tuple[np.ndarray, int] | None:
+        """Handles one complete, already-recorded turn from a remote client
+        (the Gradio cockpit's mic widget, reached e.g. over Tailscale from a
+        phone -- see docs/architecture-proposal.md, "Offene Frage: mobiler
+        Zugriff (Handy)"): transcribe -> agent -> synthesize, end to end.
+        `audio` must already be 16 kHz mono float32 (see cockpit.py's
+        conversion from whatever the browser recorded); returns the
+        synthesized reply as (samples, sample_rate) instead of playing it on
+        this machine's speakers (tts_client.synthesize(), not speak()), or
+        None if there was nothing to say (busy, no speech detected, or an
+        empty/cancelled synthesis).
+
+        A first, simple round trip: blocks the calling thread for the whole
+        turn, no barge-in/streaming yet -- same "busy, ignoring" behavior as
+        submit_text() rather than on_toggle()'s richer interrupt handling,
+        since there's no in-progress recording/thinking/speaking phase of
+        *this* turn for a second call to interrupt partway through."""
+        with self._state_lock:
+            if self._state != "idle":
+                logger.info("Busy (%s), ignoring voice turn", self._state)
+                return None
+            self._interrupt = threading.Event()
+            self._state = "thinking"
+
+        text = stt_client.transcribe(audio).strip()
+        if not text:
+            logger.info("No speech detected (voice turn).")
+            with self._state_lock:
+                self._state = "idle"
+            return None
+
+        logger.info("Voice turn (remote): %s", text)
+        self._append_history("user", text)
+        assert self._llm is not None
+        reply = self._llm.send(text)
+        self._append_history("assistant", reply)
+        with self._history_lock:
+            self._stats["turns"] += 1
+
+        with self._state_lock:
+            self._state = "speaking"
+        reply_audio, sample_rate = tts_client.synthesize(reply)
+        with self._state_lock:
+            self._state = "idle"
+
+        if reply_audio.size == 0:
+            return None
+        return reply_audio, sample_rate
 
     def _append_history(self, role: str, content: str) -> None:
         with self._history_lock:
