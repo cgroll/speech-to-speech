@@ -2,22 +2,23 @@
 agent backend the desktop app (app.py) talks to (docs/telegram-bot-proposal.md).
 
 A message in gets a message back:
-- Text message -> straight to the agent, reply sent back as text or voice
-  depending on the chat's output mode (see /voice below).
+- Text message -> straight to the agent, reply always sent back as text,
+  plus a synthesized voice message too if the chat has audio replies
+  switched on (see /voice below).
 - Voice message -> downloaded, decoded from Ogg/Opus to 16 kHz mono PCM via
   ffmpeg, transcribed by the shared STT daemon (stt_client.transcribe(),
   which bypasses the live-mic/VAD path entirely), the transcript sent back
   as its own text message first (so recognition errors are visible
   separately from understanding errors), then fed into the agent exactly
-  like a text message -- the reply again follows the chat's output mode.
+  like a text message -- the reply again follows the chat's audio setting.
 
-Per-chat output mode (/voice) picks text or synthesized-voice replies,
-independent of whether the *input* was typed or spoken -- reuses the shared
-TTS daemon's synthesize() (tts_client.py, same one the Gradio cockpit's
-audio round trip uses) rather than playing anything locally, then
-re-encodes to Ogg/Opus via ffmpeg since that's what Telegram's voice-message
-bubble requires (mirrors _decode_ogg_to_pcm's decode in the other
-direction).
+Per-chat audio setting (/voice) adds a synthesized-voice copy of every
+reply on top of the text (always sent), independent of whether the *input*
+was typed or spoken -- reuses the shared TTS daemon's synthesize()
+(tts_client.py, same one the Gradio cockpit's audio round trip uses) rather
+than playing anything locally, then re-encodes to Ogg/Opus via ffmpeg since
+that's what Telegram's voice-message bubble requires (mirrors
+_decode_ogg_to_pcm's decode in the other direction).
 
 One AgentConversation per chat id, held in memory for the lifetime of this
 process (analogous to App._llm, but one per chat instead of one for the
@@ -35,8 +36,9 @@ listing/resume mechanism:
 - /agent -- show which backend this chat is currently on.
 - /sessions -- recent sessions (both backends, across all chats/callers --
   see sessions.py) as tappable inline buttons; tapping one resumes it.
-- /voice [text|audio] -- show or switch this chat's reply mode; toggles
-  between the two if called without an argument.
+- /voice [text|audio] -- switch whether replies also go out as a voice
+  message (text replies are sent either way); toggles if called without an
+  argument.
 
 Long-polling, not a webhook -- no inbound port to open, the bot only makes
 outbound connections to Telegram's servers (see the proposal doc for why).
@@ -100,12 +102,14 @@ class _ChatSession:
         self.agent = agent
         self.conversation = conversation
         # Per-chat, independent of whether the *input* was typed or spoken
-        # -- a chat that sends voice messages might still want text replies
-        # back (e.g. to read quietly), and vice versa. Plain str field, not
-        # guarded by `lock` below: toggled by /voice only, a single
-        # attribute assignment is already atomic under the GIL, and reading
-        # a slightly-stale value while a toggle is in flight is harmless
-        # (affects at most the reply to the message that raced it).
+        # -- a chat that sends voice messages might still want an audio
+        # reply on top of the (always-sent) text one, and vice versa. Text
+        # is never turned off, only whether a voice-message copy is added on
+        # top (see _send_reply()). Plain str field, not guarded by `lock`
+        # below: toggled by /voice only, a single attribute assignment is
+        # already atomic under the GIL, and reading a slightly-stale value
+        # while a toggle is in flight is harmless (affects at most the
+        # reply to the message that raced it).
         self.output_mode = "text"
         # Serializes turns *and* resets within one chat (a chat client
         # could in principle fire off a second message -- or a /new --
@@ -192,20 +196,22 @@ def _encode_pcm_to_ogg(audio: np.ndarray, sample_rate: int) -> bytes:
 
 
 async def _send_reply(update: Update, chat_id: int, text: str) -> None:
-    """Sends an agent reply back in the chat's current output mode
-    (session.output_mode, toggled via /voice). Falls back to a text reply
-    if synthesis fails, rather than swallowing the reply entirely -- a
-    transient TTS-daemon hiccup shouldn't lose the answer."""
-    if _get_session(chat_id).output_mode == "audio":
-        try:
-            audio, sample_rate = await asyncio.to_thread(tts_client.synthesize, text)
-            if audio.size > 0:
-                ogg_bytes = await asyncio.to_thread(_encode_pcm_to_ogg, audio, sample_rate)
-                await update.message.reply_voice(voice=ogg_bytes)
-                return
-        except Exception:  # noqa: BLE001 - fall back to text, keep the daemon alive
-            logger.exception("Voice synthesis failed, falling back to text")
+    """Sends an agent reply as text (always), plus a synthesized voice-
+    message copy on top if the chat has audio replies switched on
+    (session.output_mode, toggled via /voice). A synthesis failure only
+    drops the extra voice copy, never the text reply that already went
+    out -- a transient TTS-daemon hiccup shouldn't lose the answer."""
     await update.message.reply_text(text)
+
+    if _get_session(chat_id).output_mode != "audio":
+        return
+    try:
+        audio, sample_rate = await asyncio.to_thread(tts_client.synthesize, text)
+        if audio.size > 0:
+            ogg_bytes = await asyncio.to_thread(_encode_pcm_to_ogg, audio, sample_rate)
+            await update.message.reply_voice(voice=ogg_bytes)
+    except Exception:  # noqa: BLE001 - text reply already sent, keep the daemon alive
+        logger.exception("Voice synthesis failed")
 
 
 async def _handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -298,7 +304,7 @@ async def _cmd_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     else:
         session.output_mode = "audio" if session.output_mode == "text" else "text"
 
-    label = "Sprachnachricht" if session.output_mode == "audio" else "Text"
+    label = "Text + Sprachnachricht" if session.output_mode == "audio" else "nur Text"
     await update.message.reply_text(f"Antwortmodus: {label}")
 
 
@@ -361,7 +367,7 @@ async def _post_init(app: Application) -> None:
             ("new", "Neue Session starten (optional: claude|pi)"),
             ("agent", "Aktuellen Agenten anzeigen"),
             ("sessions", "Frühere Sessions anzeigen/fortsetzen"),
-            ("voice", "Antwortmodus umschalten (optional: text|audio)"),
+            ("voice", "Sprachantwort an/aus (optional: text|audio)"),
         ]
     )
 
