@@ -22,6 +22,7 @@ def play_audio_streaming(
     chunks: Iterator[tuple[np.ndarray, int]],
     stop_event: threading.Event | None = None,
     on_first_chunk: Callable[[], None] | None = None,
+    on_chunk: Callable[[], None] | None = None,
 ) -> None:
     """Stream TTS audio chunks to playback with pitch-preserving time-stretch.
 
@@ -40,6 +41,12 @@ def play_audio_streaming(
     written to the output stream -- i.e. after ffmpeg's atempo stretch when
     TTS_PLAYBACK_SPEED != 1.0, not just once the first raw TTS chunk exists.
     Used to time "time to first speech" for the caller.
+
+    `on_chunk`, if given, fires every time a chunk is pulled from `chunks`
+    (i.e. as soon as the GPU has produced it, before playback/time-stretch) --
+    a progress heartbeat the caller's stall watchdog uses to tell "still
+    generating, just a long reply" apart from "stuck mid-chunk" (see
+    daemon.py's `_run_with_watchdog`).
     """
     t0 = time.monotonic()
     it = iter(chunks)
@@ -47,6 +54,8 @@ def play_audio_streaming(
         first_chunk, sample_rate = next(it)
     except StopIteration:
         return
+    if on_chunk is not None:
+        on_chunk()
 
     def _all() -> Iterator[np.ndarray]:
         yield first_chunk
@@ -55,6 +64,8 @@ def play_audio_streaming(
                 chunk, _ = next(it)
             except StopIteration:
                 return
+            if on_chunk is not None:
+                on_chunk()
             yield chunk
 
     if TTS_PLAYBACK_SPEED == 1.0:

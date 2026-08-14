@@ -30,8 +30,8 @@ import subprocess
 import threading
 import uuid
 
-from speech_to_speech.agent_backend import SYSTEM_PROMPT
-from speech_to_speech.config import PROJECT_DIR
+from speech_to_speech.agent_backend import SYSTEM_PROMPT, workspace_instruction
+from speech_to_speech.config import DEFAULT_WORKSPACE
 
 logger = logging.getLogger(__name__)
 
@@ -45,11 +45,21 @@ TURN_TIMEOUT_S = 300
 
 
 class PiAgentConversation:
-    def __init__(self, resume: str | None = None) -> None:
+    def __init__(self, resume: str | None = None, workspace: str | None = None) -> None:
         # `resume` is a past session_id (see sessions.py) to continue;
         # otherwise a fresh one, handed to `pi --session-id` on every call
         # of this instance so all turns land in the same on-disk session.
         self.session_id = resume or str(uuid.uuid4())
+        # `workspace` (docs/backlog.md, "Mehrere Agent-Backends", point 2)
+        # becomes the subprocess's cwd below -- note this only confines
+        # *this* process's default working directory, not a hard sandbox:
+        # Pi's own guardrails extension (~/.pi/agent/extensions/
+        # guardrails.json) is what actually enforces path access, and as of
+        # writing it's scoped to ~/.agents and ~/research globally, wider
+        # than any single session's workspace -- picking a workspace outside
+        # those two won't additionally be blocked by Pi, just not
+        # specifically whitelisted either.
+        self.workspace = workspace or str(DEFAULT_WORKSPACE)
         self._proc_lock = threading.Lock()
         self._proc: subprocess.Popen | None = None
 
@@ -63,13 +73,13 @@ class PiAgentConversation:
             "--session-id",
             self.session_id,
             "--append-system-prompt",
-            SYSTEM_PROMPT,
+            SYSTEM_PROMPT + "\n\n" + workspace_instruction(self.workspace),
             text,
         ]
         with self._proc_lock:
             self._proc = subprocess.Popen(
                 cmd,
-                cwd=str(PROJECT_DIR),
+                cwd=self.workspace,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,

@@ -10,6 +10,13 @@ from pathlib import Path
 # Claude Agent SDK sessions to this project (see sessions.py).
 PROJECT_DIR = Path(__file__).resolve().parents[2]
 
+# Default working directory for a new agent session (Claude SDK's `cwd`, Pi
+# subprocess's `cwd`) -- see docs/backlog.md, "Mehrere Agent-Backends", point
+# 2. Just the starting value; changeable per session (cockpit folder picker,
+# Telegram `/workspace`), same "picked once at session start" model as the
+# agent choice itself (agent_backend.py).
+DEFAULT_WORKSPACE = PROJECT_DIR
+
 # -- Jabra push-to-talk button -----------------------------------------
 JABRA_DEVICE_NAME = "Jabra Link 390"
 

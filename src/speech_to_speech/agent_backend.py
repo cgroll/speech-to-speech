@@ -13,7 +13,11 @@ the other's SDK/deps (claude_agent_sdk vs. just a `pi` subprocess).
 """
 
 import logging
+from collections.abc import Callable
+from pathlib import Path
 from typing import Protocol
+
+from speech_to_speech.config import DEFAULT_WORKSPACE
 
 logger = logging.getLogger(__name__)
 
@@ -61,16 +65,58 @@ AGENT_LABELS = {
 DEFAULT_AGENT = AGENT_CLAUDE
 
 
-def create_conversation(agent: str, resume: str | None = None) -> AgentConversation:
+def create_conversation(
+    agent: str,
+    resume: str | None = None,
+    workspace: str | None = None,
+    on_image: Callable[[str, str], None] | None = None,
+) -> AgentConversation:
     """Instantiates the right backend client for `agent` (one of
     AGENT_LABELS' keys). Imports are lazy so picking one backend doesn't
-    import the other's dependencies."""
+    import the other's dependencies.
+
+    `workspace` (docs/backlog.md, "Mehrere Agent-Backends", point 2) sets
+    where the agent's file/tool access is rooted -- Claude SDK's `cwd`, Pi
+    subprocess's `cwd`. Defaults to DEFAULT_WORKSPACE if not given; callers
+    that let a user pick one (cockpit, Telegram bot) should already have
+    run it through resolve_workspace() below.
+
+    `on_image`, if given, wires up the show_image tool (image_tool.py) so
+    the agent can push an image to the caller's chat/UI -- Claude-only for
+    now (see image_tool.py's docstring for why), silently ignored for the
+    Pi backend rather than raising, since a caller that always wires up
+    image delivery shouldn't have to special-case which agent it picked."""
+    workspace = workspace or str(DEFAULT_WORKSPACE)
     if agent == AGENT_CLAUDE:
         from speech_to_speech.llm import ClaudeCodeConversation
 
-        return ClaudeCodeConversation(resume=resume)
+        return ClaudeCodeConversation(resume=resume, workspace=workspace, on_image=on_image)
     if agent == AGENT_PI:
         from speech_to_speech.pi_agent import PiAgentConversation
 
-        return PiAgentConversation(resume=resume)
+        return PiAgentConversation(resume=resume, workspace=workspace)
     raise ValueError(f"Unknown agent backend: {agent!r} (known: {sorted(AGENT_LABELS)})")
+
+
+def resolve_workspace(path: str) -> str:
+    """Validates and normalizes a user-supplied workspace path (cockpit
+    folder picker, Telegram `/workspace <path>`): expands `~` and resolves
+    to an absolute path, raising ValueError (caught by the caller and shown
+    to the user) if it doesn't exist or isn't a directory -- surfaced back
+    right away instead of silently falling back to the old workspace."""
+    resolved = Path(path).expanduser().resolve()
+    if not resolved.is_dir():
+        raise ValueError(f"not a directory: {resolved}")
+    return str(resolved)
+
+
+def workspace_instruction(workspace: str) -> str:
+    """Soft steering to combine with the hard `cwd` confinement each backend
+    sets up itself: tells the agent in its own words where its workspace is,
+    per docs/backlog.md's "Instruktion im System-Prompt ... kombiniert mit
+    der harten Durchsetzung" idea."""
+    return (
+        f"Your workspace for this session is {workspace}. Treat it as your "
+        "working directory for file and tool access, and stay within it "
+        "unless explicitly asked to work elsewhere."
+    )

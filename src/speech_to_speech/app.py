@@ -19,8 +19,9 @@ import time
 
 import numpy as np
 
-from speech_to_speech import cockpit, input_button, sessions, stt_client, toggle_socket, tts_client
+from speech_to_speech import cockpit, daemon_control, input_button, sessions, stt_client, toggle_socket, tts_client
 from speech_to_speech.agent_backend import AGENT_LABELS, AgentConversation, DEFAULT_AGENT, create_conversation
+from speech_to_speech.config import DEFAULT_WORKSPACE
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,12 @@ class App:
         # Agent-Backends", decision 1: sessions carry an agent label).
         self._default_agent = default_agent
         self._agent_name = default_agent
+        # Working directory the agent backend's file/tool access is rooted
+        # in (docs/backlog.md, "Mehrere Agent-Backends", point 2) -- same
+        # "picked once at session start, no mid-session switch" model as
+        # _agent_name above. Defaults to DEFAULT_WORKSPACE; changed via
+        # reset()'s workspace argument (cockpit's folder picker feeds it).
+        self._workspace = str(DEFAULT_WORKSPACE)
         # Replaced with a fresh Event each time a recording is stopped
         # (recording -> thinking); shared by the thinking and speaking
         # phases of that same turn. A barge-in sets it to tell whichever
@@ -60,7 +67,11 @@ class App:
         # participate in the (short, latency-sensitive) state-transition
         # locking above.
         self._history_lock = threading.Lock()
-        self._history: list[dict[str, str]] = []
+        # content is usually a str (a text turn), but _append_image() below
+        # also appends a mixed list[dict|str] (file dict + caption) for an
+        # image the agent showed via the show_image tool -- both shapes are
+        # what gr.Chatbot's message format accepts directly (cockpit.py).
+        self._history: list[dict[str, object]] = []
         self._stats = {
             "turns": 0,
             "last_stt_s": None,
@@ -72,7 +83,9 @@ class App:
     def load(self) -> None:
         # Fail fast on a missing API key or an unreachable STT/TTS daemon
         # before the app starts listening for a toggle.
-        self._llm = create_conversation(self._default_agent)
+        self._llm = create_conversation(
+            self._default_agent, workspace=self._workspace, on_image=self._append_image
+        )
         self._agent_name = self._default_agent
         stt_client.ensure_available()
         tts_client.ensure_available()
@@ -295,6 +308,22 @@ class App:
         with self._history_lock:
             self._history.append({"role": role, "content": content})
 
+    def _append_image(self, path: str, caption: str) -> None:
+        """The show_image tool's delivery callback (image_tool.py, wired in
+        via create_conversation()'s on_image) for the cockpit: appends a
+        message whose content is a list mixing a Gradio file dict and the
+        caption text, which gr.Chatbot renders as an inline image (verified
+        against Gradio's own FileMessage/MessageDict shapes) -- both in one
+        chat bubble, in one call to this method rather than two separate
+        _append_history() calls. Runs on the Claude SDK's own background
+        event-loop thread, not any thread already holding _history_lock, so
+        this needs its own locking same as _append_history() above."""
+        content: list[dict[str, str] | str] = [{"path": path}]
+        if caption:
+            content.append(caption)
+        with self._history_lock:
+            self._history.append({"role": "assistant", "content": content})
+
     # -- Cockpit-facing read/write API ------------------------------------
     # Called from cockpit.py's Gradio callbacks, which run on Gradio's own
     # request threads -- everything here either takes a lock already used
@@ -304,7 +333,7 @@ class App:
     def get_state(self) -> str:
         return STATE_LABELS.get(self._state, self._state)
 
-    def get_history(self) -> list[dict[str, str]]:
+    def get_history(self) -> list[dict[str, object]]:
         with self._history_lock:
             return list(self._history)
 
@@ -319,6 +348,7 @@ class App:
         agent_label = AGENT_LABELS.get(self._agent_name, self._agent_name)
         return (
             f"Agent: {agent_label}  |  "
+            f"Workspace: {self._workspace}  |  "
             f"Runden: {stats['turns']}  |  "
             f"STT-Zeit (ab Mikro-Stopp): {_fmt('last_stt_s')}  |  "
             f"Letzte Antwortzeit: {_fmt('last_response_s')}  |  "
@@ -328,6 +358,40 @@ class App:
 
     def get_agent_name(self) -> str:
         return self._agent_name
+
+    def get_workspace(self) -> str:
+        return self._workspace
+
+    def restart_stt_daemon(self) -> None:
+        """Manual escape hatch (docs/backlog.md, "Daemon-Neustart aus der
+        App/dem Cockpit heraus") for when the STT daemon is still answering
+        but stuck/misbehaving, without waiting for a crash the watchdog
+        would catch. If a recording is in progress, it's stopped and
+        discarded first -- same as a barge-in dropping into idle -- so the
+        daemon isn't restarted out from under an in-flight mic-capture call;
+        "thinking"/"speaking" don't touch the STT daemon at all and are left
+        running untouched."""
+        with self._state_lock:
+            state = self._state
+            if state == "recording":
+                self._state = "idle"
+        if state == "recording":
+            stt_client.stop_recording()  # discard text, just stop+drain
+        daemon_control.restart_stt_daemon()
+        logger.info("STT daemon restarted.")
+
+    def restart_tts_daemon(self) -> None:
+        """Same idea as restart_stt_daemon(), for the TTS daemon: stops
+        playback in flight first (same tts_client.stop() barge-in uses) so
+        the daemon isn't restarted mid-speak()."""
+        with self._state_lock:
+            state = self._state
+            if state == "speaking":
+                self._state = "idle"
+        if state == "speaking":
+            tts_client.stop()
+        daemon_control.restart_tts_daemon()
+        logger.info("TTS daemon restarted.")
 
     def _abort_current_turn(self) -> AgentConversation | None:
         """Shared first half of reset() and resume_session(): claims idle,
@@ -354,7 +418,7 @@ class App:
             old_llm.cancel()
         return old_llm
 
-    def reset(self, agent: str | None = None) -> None:
+    def reset(self, agent: str | None = None, workspace: str | None = None) -> None:
         """Starts a fresh session (cockpit's "Neue Session" button): aborts
         whatever's in flight, connects a fresh backend client so no
         conversation memory carries over, and clears history + stats.
@@ -363,11 +427,22 @@ class App:
         "Mehrere Agent-Backends", decision 3: chosen per new session, not
         just once at app start) -- defaults to whichever backend was active,
         so calling reset() with no argument (e.g. any future non-cockpit
-        caller) keeps today's behaviour of just restarting the same one."""
+        caller) keeps today's behaviour of just restarting the same one.
+
+        `workspace` (docs/backlog.md, "Mehrere Agent-Backends", point 2)
+        works the same way -- defaults to the currently active workspace.
+        Callers that let a user type/pick an arbitrary path (cockpit,
+        Telegram bot) are expected to have already validated it via
+        agent_backend.resolve_workspace() before calling in, so this trusts
+        the value as-is."""
         agent = agent or self._agent_name
+        workspace = workspace or self._workspace
         old_llm = self._abort_current_turn()
-        self._llm = create_conversation(agent)
+        self._llm = create_conversation(
+            agent, workspace=workspace, on_image=self._append_image
+        )
         self._agent_name = agent
+        self._workspace = workspace
         if old_llm is not None:
             old_llm.close()
 
@@ -396,13 +471,22 @@ class App:
         packed as "<agent>:<session_id>" -- resuming always continues with
         whichever backend originally created that session (no backend
         switch mid-session), which is exactly what picking it back out of
-        the tagged list means."""
+        the tagged list means.
+
+        Workspace isn't tagged per past session anywhere (unlike the
+        agent), so this keeps whatever `self._workspace` currently is
+        rather than trying to recover what the original session used --
+        fine as long as the resumed conversation's own file references are
+        still valid from the new workspace, but a mismatch is possible if
+        the workspace was since changed."""
         if not choice or ":" not in choice:
             return
         agent, session_id = choice.split(":", 1)
 
         old_llm = self._abort_current_turn()
-        self._llm = create_conversation(agent, resume=session_id)
+        self._llm = create_conversation(
+            agent, resume=session_id, workspace=self._workspace, on_image=self._append_image
+        )
         self._agent_name = agent
         if old_llm is not None:
             old_llm.close()

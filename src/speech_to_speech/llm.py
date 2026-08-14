@@ -7,6 +7,7 @@ synchronous send() interface that App expects is preserved unchanged.
 import asyncio
 import logging
 import threading
+from collections.abc import Callable
 
 from claude_agent_sdk import (
     AssistantMessage,
@@ -14,29 +15,53 @@ from claude_agent_sdk import (
     ClaudeSDKClient,
     ResultMessage,
     TextBlock,
+    create_sdk_mcp_server,
 )
 
-from speech_to_speech.agent_backend import SYSTEM_PROMPT
+from speech_to_speech.agent_backend import SYSTEM_PROMPT, workspace_instruction
+from speech_to_speech.config import DEFAULT_WORKSPACE
+from speech_to_speech.image_tool import SHOW_IMAGE_INSTRUCTION, make_show_image_tool
 
 logger = logging.getLogger(__name__)
 
 
 class ClaudeCodeConversation:
-    def __init__(self, resume: str | None = None) -> None:
+    def __init__(
+        self,
+        resume: str | None = None,
+        workspace: str | None = None,
+        on_image: Callable[[str, str], None] | None = None,
+    ) -> None:
         # `resume` is a past session_id (see sessions.py / docs/backlog.md,
         # "Frühere Sessions wieder aufnehmen können") -- the SDK loads that
         # session's history from its own on-disk JSONL transcript and
         # continues it, so no conversation state needs to be reconstructed
         # here beyond what App.resume_session() rebuilds for cockpit display.
+        self._workspace = workspace or str(DEFAULT_WORKSPACE)
+        # `on_image`, if given, wires up the show_image tool (image_tool.py)
+        # -- the caller (App for the cockpit, telegram_bot/daemon.py per
+        # chat) supplies where a shown image should actually go. None means
+        # no delivery channel is available, so the tool isn't registered at
+        # all rather than registered-but-broken.
+        self._on_image = on_image
         self._loop = asyncio.new_event_loop()
         threading.Thread(target=self._loop.run_forever, daemon=True).start()
         asyncio.run_coroutine_threadsafe(self._start(resume), self._loop).result(timeout=30)
 
     async def _start(self, resume: str | None) -> None:
+        system_prompt = SYSTEM_PROMPT + "\n\n" + workspace_instruction(self._workspace)
+        mcp_servers = {}
+        if self._on_image is not None:
+            show_image_tool = make_show_image_tool(self._workspace, self._on_image)
+            mcp_servers["images"] = create_sdk_mcp_server("images", tools=[show_image_tool])
+            system_prompt += "\n\n" + SHOW_IMAGE_INSTRUCTION
+
         options = ClaudeAgentOptions(
             permission_mode="bypassPermissions",
-            system_prompt=SYSTEM_PROMPT,
+            system_prompt=system_prompt,
             resume=resume,
+            cwd=self._workspace,
+            mcp_servers=mcp_servers,
         )
         self._mgr = ClaudeSDKClient(options=options)
         self._client = await self._mgr.__aenter__()

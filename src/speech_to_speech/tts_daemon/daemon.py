@@ -16,13 +16,21 @@ its own thread.
 generation call once it's already running on the GPU. Normally that's well
 under a second, but some inputs make the model run long past a natural stop
 without yielding, and a blocking GPU call can't be cancelled from another
-thread in Python, only the process it runs in can be killed. `_speak()`
-therefore runs playback under a watchdog: if it's still going past
-`_SPEAK_WATCHDOG_S`, the daemon kills itself (`os._exit`) instead of staying
-wedged in `speaking` forever and rejecting every request after it. systemd's
-`Restart=on-failure` (see systemd/qwen-tts.service) brings up a fresh
-process, which costs a model reload (~10s) but bounds the outage instead of
-requiring a manual restart.
+thread in Python, only the process it runs in can be killed. `_speak()`/
+`_synthesize()` therefore run under a watchdog that tracks per-chunk
+*progress* (via `playback.play_audio_streaming`'s `on_chunk` callback, or the
+raw chunk loop in `_synthesize()`) rather than capping total wall-clock
+duration: only a genuine *stall* -- no new chunk for `_SPEAK_STALL_S` -- kills
+the daemon (`os._exit`), not a long-but-healthy reply whose total speak time
+(generation + real-time playback) happens to run long. `_SPEAK_MAX_S` is a
+backstop ceiling in case progress-tracking itself has a bug, not the intended
+trigger path. Either way, systemd's `Restart=on-failure` (see
+systemd/qwen-tts.service) brings up a fresh process, which costs a model
+reload (~10s) but bounds the outage instead of requiring a manual restart.
+
+(An earlier version of this watchdog capped total speak() duration at a flat
+90s -- that fired on legitimately long replies, not just hangs, cutting them
+off mid-sentence; see docs/backlog.md.)
 """
 
 import json
@@ -33,6 +41,7 @@ import socket
 import sys
 import threading
 import time
+from collections.abc import Callable
 
 import numpy as np
 
@@ -47,11 +56,19 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Generous vs. a normal turn (a few seconds, per the app's "short, natural
-# sentences" system prompt) but well under TTS_MAX_NEW_TOKENS's multi-minute
-# worst case -- long enough that it won't fire on a legitimately long reply,
-# short enough to bound how long the daemon stays unusable if one does hang.
-_SPEAK_WATCHDOG_S = 90.0
+# No new chunk generated for this long -> assume the GPU call is genuinely
+# stuck (not just producing a long reply) and kill the daemon. Generous vs.
+# a single chunk's normal generation time (well under a second) but short
+# enough to bound how long the daemon stays unusable if one does hang.
+_SPEAK_STALL_S = 30.0
+
+# Backstop ceiling on total speak() duration regardless of progress, in case
+# the progress signal itself is ever wrong -- not the normal trigger path
+# (that's _SPEAK_STALL_S). Matches tts_client.py's _SPEAK_TIMEOUT_S (600s)
+# client-side socket timeout, so this fires first if anything does.
+_SPEAK_MAX_S = 480.0
+
+_WATCHDOG_POLL_S = 1.0
 
 
 class Daemon:
@@ -94,26 +111,43 @@ class Daemon:
             self._stop_event = threading.Event()
         return self._stop_event
 
-    def _run_with_watchdog(self, target) -> None:
-        """Runs `target` in a background thread and waits up to
-        `_SPEAK_WATCHDOG_S`. If it's still running past that, kills the
-        daemon process (`os._exit`) instead of staying wedged in `speaking`
-        forever and rejecting every request after it -- see the module
-        docstring and systemd/qwen-tts.service's `Restart=on-failure`. Shared
-        by speak() and synthesize(), which only differ in what they do with
-        each generated chunk."""
-        worker = threading.Thread(target=target, daemon=True)
-        worker.start()
-        worker.join(timeout=_SPEAK_WATCHDOG_S)
+    def _run_with_watchdog(self, target: Callable[[Callable[[], None]], None]) -> None:
+        """Runs `target(progress_cb)` in a background thread and polls it
+        every `_WATCHDOG_POLL_S`. `target` must call `progress_cb()` each
+        time it makes forward progress (a new TTS chunk generated) --
+        `_speak()` wires this to `playback.play_audio_streaming`'s
+        `on_chunk`, `_synthesize()` calls it directly in its chunk loop. If
+        no progress arrives for `_SPEAK_STALL_S`, or the call runs past the
+        `_SPEAK_MAX_S` backstop regardless of progress, kills the daemon
+        process (`os._exit`) instead of staying wedged in `speaking` forever
+        and rejecting every request after it -- see the module docstring and
+        systemd/qwen-tts.service's `Restart=on-failure`. Shared by speak()
+        and synthesize(), which only differ in what they do with each
+        generated chunk."""
+        start = time.monotonic()
+        last_progress = [start]
 
-        if worker.is_alive():
-            logger.error(
-                "TTS call still running after %.0fs with no natural stop -- "
-                "can't cancel a blocking GPU call from another thread, "
-                "restarting the daemon process instead.",
-                _SPEAK_WATCHDOG_S,
-            )
-            os._exit(1)
+        def _progress() -> None:
+            last_progress[0] = time.monotonic()
+
+        worker = threading.Thread(target=target, args=(_progress,), daemon=True)
+        worker.start()
+
+        while worker.is_alive():
+            worker.join(timeout=_WATCHDOG_POLL_S)
+            if not worker.is_alive():
+                return
+            now = time.monotonic()
+            stalled_s = now - last_progress[0]
+            total_s = now - start
+            if stalled_s > _SPEAK_STALL_S or total_s > _SPEAK_MAX_S:
+                logger.error(
+                    "TTS call stuck (no new chunk for %.0fs, running %.0fs total) -- "
+                    "can't cancel a blocking GPU call from another thread, "
+                    "restarting the daemon process instead.",
+                    stalled_s, total_s,
+                )
+                os._exit(1)
 
     def _speak(self, text: str) -> dict:
         stop_event = self._claim_speaking()
@@ -128,12 +162,13 @@ class Daemon:
             nonlocal first_chunk_s
             first_chunk_s = time.monotonic() - t0
 
-        def _run() -> None:
+        def _run(progress_cb: Callable[[], None]) -> None:
             try:
                 playback.play_audio_streaming(
                     self._tts.synthesize_streaming(text),
                     stop_event=stop_event,
                     on_first_chunk=_on_first_chunk,
+                    on_chunk=progress_cb,
                 )
             except Exception as exc:  # noqa: BLE001 - reported to the client below
                 error.append(exc)
@@ -163,12 +198,13 @@ class Daemon:
         chunks: list[np.ndarray] = []
         sample_rate = 0
 
-        def _run() -> None:
+        def _run(progress_cb: Callable[[], None]) -> None:
             nonlocal first_chunk_s, sample_rate
             try:
                 for chunk, sr in self._tts.synthesize_streaming(text):
                     if stop_event.is_set():
                         break
+                    progress_cb()
                     if first_chunk_s is None:
                         first_chunk_s = time.monotonic() - t0
                     sample_rate = sr
