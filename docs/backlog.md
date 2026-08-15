@@ -247,6 +247,139 @@ hat dafür zwei neue Buttons neben "Neue Session"; der Telegram-Bot
 - `systemctl --user` aus dem App-/Bot-Prozess heraus war unproblematisch
   (gleicher User, gleiche Session) -- keine offene Berechtigungsfrage mehr.
 
+## Telegram-Erinnerungen per GCP setzen können
+
+Status: Umgesetzt am 2026-08-15 (`~/.claude/skills/reminder/SKILL.md`,
+`llm.py`).
+
+Ziel: der Agent (egal ob per Sprache, Cockpit oder Telegram angesprochen) soll
+zeitgesteuerte Telegram-Erinnerungen setzen können ("erinnere mich in 20
+Minuten ans Brot rausholen"), die zuverlässig zustellen -- auch wenn dieser
+Rechner zu dem Zeitpunkt aus/im Standby ist.
+
+Ist-Zustand: die Infrastruktur dafür existiert bereits und läuft
+(`~/research/gcp-telegram-reminders` als Deploy-Vorlage: Cloud Tasks Queue ->
+Cloud Function -> Telegram `sendMessage`), tatsächlich deployed unter dem GCP
+Projekt `pi-agent-gemini` (Account `[redacted-personal-email]` -- nicht das Projekt
+aus `gcp-telegram-reminders/.env`, das ist ein älterer/anderer Stand). Der Pi
+Coding Agent hatte darauf bereits Zugriff, global über eine eigene
+Skill-Definition `~/.agents/skills/reminder/` (referenziert in
+`~/.pi/agent/settings.json`s `"skills"`-Liste, projektunabhängig) mit
+Zeitparsing (relative Delays, Wochentage, "tomorrow 15:00" etc.) und dem
+eigentlichen GCP-Cloud-Tasks-Aufruf.
+
+Umgesetzt: der Claude-Backend hatte dieselbe Fähigkeit noch nicht, aus zwei
+Gründen. Behoben:
+- Neue, dünne Skill-Definition `~/.claude/skills/reminder/SKILL.md` (globaler
+  User-Skill, nicht projekt-gebunden unter `.claude/skills/` in diesem Repo --
+  Erinnerungen sind ein allgemeines Assistenz-Feature, kein Coding-Werkzeug für
+  gerade dieses Projekt, und sollen unabhängig vom per `/workspace` gewählten
+  Arbeitsverzeichnis verfügbar bleiben). Delegiert an dieselbe, schon
+  vorhandene ausführbare Datei `~/.agents/skills/reminder/bin/reminder` statt
+  die GCP-Konfiguration/Logik zu duplizieren -- ein Redeploy (neue
+  Function-URL, anderes Projekt) muss so nur an einer Stelle
+  (`reminder_cli.py`) gepflegt werden.
+- `llm.py`s `ClaudeAgentOptions` bekam `skills="all"`: laut SDK-Doku ist
+  unklar/CLI-abhängig, ob personenbezogene Skills ohne dieses Flag überhaupt
+  gelistet werden ("CLI defaults" ist nicht dasselbe wie "an"), daher explizit
+  statt implizit verlassen.
+
+### Nächste Schritte
+- Manuell verifizieren (in diesem Sandbox-Environment war weder `pi` noch
+  `claude` auf dem PATH, End-to-End-Test war daher nicht möglich): über
+  Sprache/Cockpit/Telegram eine Erinnerung setzen lassen ("erinnere mich in
+  30 Sekunden an X") und prüfen, dass die Telegram-Nachricht ankommt --
+  einmal mit Claude-, einmal mit Pi-Backend.
+- Die beiden Skill-Kopien (`~/.agents/skills/reminder/SKILL.md` für Pi,
+  `~/.claude/skills/reminder/SKILL.md` für Claude) sind inhaltlich fast
+  identisch und leben beide außerhalb dieses Repos -- bei künftigen Änderungen
+  (z.B. neue Zeitformate) beide pflegen, oder die Doku zusammenlegen und nur
+  noch aus einer Datei generieren.
+
+**Nachtrag 2026-08-15:** manueller Test im Cockpit ("remind me in 3 minutes
+...") zeigte, dass das Claude-Backend statt des `reminder`-Skills das
+eingebaute `CronCreate`-Tool (claude.ai-"Routines") benutzt hat -- eine
+Routine ruft später nur wieder eine claude.ai-Session auf, die hier niemand
+beobachtet, die Erinnerung kam also nie an. Behoben in `llm.py`
+(`disallowed_tools=["CronCreate", "ScheduleWakeup"]`, hartes Verbot statt nur
+Prompt-Hinweis) und `agent_backend.py`s `SYSTEM_PROMPT` (expliziter Hinweis,
+für Erinnerungen immer den `reminder`-Skill statt eingebauter
+Scheduling-Features zu nutzen). Noch offen: erneuter manueller Test nach
+Neustart des `speech-to-speech`-Prozesses (Code-Änderungen an `llm.py`/
+`agent_backend.py` wirken erst nach Neustart, der laufende Prozess hält einen
+persistenten SDK-Client).
+
+**Nachtrag 2026-08-15 (2):** auf die Frage, ob es Feedback gibt, dass das
+Setzen einer Erinnerung wirklich geklappt hat, `reminder_cli.py` um zwei
+Dinge ergänzt (wirkt für beide Backends, da beide Skills auf dieselbe Datei
+delegieren): erstens verschickt `schedule_reminder()` nach erfolgreichem
+`create_task()` sofort eine eigene, vom Agenten-Chat unabhängige
+Telegram-Bestätigung ("✅ Reminder set for ... : ...") direkt per Bot-API --
+so hängt "hat es geklappt" nicht an der Zuverlässigkeit/Vollständigkeit der
+LLM-eigenen Antwort. Zweitens ein neuer `--list`-Modus
+(`reminder_cli.py list_reminders()`, nutzt `CloudTasksClient.list_tasks()`
+mit `response_view=FULL`, da die Standard-`BASIC`-View kein `http_request.body`
+liefert), der alle aktuell wartenden Reminder mit Zeit und Text auflistet --
+beantwortet "welche Erinnerung wurde gesetzt" auch später noch, unabhängig
+vom Chatverlauf. Live gegen die echte Queue getestet (`--list`, read-only,
+noch keine echten Reminder drin).
+
+Außerdem, auf Nachfrage geklärt: Erinnerungen laufen über denselben
+Telegram-Bot/Chat wie die normalen Assistenten-Antworten (Token/Chat-ID in
+diesem Repos `.env` sind identisch mit denen der Cloud Function) --
+`reminder_cli.py` stellt der eigentlichen Nachricht daher jetzt immer
+`⏰ Reminder: ` voran, damit beides im Chat unterscheidbar bleibt.
+
+## Webseiten per Telegram-Link als Obsidian-Bookmark speichern
+
+Status: Umgesetzt am 2026-08-15 (`~/.claude/skills/bookmark/SKILL.md`,
+`~/.agents/skills/bookmark/SKILL.md`, `agent_backend.py`).
+
+Ziel: eine per Telegram geteilte URL soll automatisch (ohne Rückfrage) als
+Bookmark gespeichert werden -- mit Titel, ein paar sinnvollen Tags und einer
+Ein-Satz-Beschreibung, die der Agent selbst aus dem Seiteninhalt ableitet.
+
+Ablageort: `~/GlobalAgentKnowledgebase` (Obsidian-Vault), nicht
+`~/docubotics/docubotics-agent-harness/PersonalWiki` -- letzteres ist laut
+eigenem README explizit für Personen-/Versicherungs-/Steuer-/
+Immobilien-Notizen ("eine Notiz pro realem Ding") reserviert.
+`GlobalAgentKnowledgebase` ist dagegen bereits als die generelle
+Agenten-Metamemory dokumentiert (`Protocols/Multi-Context-Protocol.md`:
+"Global Manager"-Kontext, `reminder` steht dort schon als "Primary Tool"
+drin). Neue Notizen landen unter `Bookmarks/<Titel>.md`, Frontmatter
+(`type: bookmark`, `url`, `tags`, `added`) folgt derselben Konvention wie
+PersonalWiki (`type`-Feld fürs Dataview-Plugin), damit sich später z.B. "alle
+Bookmarks mit Tag X" abfragen lässt.
+
+Umsetzung analog zum `reminder`-Skill: zwei fast identische
+`SKILL.md`-Kopien (`~/.claude/skills/bookmark/` für Claude,
+`~/.agents/skills/bookmark/` für Pi, global statt projekt-gebunden, aus
+demselben Grund wie bei `reminder`). Anders als bei `reminder` gibt es aber
+kein eigenes CLI-Script -- Seite laden, Titel/Tags/Beschreibung ableiten und
+die Notiz-Datei schreiben passiert komplett über die ohnehin vorhandenen
+Bordmittel des Agenten (WebFetch, Write/Bash), das Skill ist reine
+Anleitung. `agent_backend.py`s `SYSTEM_PROMPT` bekam eine Zeile, die eine
+Nachricht, die nur aus einer URL besteht, als impliziten
+Bookmark-Auftrag markiert (kein Rückfragen-Zwang, passend zur
+"vollautomatisch"-Anforderung).
+
+### Nächste Schritte
+- Manuell verifizieren: URL per Telegram teilen, prüfen dass eine Notiz unter
+  `~/GlobalAgentKnowledgebase/Bookmarks/` entsteht (Titel, Tags,
+  Beschreibung sinnvoll) und die Bestätigungsantwort passt -- mit
+  Claude-Backend (Neustart nötig, siehe Nachtrag oben) und mit Pi.
+- Offener Punkt beim Pi-Backend: Pis Guardrails-Extension
+  (`~/.pi/agent/extensions/guardrails.json`) hat `~/GlobalAgentKnowledgebase`
+  nicht in `pathAccess.allowedPaths` (nur `~/.agents` und `~/research`,
+  siehe "Mehrere Agent-Backends" oben). `pathAccess.mode` steht auf `"ask"`;
+  laut `pi_agent.py`s Docstring laufen Tool-Aufrufe im hier verwendeten
+  `--print --mode json`-Headless-Modus generell ohne interaktive
+  Rückfrage durch, was auch für Pfad-Asks gelten sollte -- aber nicht
+  spezifisch für diesen Pfad verifiziert. Falls das Schreiben dorthin mit
+  Pi tatsächlich blockiert: entweder `~/GlobalAgentKnowledgebase` zu
+  `allowedPaths` hinzufügen, oder das Bookmark-Skill stattdessen über einen
+  Pfad unter `~/.agents` ablegen lassen.
+
 ## Bilder an den Nutzer senden
 
 Status: Umgesetzt am 2026-08-14 (`image_tool.py`, `App._append_image()`,

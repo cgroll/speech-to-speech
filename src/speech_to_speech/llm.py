@@ -62,6 +62,21 @@ class ClaudeCodeConversation:
             resume=resume,
             cwd=self._workspace,
             mcp_servers=mcp_servers,
+            # Explicit per claude_agent_sdk's own docs ("the single place to
+            # turn skills on"): without this, whether personal skills like
+            # ~/.claude/skills/reminder actually get listed depends on
+            # ambiguous "CLI defaults", so pin it to "all" instead of relying
+            # on that.
+            skills="all",
+            # Observed 2026-08-15: asked to "remind me in 3 minutes", the
+            # model reached for CronCreate (claude.ai routines) instead of
+            # the reminder skill -- a routine re-invokes a claude.ai session
+            # later, which nothing on this device is watching, so the
+            # reminder silently never arrives. Nothing here needs a routine
+            # or a wakeup schedule (this is a one-shot voice/Telegram
+            # backend, not an agent that keeps running), so block both
+            # outright rather than relying on the system-prompt hint alone.
+            disallowed_tools=["CronCreate", "ScheduleWakeup"],
         )
         self._mgr = ClaudeSDKClient(options=options)
         self._client = await self._mgr.__aenter__()
