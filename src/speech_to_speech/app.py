@@ -20,8 +20,19 @@ import time
 import numpy as np
 
 from speech_to_speech import cockpit, daemon_control, input_button, sessions, stt_client, toggle_socket, tts_client
-from speech_to_speech.agent_backend import AGENT_LABELS, AgentConversation, DEFAULT_AGENT, create_conversation
+from speech_to_speech.agent_backend import (
+    AGENT_LABELS,
+    AgentConversation,
+    DEFAULT_AGENT,
+    LlmTimeoutError,
+    create_conversation,
+)
 from speech_to_speech.config import DEFAULT_WORKSPACE
+
+# Spoken/shown when a backend gives up on a stuck turn (agent_backend.
+# LlmTimeoutError) -- tells the user plainly rather than leaving them
+# staring at a stuck "Denkt nach…" with no idea the turn already died.
+TIMEOUT_MESSAGE = "Entschuldigung, das hat zu lange gedauert. Versuch's gern nochmal."
 
 logger = logging.getLogger(__name__)
 
@@ -218,7 +229,12 @@ class App:
         self._append_history("user", text)
         assert self._llm is not None
         t0 = time.monotonic()
-        reply = self._llm.send(text)
+        try:
+            reply = self._llm.send(text)
+        except LlmTimeoutError:
+            logger.warning("LLM turn timed out -- resetting to idle.")
+            self._recover_from_llm_timeout(interrupt)
+            return
         reply_ready = time.monotonic()
         response_s = reply_ready - t0
 
@@ -255,6 +271,30 @@ class App:
                 self._stats["last_ttfa_s"] = first_chunk_s
             self._stats["last_speaking_s"] = time.monotonic() - t0
 
+    def _recover_from_llm_timeout(self, interrupt: threading.Event) -> None:
+        """Shared LlmTimeoutError handling for _respond()/voice_turn(): the
+        backend has already given up on (and best-effort interrupted) a
+        stuck turn (agent_backend.LlmTimeoutError), so unlike a normal reply
+        there's nothing to discard-if-interrupted -- just tell the user in
+        their own ears (same speaking->idle path a real reply takes, so
+        state comes back the same way either way) and free up "thinking" so
+        the next turn isn't left waiting behind a dead one forever."""
+        if interrupt.is_set():
+            logger.info("Interrupted while thinking -- timeout recovery moot.")
+            return
+
+        self._append_history("assistant", TIMEOUT_MESSAGE)
+
+        with self._state_lock:
+            if self._state != "thinking":
+                return  # a barge-in already claimed the state for a new turn
+            self._state = "speaking"
+        self._speak(TIMEOUT_MESSAGE)
+
+        with self._state_lock:
+            if self._state == "speaking":
+                self._state = "idle"
+
     def voice_turn(self, audio: np.ndarray) -> tuple[np.ndarray, int] | None:
         """Handles one complete, already-recorded turn from a remote client
         (the Gradio cockpit's mic widget, reached e.g. over Tailscale from a
@@ -289,7 +329,19 @@ class App:
         logger.info("Voice turn (remote): %s", text)
         self._append_history("user", text)
         assert self._llm is not None
-        reply = self._llm.send(text)
+        try:
+            reply = self._llm.send(text)
+        except LlmTimeoutError:
+            logger.warning("LLM turn timed out (voice_turn) -- resetting to idle.")
+            self._append_history("assistant", TIMEOUT_MESSAGE)
+            with self._state_lock:
+                self._state = "speaking"
+            reply_audio, sample_rate = tts_client.synthesize(TIMEOUT_MESSAGE)
+            with self._state_lock:
+                self._state = "idle"
+            if reply_audio.size == 0:
+                return None
+            return reply_audio, sample_rate
         self._append_history("assistant", reply)
         with self._history_lock:
             self._stats["turns"] += 1

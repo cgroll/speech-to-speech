@@ -60,6 +60,17 @@ class AgentConversation(Protocol):
     def close(self) -> None: ...
 
 
+class LlmTimeoutError(Exception):
+    """Raised by a backend's send() when a turn is stuck rather than just
+    slow -- e.g. llm.py's Claude backend gives up after a stretch of no
+    streamed activity at all. Shared here (not defined in llm.py) so App can
+    catch one type regardless of which backend is active, per this module's
+    job as the common contract both backends implement. The backend is
+    expected to have already made a best-effort attempt to interrupt/kill
+    whatever was stuck before raising, so the conversation is left usable
+    for the next turn."""
+
+
 # -- Backend registry -------------------------------------------------------
 # Ids used everywhere a backend needs naming: the --agent CLI flag, the
 # cockpit's new-session/session-list pickers, and the tag stored alongside

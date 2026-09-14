@@ -438,3 +438,49 @@ Umgesetzt:
 - Aktuell nur Bilder (MIME-Präfix `image/`); andere Dateitypen (PDF, Audio,
   beliebige Dokumente) wären ein separates, ähnlich gebautes Tool
   (`send_document` o.ä.), nicht Teil dieser Umsetzung.
+
+## Claude-Code-Timeout: hängende Turns sauber abfangen statt nur den Timeout erhöhen
+
+Status: Umgesetzt am 2026-09-14 (`llm.py`, `agent_backend.py`, `app.py`).
+
+Beobachtet: Ein hängender `ClaudeSDKClient.query()`/`receive_response()`
+führte nach dem alten flachen 300s-Timeout in `ClaudeCodeConversation.send()`
+zu einer unbehandelten `TimeoutError`, die den `_respond()`-Thread in
+`app.py` mit Traceback sterben ließ -- der `App`-State blieb dabei auf
+"thinking" hängen (der Code, der ihn zurücksetzt, wurde nie erreicht), und
+der zugrundeliegende Claude-Client blieb mit der alten Anfrage beschäftigt,
+statt für den nächsten Turn frei zu sein. Ein einfaches Hochsetzen des
+Timeouts hätte daran nichts geändert, nur das Zeitfenster bis zum Hängen
+vergrößert.
+
+Umgesetzt: `llm.py`s `_query()` liest jetzt Nachricht für Nachricht aus
+`receive_response()` per `asyncio.wait_for(..., timeout=_ACTIVITY_TIMEOUT_S)`
+(zunächst 60s, am 2026-09-14 auf 300s hochgesetzt -- ein echter Stall ist
+selten genug, dass ein engeres Fenster das Risiko nicht wert war, einen
+bloß langsamen, aber aktiven Turn abzuschneiden) statt eines einzigen
+Timeouts über den gesamten Turn -- der Timer wird bei jeder gestreamten
+Nachricht zurückgesetzt, sodass ein aktiver, aber langer (tool-lastiger)
+Turn nicht abbricht, ein wirklich hängender aber innerhalb von 300s
+auffliegt. Bei einem Stall wird zusätzlich best-effort
+`self._client.interrupt()` aufgerufen, damit der Client für den nächsten
+Turn wieder benutzbar ist. `send()` behält daneben ein äußeres
+`_HARD_TIMEOUT_S` (20 Minuten) als Sicherheitsnetz, falls trotz Aktivität nie
+fertig wird. Beide Fälle werfen jetzt `agent_backend.LlmTimeoutError` (neu,
+im gemeinsamen Backend-Contract-Modul, damit `App` unabhängig vom aktiven
+Backend denselben Typ fängt) statt der rohen `TimeoutError` durchzureichen.
+
+`App._respond()`/`voice_turn()` fangen `LlmTimeoutError` jetzt ab: State
+zurück auf "idle" (gleicher speaking->idle-Pfad wie eine normale Antwort),
+Nutzer bekommt eine gesprochene/im Chat sichtbare Nachricht ("Entschuldigung,
+das hat zu lange gedauert. Versuch's gern nochmal.") statt stillem Hängen.
+`pi_agent.py` (Pi-Backend) ist von dieser Umsetzung unberührt -- war zum
+Zeitpunkt der Änderung nicht aktiv im Einsatz.
+
+### Nächste Schritte
+- Manuell einen echten Stall provozieren (z. B. Netzwerk kappen während
+  eines Turns) und verifizieren, dass nach ~300s die Timeout-Nachricht kommt
+  und der nächste Turn danach normal funktioniert.
+- `pi_agent.py`s eigener `TURN_TIMEOUT_S` greift aktuell nur beim
+  `proc.wait()` *nach* dem stdout-Lese-Loop, nicht während eines hängenden
+  `for line in proc.stdout`-Reads selbst -- gleiches aktivitätsbasiertes
+  Muster wäre dort nötig, falls Pi wieder aktiv genutzt wird.

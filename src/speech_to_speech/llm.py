@@ -5,6 +5,7 @@ synchronous send() interface that App expects is preserved unchanged.
 """
 
 import asyncio
+import concurrent.futures
 import logging
 import threading
 from collections.abc import Callable
@@ -18,11 +19,26 @@ from claude_agent_sdk import (
     create_sdk_mcp_server,
 )
 
-from speech_to_speech.agent_backend import SYSTEM_PROMPT, workspace_instruction
+from speech_to_speech.agent_backend import SYSTEM_PROMPT, LlmTimeoutError, workspace_instruction
 from speech_to_speech.config import DEFAULT_WORKSPACE
 from speech_to_speech.image_tool import SHOW_IMAGE_INSTRUCTION, make_show_image_tool
 
 logger = logging.getLogger(__name__)
+
+# No streamed message (assistant text, tool call/result, etc.) at all for
+# this long -> treat the turn as stuck rather than just slow, per
+# docs/backlog.md's "besser abfangen statt nur den Timeout erhöhen": a flat
+# cap on the *whole* turn can't tell a genuinely stuck call apart from one
+# that's still actively working through a long tool-heavy response, so this
+# resets on every message instead of applying once to the total. Set back to
+# 300s (2026-09-14) -- a real stall is rare enough that a tighter window
+# wasn't worth the risk of cutting off a merely slow-but-active turn.
+_ACTIVITY_TIMEOUT_S = 300
+
+# Overall safety net in case activity keeps trickling in (a message every
+# ~5min) without the turn ever actually finishing -- unlikely, but send()
+# should still return eventually rather than block its caller forever.
+_HARD_TIMEOUT_S = 20 * 60
 
 
 class ClaudeCodeConversation:
@@ -83,9 +99,20 @@ class ClaudeCodeConversation:
 
     def send(self, text: str) -> str:
         logger.info("Sending to Claude Code: %s", text)
-        return asyncio.run_coroutine_threadsafe(
-            self._query(text), self._loop
-        ).result(timeout=300)
+        future = asyncio.run_coroutine_threadsafe(self._query(text), self._loop)
+        try:
+            return future.result(timeout=_HARD_TIMEOUT_S)
+        except concurrent.futures.TimeoutError as exc:
+            # _query() itself never got the chance to notice and raise
+            # LlmTimeoutError below (that only fires on a stall *between*
+            # messages) -- this is the outer "never finished at all" net, so
+            # interrupt from out here instead.
+            logger.warning(
+                "Claude Code turn exceeded the %ss hard cap -- interrupting.",
+                _HARD_TIMEOUT_S,
+            )
+            self.cancel()
+            raise LlmTimeoutError(f"No reply within {_HARD_TIMEOUT_S}s") from exc
 
     def cancel(self) -> None:
         """Best-effort interrupt of an in-flight query (e.g. on barge-in).
@@ -118,7 +145,31 @@ class ClaudeCodeConversation:
     async def _query(self, text: str) -> str:
         await self._client.query(text)
         parts: list[str] = []
-        async for msg in self._client.receive_response():
+        responses = self._client.receive_response()
+        while True:
+            try:
+                msg = await asyncio.wait_for(anext(responses), timeout=_ACTIVITY_TIMEOUT_S)
+            except StopAsyncIteration:
+                break
+            except TimeoutError as exc:
+                # Nothing streamed in a while -- likely stuck (e.g. the
+                # timeout that used to show up as an uncaught TimeoutError
+                # deep in app.py's _respond thread, silently wedging the
+                # whole app in "thinking" -- see docs/backlog.md). Best-effort
+                # interrupt so the client is usable again for the next turn
+                # before handing the failure up to App, which resets state
+                # and tells the user, rather than just re-raising and letting
+                # the handler thread die.
+                logger.warning(
+                    "Claude Code stalled: no activity for %ss -- interrupting.",
+                    _ACTIVITY_TIMEOUT_S,
+                )
+                try:
+                    await asyncio.wait_for(self._client.interrupt(), timeout=10)
+                except Exception:
+                    logger.warning("Interrupt after stall failed", exc_info=True)
+                raise LlmTimeoutError(f"No activity for {_ACTIVITY_TIMEOUT_S}s") from exc
+
             if isinstance(msg, AssistantMessage):
                 for block in msg.content:
                     if isinstance(block, TextBlock):
