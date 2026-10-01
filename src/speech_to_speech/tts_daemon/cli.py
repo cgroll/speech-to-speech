@@ -11,18 +11,35 @@ import argparse
 import subprocess
 import sys
 
-from speech_to_speech.tts_daemon.protocol import send_command
+from speech_to_speech.tts_daemon.protocol import send_command, socket_path
 
 SERVICE_NAME = "qwen-tts.service"
+# Entry point (pyproject [project.scripts]) used to launch/kill the daemon on
+# macOS, where there's no systemd -- see daemon_launch.py.
+DAEMON_ENTRY_POINT = "qwen-tts-daemon"
 
 
 def cmd_enable(_args: argparse.Namespace) -> int:
+    if sys.platform == "darwin":
+        from speech_to_speech import daemon_launch
+
+        daemon_launch.start(DAEMON_ENTRY_POINT, socket_path())
+        print("Qwen3-TTS daemon launched (model loading onto Metal).")
+        return 0
+
     subprocess.run(["systemctl", "--user", "start", SERVICE_NAME], check=True)
     print("Qwen3-TTS daemon enabled (model loading onto GPU).")
     return 0
 
 
 def cmd_disable(_args: argparse.Namespace) -> int:
+    if sys.platform == "darwin":
+        from speech_to_speech import daemon_launch
+
+        daemon_launch.stop(DAEMON_ENTRY_POINT, socket_path())
+        print("Qwen3-TTS daemon disabled.")
+        return 0
+
     subprocess.run(["systemctl", "--user", "stop", SERVICE_NAME], check=True)
     print("Qwen3-TTS daemon disabled (GPU memory freed).")
     return 0

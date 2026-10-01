@@ -24,15 +24,31 @@ JABRA_DEVICE_NAME = "Jabra Link 390"
 # button sends KEY_PLAY (code 207), not KEY_PLAYPAUSE.
 JABRA_TOGGLE_KEY = "KEY_PLAY"
 
-# -- STT (Parakeet, CPU) -------------------------------------------------
-# Used by the STT daemon (dictate/daemon.py) that now owns the model and mic
-# -- see docs/architecture-proposal.md, "Daemon-Aufspaltung" step 4.
-STT_MODEL_NAME = "nemo-parakeet-tdt-0.6b-v3"
+# -- STT (Parakeet) ------------------------------------------------------
+# Used by the STT daemon (dictate/daemon.py) that owns the model and mic -- see
+# docs/architecture-proposal.md, "Daemon-Aufspaltung" step 4. The id differs by
+# backend: onnx_asr (Linux, CPU) uses the "nemo-..." hub id; nano-parakeet
+# (macOS, MPS) uses the plain Hugging Face id. daemon.py picks the right one.
+STT_MODEL_NAME_ONNX = "nemo-parakeet-tdt-0.6b-v3"
+STT_MODEL_NAME_NANO = "nvidia/parakeet-tdt-0.6b-v3"
 
 # -- TTS (Qwen3-TTS CustomVoice, GPU) ------------------------------------
 TTS_MODEL_ID = "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice"
 TTS_SPEAKER = "aiden"
 TTS_LANGUAGE = "german"
+
+# Local GGUF files for the GGML/Metal backend (macOS). On this machine HF's Xet
+# download is blocked by the corporate proxy (see docs/macos-setup.md), so the
+# talker + tokenizer GGUFs are placed here by hand and loaded directly, skipping
+# the download. The CustomVoice speakers (incl. "aiden") are baked into the
+# talker GGUF, so these two files are everything the backend needs. If both are
+# present, tts.py loads from them; otherwise it falls back to the HF pull (the
+# Linux/CUDA path never looks here). Filenames follow the BF16 quant.
+TTS_GGUF_DIR = Path(
+    os.environ.get("TTS_GGUF_DIR", os.path.expanduser("~/.config/speech-to-speech/models"))
+)
+TTS_GGUF_TALKER = "qwen-talker-0.6b-customvoice-BF16.gguf"
+TTS_GGUF_TOKENIZER = "qwen-tokenizer-12hz-BF16.gguf"
 
 # faster-qwen3-tts defaults both of these to 2048 if left unset, which caps
 # generation at ~2048 codec frames (12Hz model -> well under 2048/12 = 170s,

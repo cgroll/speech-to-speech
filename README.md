@@ -20,6 +20,10 @@ von einem optionalen lokalen Hotkey entgegen (siehe Setup Schritt 5). Fehlt
 der Jabra (nicht angeschlossen), läuft die App trotzdem weiter -- nur über
 den Socket-Pfad.
 
+> **macOS (Apple Silicon):** Dieses Setup-Kapitel beschreibt Linux. Für den Mac
+> (STT auf MPS, TTS auf Metal, Daemons ohne systemd, Shortcuts-Hotkeys, Firmen-
+> Proxy/Zscaler-Hinweise) siehe **[docs/macos-setup.md](docs/macos-setup.md)**.
+
 ## Setup
 
 ### 1. Dependencies installieren

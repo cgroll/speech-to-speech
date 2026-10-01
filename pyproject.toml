@@ -7,19 +7,29 @@ authors = [
     { name = "cgroll", email = "groll.christian.edu@gmail.com" }
 ]
 requires-python = ">=3.12"
+# Platform-split STT: Linux runs Parakeet via onnx_asr on CPU; macOS (Apple
+# Silicon) runs it via nano-parakeet on the MPS GPU. The Linux-only deps carry
+# `sys_platform == 'linux'` markers so `uv sync` on macOS neither tries to build
+# evdev (needs <linux/input.h>) nor pulls the onnx/numba toolchain it doesn't
+# use. See docs/macos-port (plan) and the sibling repo ~/repos/parakeet-dictate.
 dependencies = [
-    "evdev>=1.9.3",
+    "evdev>=1.9.3 ; sys_platform == 'linux'",
     "claude-agent-sdk>=0.0.16",
-    "llvmlite>=0.43",
-    "numba>=0.60",
-    "numpy>=2.4.6",
-    "onnx-asr[cpu,hub]>=0.12.0",
+    "llvmlite>=0.43 ; sys_platform == 'linux'",
+    "numba>=0.60 ; sys_platform == 'linux'",
+    "numpy>=1.24",
+    "onnx-asr[cpu,hub]>=0.12.0 ; sys_platform == 'linux'",
+    "nano-parakeet>=0.2.1 ; sys_platform == 'darwin'",
     "python-dotenv>=1.2.2",
-    "faster-qwen3-tts>=0.3.2",
+    # [ggml] pulls qwentts-cpp-python (the GGML/qwentts.cpp runtime). On native
+    # Apple Silicon that wheel bundles Metal and the backend is auto-selected;
+    # on Linux it's the CUDA build. Not pulled by the bare package at 0.3.2, so
+    # request the extra explicitly.
+    "faster-qwen3-tts[ggml]>=0.3.2",
     "gradio>=6.17.3",
     "setuptools<81",
     "sounddevice>=0.5.5",
-    "torch>=2.13.0",
+    "torch>=2.12.1",
     "webrtcvad>=2.0.10",
     "python-telegram-bot>=22.8",
 ]

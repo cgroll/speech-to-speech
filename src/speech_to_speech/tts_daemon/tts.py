@@ -3,12 +3,16 @@ embedding, using faster-qwen3-tts with GGML quantization. Audio is yielded
 in chunks as soon as they are ready so playback can start immediately."""
 
 import logging
+import sys
 import time
 from collections.abc import Iterator
 
 import numpy as np
 
 from speech_to_speech.config import (
+    TTS_GGUF_DIR,
+    TTS_GGUF_TALKER,
+    TTS_GGUF_TOKENIZER,
     TTS_LANGUAGE,
     TTS_MAX_NEW_TOKENS,
     TTS_MAX_SEQ_LEN,
@@ -26,9 +30,33 @@ class TextToSpeech:
     def load(self) -> None:
         from faster_qwen3_tts import FasterQwen3TTS
 
-        logger.info("Loading TTS model (Qwen3-TTS %s, GGML)...", TTS_MODEL_ID)
+        # Two runtimes for the same model: Linux/CUDA uses the "torch" backend
+        # with captured CUDA graphs (max_seq_len sizes the static KV cache);
+        # macOS runs the qwentts.cpp "ggml" backend on Metal (the torch path
+        # errors out with "CUDA graphs require CUDA device"). The ggml backend
+        # manages its own cache, so max_seq_len doesn't apply there.
         t0 = time.monotonic()
-        self._model = FasterQwen3TTS.from_pretrained(TTS_MODEL_ID, max_seq_len=TTS_MAX_SEQ_LEN)
+        if sys.platform == "darwin":
+            talker = TTS_GGUF_DIR / TTS_GGUF_TALKER
+            tokenizer = TTS_GGUF_DIR / TTS_GGUF_TOKENIZER
+            if talker.exists() and tokenizer.exists():
+                logger.info(
+                    "Loading TTS model (Qwen3-TTS %s, GGML/Metal) from local GGUF in %s...",
+                    TTS_MODEL_ID,
+                    TTS_GGUF_DIR,
+                )
+                self._model = FasterQwen3TTS.from_pretrained(
+                    TTS_MODEL_ID,
+                    backend="ggml",
+                    gguf_talker_path=str(talker),
+                    gguf_codec_path=str(tokenizer),
+                )
+            else:
+                logger.info("Loading TTS model (Qwen3-TTS %s, GGML/Metal) from HF...", TTS_MODEL_ID)
+                self._model = FasterQwen3TTS.from_pretrained(TTS_MODEL_ID, backend="ggml")
+        else:
+            logger.info("Loading TTS model (Qwen3-TTS %s, torch/CUDA)...", TTS_MODEL_ID)
+            self._model = FasterQwen3TTS.from_pretrained(TTS_MODEL_ID, max_seq_len=TTS_MAX_SEQ_LEN)
         logger.info("TTS model loaded in %.1fs", time.monotonic() - t0)
 
         t0 = time.monotonic()

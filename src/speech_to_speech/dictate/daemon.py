@@ -11,18 +11,38 @@ Two clients, two command pairs, same model+mic+worker underneath:
   typing it -- see docs/architecture-proposal.md, "Daemon-Aufspaltung" step 4.
 """
 
+import os
+import sys
+
+# macOS (Apple Silicon): enable the MPS fallback for ops Metal lacks, and neuter
+# autocast when MPS is requested -- both BEFORE torch is imported anywhere.
+# nano-parakeet/torch get imported lazily in load_model(), so this guard (run at
+# module load) is still first. Mirrors ~/repos/parakeet-dictate's daemon.py.
+if sys.platform == "darwin":
+    os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
+    import torch
+
+    _original_autocast = torch.amp.autocast
+
+    class _CustomAutocast(_original_autocast):
+        def __init__(self, device_type, dtype=None, enabled=True, cache_enabled=None):
+            if device_type == "mps":
+                device_type = "cpu"
+                enabled = False
+            super().__init__(device_type, dtype=dtype, enabled=enabled, cache_enabled=cache_enabled)
+
+    torch.amp.autocast = _CustomAutocast
+
 import json
 import logging
-import os
 import signal
 import socket
-import sys
 import threading
 import time
 
 import numpy as np
 
-from speech_to_speech.config import STT_MODEL_NAME
+from speech_to_speech.config import STT_MODEL_NAME_NANO, STT_MODEL_NAME_ONNX
 from speech_to_speech.dictate import feedback
 from speech_to_speech.dictate.audio import SAMPLE_RATE, Recorder
 from speech_to_speech.dictate.keymap import fix_for_de_layout
@@ -46,15 +66,29 @@ class Daemon:
         self._typed: list[str] = []
 
     def load_model(self) -> None:
-        import onnx_asr
-
+        # Same model (Parakeet TDT 0.6b v3), two runtimes: nano-parakeet on the
+        # MPS GPU for macOS, onnx_asr (int8, CPU) for Linux. The two expose
+        # different load/infer APIs, so the whole method branches -- see
+        # _transcribe() for the matching inference split.
         logger.info("Loading STT model (Parakeet)...")
         t0 = time.monotonic()
-        self._model = onnx_asr.load_model(STT_MODEL_NAME, quantization="int8")
-        logger.info("STT model loaded in %.1fs", time.monotonic() - t0)
+        if sys.platform == "darwin":
+            from nano_parakeet import from_pretrained
 
-        # Warmup: first inference triggers one-time onnxruntime session setup.
-        self._model.recognize(np.zeros(SAMPLE_RATE, dtype=np.float32), sample_rate=SAMPLE_RATE)
+            device = "mps" if torch.backends.mps.is_available() else "cpu"
+            self._model = from_pretrained(model_name=STT_MODEL_NAME_NANO, device=device)
+            logger.info("STT model loaded onto %s in %.1fs", device, time.monotonic() - t0)
+
+            # Warmup: first inference compiles/initialises the MPS kernels.
+            self._model.transcribe(np.zeros(SAMPLE_RATE, dtype=np.float32))
+        else:
+            import onnx_asr
+
+            self._model = onnx_asr.load_model(STT_MODEL_NAME_ONNX, quantization="int8")
+            logger.info("STT model loaded in %.1fs", time.monotonic() - t0)
+
+            # Warmup: first inference triggers one-time onnxruntime session setup.
+            self._model.recognize(np.zeros(SAMPLE_RATE, dtype=np.float32), sample_rate=SAMPLE_RATE)
         logger.info("Warmup inference done, ready.")
 
     def handle_command(self, cmd: dict) -> dict:
@@ -136,7 +170,11 @@ class Daemon:
                 feedback.notify("No speech detected")
                 return result
             try:
-                type_text(fix_for_de_layout(text))
+                # macOS pastes via the clipboard (typing_backend), which is
+                # layout-independent -- umlauts come through natively, so the
+                # QWERTZ keymap fix is Linux/ydotool-only.
+                typed = text if sys.platform == "darwin" else fix_for_de_layout(text)
+                type_text(typed)
             except TypingError as exc:
                 logger.error("Typing failed: %s", exc)
                 feedback.notify(f"Typing failed: {exc}", error=True)
@@ -162,6 +200,10 @@ class Daemon:
         if len(audio) < SAMPLE_RATE // 4:  # less than 250ms, not worth transcribing
             return ""
 
+        if sys.platform == "darwin":
+            # nano-parakeet assumes 16kHz mono float32 (our SAMPLE_RATE) and
+            # takes no sample_rate arg.
+            return self._model.transcribe(audio).strip()
         return self._model.recognize(audio, sample_rate=SAMPLE_RATE).strip()
 
 

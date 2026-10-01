@@ -11,18 +11,35 @@ import subprocess
 import sys
 
 from speech_to_speech.dictate import feedback
-from speech_to_speech.dictate.protocol import send_command
+from speech_to_speech.dictate.protocol import send_command, socket_path
 
 SERVICE_NAME = "parakeet-dictate.service"
+# Entry point (pyproject [project.scripts]) used to launch/kill the daemon on
+# macOS, where there's no systemd -- see daemon_launch.py.
+DAEMON_ENTRY_POINT = "parakeet-dictate-daemon"
 
 
 def cmd_enable(_args: argparse.Namespace) -> int:
+    if sys.platform == "darwin":
+        from speech_to_speech import daemon_launch
+
+        daemon_launch.start(DAEMON_ENTRY_POINT, socket_path())
+        print("Parakeet dictation daemon launched (model loading onto MPS).")
+        return 0
+
     subprocess.run(["systemctl", "--user", "start", SERVICE_NAME], check=True)
     print("Parakeet dictation enabled (model loading onto GPU).")
     return 0
 
 
 def cmd_disable(_args: argparse.Namespace) -> int:
+    if sys.platform == "darwin":
+        from speech_to_speech import daemon_launch
+
+        daemon_launch.stop(DAEMON_ENTRY_POINT, socket_path())
+        print("Parakeet dictation disabled.")
+        return 0
+
     subprocess.run(["systemctl", "--user", "stop", SERVICE_NAME], check=True)
     print("Parakeet dictation disabled (GPU memory freed).")
     return 0
