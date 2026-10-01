@@ -95,7 +95,10 @@ class App:
         # Fail fast on a missing API key or an unreachable STT/TTS daemon
         # before the app starts listening for a toggle.
         self._llm = create_conversation(
-            self._default_agent, workspace=self._workspace, on_image=self._append_image
+            self._default_agent,
+            workspace=self._workspace,
+            on_image=self._append_image,
+            voice_output=True,
         )
         self._agent_name = self._default_agent
         stt_client.ensure_available()
@@ -491,7 +494,7 @@ class App:
         workspace = workspace or self._workspace
         old_llm = self._abort_current_turn()
         self._llm = create_conversation(
-            agent, workspace=workspace, on_image=self._append_image
+            agent, workspace=workspace, on_image=self._append_image, voice_output=True
         )
         self._agent_name = agent
         self._workspace = workspace
@@ -537,7 +540,11 @@ class App:
 
         old_llm = self._abort_current_turn()
         self._llm = create_conversation(
-            agent, resume=session_id, workspace=self._workspace, on_image=self._append_image
+            agent,
+            resume=session_id,
+            workspace=self._workspace,
+            on_image=self._append_image,
+            voice_output=True,
         )
         self._agent_name = agent
         if old_llm is not None:

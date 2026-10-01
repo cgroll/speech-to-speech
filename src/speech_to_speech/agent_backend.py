@@ -21,15 +21,17 @@ from speech_to_speech.config import DEFAULT_WORKSPACE
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """\
-You are a voice assistant. Your responses will be read aloud via text-to-speech,
-so format them accordingly:
-- Use plain prose, no markdown, no bullet lists, no tables, no code blocks.
-- Keep responses concise — a spoken answer should rarely exceed a few sentences
-  unless detail is explicitly requested.
-- For numbers and symbols, spell them out in a way that sounds natural when read
-  aloud (e.g. "fifty percent" instead of "50%").
+# The system prompt both backends follow is composed per conversation from a
+# shared, mode-neutral base plus one output-formatting block chosen by the
+# `voice_output` flag -- see system_prompt_for(). The formatting rules can't be
+# one-size-fits-all: a spoken reply must avoid markdown/code/lists and stay
+# short, but a Telegram text reply actively wants them. Which surface is which
+# is fixed per conversation (App = always spoken, Telegram = text), so the
+# choice is made once at create_conversation() rather than per turn.
 
+# Tool access, destructive-action safety, and the skill triggers -- true
+# regardless of how the reply is delivered.
+SYSTEM_PROMPT_BASE = """\
 You have full tool access (Bash, file read/write, web search, etc.) with all
 permission checks bypassed. Before executing any command that is destructive or
 hard to reverse — deleting files, overwriting data, pushing to remote — pause and
@@ -43,8 +45,33 @@ For time-based reminders ("remind me in 10 minutes to...", "ping me at 5pm
 about..."), always use the `reminder` skill (schedules a real Telegram
 message via Google Cloud Tasks). Never use a built-in scheduled-task/routine/
 cron feature for this — nothing is watching claude.ai on this device, so a
-routine would silently never reach the user.
-"""
+routine would silently never reach the user."""
+
+# Appended when the reply is read aloud via TTS (voice_output=True): the App's
+# spoken dialog and the cockpit's voice round-trip. Must keep answers speakable.
+VOICE_FORMATTING = """\
+You are a voice assistant: your response is read aloud via text-to-speech, so it
+must be speakable.
+- Answer in plain spoken prose. No markdown, no bullet or numbered lists, no
+  tables, no code blocks, no inline code, no URLs, no emoji.
+- Be brief. A spoken answer should rarely exceed a few sentences unless the user
+  explicitly asks for detail — summarize rather than dump everything.
+- Say numbers and symbols as words ("fifty percent", not "50%"), and describe
+  code or commands in words instead of quoting them verbatim."""
+
+# Appended when the reply is delivered as text (voice_output=False): Telegram.
+# Normal chat formatting is welcome there.
+TEXT_FORMATTING = """\
+Your response is delivered as a text chat message, so normal formatting is fine:
+use markdown, code blocks, and lists wherever they make the answer clearer."""
+
+
+def system_prompt_for(voice_output: bool) -> str:
+    """The full system prompt for a conversation whose replies are spoken
+    (voice_output=True) or shown as text (False). The formatting block leads so
+    it's the most salient instruction, with the shared base rules after it."""
+    formatting = VOICE_FORMATTING if voice_output else TEXT_FORMATTING
+    return f"{formatting}\n\n{SYSTEM_PROMPT_BASE}"
 
 
 class AgentConversation(Protocol):
@@ -91,6 +118,7 @@ def create_conversation(
     resume: str | None = None,
     workspace: str | None = None,
     on_image: Callable[[str, str], None] | None = None,
+    voice_output: bool = False,
 ) -> AgentConversation:
     """Instantiates the right backend client for `agent` (one of
     AGENT_LABELS' keys). Imports are lazy so picking one backend doesn't
@@ -106,16 +134,26 @@ def create_conversation(
     the agent can push an image to the caller's chat/UI -- Claude-only for
     now (see image_tool.py's docstring for why), silently ignored for the
     Pi backend rather than raising, since a caller that always wires up
-    image delivery shouldn't have to special-case which agent it picked."""
+    image delivery shouldn't have to special-case which agent it picked.
+
+    `voice_output` picks the reply-formatting half of the system prompt
+    (system_prompt_for): True for conversations whose replies are spoken (the
+    App's dialog and cockpit), False for text-delivered ones (Telegram). Set
+    once here since the surface -- and thus how replies come out -- is fixed
+    for the life of the conversation."""
     workspace = workspace or str(DEFAULT_WORKSPACE)
     if agent == AGENT_CLAUDE:
         from speech_to_speech.llm import ClaudeCodeConversation
 
-        return ClaudeCodeConversation(resume=resume, workspace=workspace, on_image=on_image)
+        return ClaudeCodeConversation(
+            resume=resume, workspace=workspace, on_image=on_image, voice_output=voice_output
+        )
     if agent == AGENT_PI:
         from speech_to_speech.pi_agent import PiAgentConversation
 
-        return PiAgentConversation(resume=resume, workspace=workspace)
+        return PiAgentConversation(
+            resume=resume, workspace=workspace, voice_output=voice_output
+        )
     raise ValueError(f"Unknown agent backend: {agent!r} (known: {sorted(AGENT_LABELS)})")
 
 

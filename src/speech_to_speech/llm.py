@@ -19,7 +19,7 @@ from claude_agent_sdk import (
     create_sdk_mcp_server,
 )
 
-from speech_to_speech.agent_backend import SYSTEM_PROMPT, LlmTimeoutError, workspace_instruction
+from speech_to_speech.agent_backend import LlmTimeoutError, system_prompt_for, workspace_instruction
 from speech_to_speech.config import DEFAULT_WORKSPACE
 from speech_to_speech.image_tool import SHOW_IMAGE_INSTRUCTION, make_show_image_tool
 
@@ -47,6 +47,7 @@ class ClaudeCodeConversation:
         resume: str | None = None,
         workspace: str | None = None,
         on_image: Callable[[str, str], None] | None = None,
+        voice_output: bool = False,
     ) -> None:
         # `resume` is a past session_id (see sessions.py / docs/backlog.md,
         # "Frühere Sessions wieder aufnehmen können") -- the SDK loads that
@@ -60,12 +61,15 @@ class ClaudeCodeConversation:
         # no delivery channel is available, so the tool isn't registered at
         # all rather than registered-but-broken.
         self._on_image = on_image
+        # Whether this conversation's replies get spoken -- picks the voice vs.
+        # text formatting half of the system prompt (set once in _start()).
+        self._voice_output = voice_output
         self._loop = asyncio.new_event_loop()
         threading.Thread(target=self._loop.run_forever, daemon=True).start()
         asyncio.run_coroutine_threadsafe(self._start(resume), self._loop).result(timeout=30)
 
     async def _start(self, resume: str | None) -> None:
-        system_prompt = SYSTEM_PROMPT + "\n\n" + workspace_instruction(self._workspace)
+        system_prompt = system_prompt_for(self._voice_output) + "\n\n" + workspace_instruction(self._workspace)
         mcp_servers = {}
         if self._on_image is not None:
             show_image_tool = make_show_image_tool(self._workspace, self._on_image)

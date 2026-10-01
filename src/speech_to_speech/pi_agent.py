@@ -30,7 +30,7 @@ import subprocess
 import threading
 import uuid
 
-from speech_to_speech.agent_backend import SYSTEM_PROMPT, workspace_instruction
+from speech_to_speech.agent_backend import system_prompt_for, workspace_instruction
 from speech_to_speech.config import DEFAULT_WORKSPACE
 
 logger = logging.getLogger(__name__)
@@ -45,7 +45,12 @@ TURN_TIMEOUT_S = 300
 
 
 class PiAgentConversation:
-    def __init__(self, resume: str | None = None, workspace: str | None = None) -> None:
+    def __init__(
+        self,
+        resume: str | None = None,
+        workspace: str | None = None,
+        voice_output: bool = False,
+    ) -> None:
         # `resume` is a past session_id (see sessions.py) to continue;
         # otherwise a fresh one, handed to `pi --session-id` on every call
         # of this instance so all turns land in the same on-disk session.
@@ -60,6 +65,9 @@ class PiAgentConversation:
         # those two won't additionally be blocked by Pi, just not
         # specifically whitelisted either.
         self.workspace = workspace or str(DEFAULT_WORKSPACE)
+        # Spoken vs. text reply formatting, appended to Pi's own system prompt
+        # on every turn (see send()).
+        self._voice_output = voice_output
         self._proc_lock = threading.Lock()
         self._proc: subprocess.Popen | None = None
 
@@ -73,7 +81,7 @@ class PiAgentConversation:
             "--session-id",
             self.session_id,
             "--append-system-prompt",
-            SYSTEM_PROMPT + "\n\n" + workspace_instruction(self.workspace),
+            system_prompt_for(self._voice_output) + "\n\n" + workspace_instruction(self.workspace),
             text,
         ]
         with self._proc_lock:
