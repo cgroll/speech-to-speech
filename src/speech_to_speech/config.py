@@ -61,6 +61,17 @@ TTS_GGUF_TOKENIZER = "qwen-tokenizer-12hz-BF16.gguf"
 TTS_MAX_SEQ_LEN = 4096
 TTS_MAX_NEW_TOKENS = 3900
 
+# The talker generates audio autoregressively under that fixed KV-cache budget.
+# A single long reply can exceed it: on CUDA the decode loop just stops and
+# silently truncates mid-sentence (see the warning in tts.py), on the macOS
+# ggml/Metal backend it crashes outright ("tts_engine_step: talker decode
+# failed"). So we split the reply into sentence-sized chunks and synthesize them
+# back to back, keeping every single generation well under the ceiling. A short
+# reply -- the common case for a voice assistant -- stays one chunk, so this is
+# a no-op there. Budget is in chars (a safe proxy for frames): ~3760 chars still
+# generated fine, ~7520 crashed, so 1500 leaves a wide margin.
+TTS_CHUNK_CHAR_BUDGET = 1500
+
 # Playback tempo for the synthesized reply (pitch-preserving time-stretch,
 # not raw resampling -- 1.0 = natural speed).
 TTS_PLAYBACK_SPEED = 1.5
