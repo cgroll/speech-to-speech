@@ -1,0 +1,19 @@
+{
+  "name": "speech-to-speech",
+  "version": "1.0.0",
+  "description": "Proof of concept: Sprache rein, Sprache raus. Ein Knopf am Jabra-Headset (oder wahlweise eine lokale Tastenkombination) startet/stoppt die Aufnahme (push-to-toggle, wie bei `parakeet-dictate`), das Gesagte wird lokal transkribiert (Parakeet/CPU), an Gemini geschickt, und die Antwort wird lokal per Qwen3-TTS (GPU, Stimme \"aiden\") vorgelesen.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@nanonets/graft": "^0.21.1"
+  }
+}

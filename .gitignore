@@ -11,3 +11,9 @@ wheels/
 
 # Secrets
 .env
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/
+
+# Node (only used locally for the graft CLI devDependency)
+/node_modules/
