@@ -22,6 +22,8 @@ import numpy as np
 from speech_to_speech import cockpit, daemon_control, input_button, sessions, stt_client, toggle_socket, tts_client
 from speech_to_speech.agent_backend import (
     AGENT_LABELS,
+    CATEGORY_OTHER,
+    CATEGORY_THINKING,
     AgentConversation,
     DEFAULT_AGENT,
     LlmTimeoutError,
@@ -41,6 +43,17 @@ STATE_LABELS = {
     "recording": "Aufnahme läuft…",
     "thinking": "Denkt nach…",
     "speaking": "Spricht…",
+}
+
+# gr.ChatMessage's `metadata.title` for each non-response output category
+# (cockpit.py renders any history entry carrying `metadata` as Gradio's
+# built-in collapsible "thought" bubble -- visually distinct from a normal
+# reply automatically, no custom CSS needed). Never shown via TTS: _speak()
+# is only ever called with send()'s own return value (see _respond()),
+# these never reach it.
+OUTPUT_CATEGORY_TITLES = {
+    CATEGORY_THINKING: "🤔 Denkprozess",
+    CATEGORY_OTHER: "🔧 Sonstiges (Tool-Aufruf/-Ergebnis)",
 }
 
 
@@ -104,6 +117,7 @@ class App:
             self._default_agent,
             workspace=self._workspace,
             on_image=self._append_image,
+            on_output=self._append_output,
             voice_output=True,
         )
         self._agent_name = self._default_agent
@@ -410,6 +424,29 @@ class App:
         with self._history_lock:
             self._history.append({"role": "assistant", "content": content})
 
+    def _append_output(self, category: str, text: str) -> None:
+        """create_conversation()'s `on_output` callback: appends a
+        CATEGORY_THINKING/CATEGORY_OTHER chunk to the chat history as its
+        own entry, live, as the backend produces it -- *not* via
+        _speak()/TTS (that only ever gets called with send()'s own return
+        value, the actual response, see _respond()/voice_turn() -- this
+        method is never in that path). Tagged with `metadata` so
+        cockpit.py's gr.Chatbot renders it as a visually distinct
+        collapsible "thought" bubble instead of a normal reply. Same
+        threading note as _append_image(): may run on a backend's own
+        background thread (Claude SDK's event loop; Pi's send() call runs
+        on whatever thread called it, so no extra thread there), never
+        assume the caller already holds _history_lock."""
+        title = OUTPUT_CATEGORY_TITLES.get(category, f"🔧 {category}")
+        with self._history_lock:
+            self._history.append(
+                {
+                    "role": "assistant",
+                    "content": text,
+                    "metadata": {"title": title, "status": "done"},
+                }
+            )
+
     # -- Cockpit-facing read/write API ------------------------------------
     # Called from cockpit.py's Gradio callbacks, which run on Gradio's own
     # request threads -- everything here either takes a lock already used
@@ -545,7 +582,11 @@ class App:
         workspace = workspace or self._workspace
         old_llm = self._abort_current_turn()
         self._llm = create_conversation(
-            agent, workspace=workspace, on_image=self._append_image, voice_output=True
+            agent,
+            workspace=workspace,
+            on_image=self._append_image,
+            on_output=self._append_output,
+            voice_output=True,
         )
         self._agent_name = agent
         self._workspace = workspace
@@ -595,6 +636,7 @@ class App:
             resume=session_id,
             workspace=self._workspace,
             on_image=self._append_image,
+            on_output=self._append_output,
             voice_output=True,
         )
         self._agent_name = agent

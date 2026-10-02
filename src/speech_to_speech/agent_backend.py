@@ -87,6 +87,31 @@ class AgentConversation(Protocol):
     def close(self) -> None: ...
 
 
+# -- Output categories (docs/specs/thinking-channel-and-stop-marker.md) ----
+# Every piece of output a backend produces during one send() call falls into
+# one of three categories. "response" isn't a constant below -- it's never
+# pushed through `on_output`, it's simply send()'s own return value, atomic
+# as decided in docs/specs/core-dialog-loop.md section 3/7 (no streaming of
+# the final answer). The other two *are* pushed live, via `on_output`, as
+# they're produced, before send() returns:
+CATEGORY_THINKING = "thinking"  # the agent reasoning out loud / preliminary
+# text that turns out not to be the turn's last message (see llm.py/
+# pi_agent.py: only the very last assistant message's text is "response",
+# everything earlier gets reclassified into this category once a later
+# message shows up).
+CATEGORY_OTHER = "other"  # catch-all: tool calls/results today, and
+# whatever block/event type neither backend's current code knows how to
+# name more specifically yet.
+
+# Per-category delivery rule, decided 2026-10-02: voice output (App/
+# cockpit's TTS) is wired to *only* ever receive send()'s return value
+# (the response), never `on_output` -- that rule lives structurally in
+# app.py (_speak() is only ever called with `reply`), not here, but is
+# recorded here since this is the module that defines the categories it
+# depends on. Text-heavy surfaces (cockpit chat pane) show `on_output`
+# categories live and visually distinct from the response; see cockpit.py.
+
+
 class LlmTimeoutError(Exception):
     """Raised by a backend's send() when a turn is stuck rather than just
     slow -- e.g. llm.py's Claude backend gives up after a stretch of no
@@ -118,6 +143,7 @@ def create_conversation(
     resume: str | None = None,
     workspace: str | None = None,
     on_image: Callable[[str, str], None] | None = None,
+    on_output: Callable[[str, str], None] | None = None,
     voice_output: bool = False,
 ) -> AgentConversation:
     """Instantiates the right backend client for `agent` (one of
@@ -136,6 +162,14 @@ def create_conversation(
     Pi backend rather than raising, since a caller that always wires up
     image delivery shouldn't have to special-case which agent it picked.
 
+    `on_output`, if given, is called `(category, text)` for every piece of
+    non-response output a backend produces during a send() call -- currently
+    CATEGORY_THINKING or CATEGORY_OTHER (see above) -- as it's produced, i.e.
+    *before* send() returns with the final response. None means the caller
+    doesn't want these at all (the backend just discards them, same as
+    before this existed); callers that do pass one still always get the
+    response itself as send()'s plain return value, unchanged.
+
     `voice_output` picks the reply-formatting half of the system prompt
     (system_prompt_for): True for conversations whose replies are spoken (the
     App's dialog and cockpit), False for text-delivered ones (Telegram). Set
@@ -146,13 +180,17 @@ def create_conversation(
         from speech_to_speech.llm import ClaudeCodeConversation
 
         return ClaudeCodeConversation(
-            resume=resume, workspace=workspace, on_image=on_image, voice_output=voice_output
+            resume=resume,
+            workspace=workspace,
+            on_image=on_image,
+            on_output=on_output,
+            voice_output=voice_output,
         )
     if agent == AGENT_PI:
         from speech_to_speech.pi_agent import PiAgentConversation
 
         return PiAgentConversation(
-            resume=resume, workspace=workspace, voice_output=voice_output
+            resume=resume, workspace=workspace, on_output=on_output, voice_output=voice_output
         )
     raise ValueError(f"Unknown agent backend: {agent!r} (known: {sorted(AGENT_LABELS)})")
 

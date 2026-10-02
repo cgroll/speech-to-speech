@@ -16,10 +16,20 @@ from claude_agent_sdk import (
     ClaudeSDKClient,
     ResultMessage,
     TextBlock,
+    ThinkingBlock,
+    ToolResultBlock,
+    ToolUseBlock,
+    UserMessage,
     create_sdk_mcp_server,
 )
 
-from speech_to_speech.agent_backend import LlmTimeoutError, system_prompt_for, workspace_instruction
+from speech_to_speech.agent_backend import (
+    CATEGORY_OTHER,
+    CATEGORY_THINKING,
+    LlmTimeoutError,
+    system_prompt_for,
+    workspace_instruction,
+)
 from speech_to_speech.config import DEFAULT_WORKSPACE
 from speech_to_speech.image_tool import SHOW_IMAGE_INSTRUCTION, make_show_image_tool
 
@@ -47,6 +57,7 @@ class ClaudeCodeConversation:
         resume: str | None = None,
         workspace: str | None = None,
         on_image: Callable[[str, str], None] | None = None,
+        on_output: Callable[[str, str], None] | None = None,
         voice_output: bool = False,
     ) -> None:
         # `resume` is a past session_id (see sessions.py / docs/backlog.md,
@@ -61,6 +72,10 @@ class ClaudeCodeConversation:
         # no delivery channel is available, so the tool isn't registered at
         # all rather than registered-but-broken.
         self._on_image = on_image
+        # agent_backend.CATEGORY_THINKING/CATEGORY_OTHER, pushed live as
+        # blocks stream in -- see _query()'s classification below. None
+        # means the caller doesn't want these (e.g. Telegram, for now).
+        self._on_output = on_output
         # Whether this conversation's replies get spoken -- picks the voice vs.
         # text formatting half of the system prompt (set once in _start()).
         self._voice_output = voice_output
@@ -146,9 +161,26 @@ class ClaudeCodeConversation:
             logger.warning("Error closing Claude client during reset", exc_info=True)
         self._loop.call_soon_threadsafe(self._loop.stop)
 
+    def _emit(self, category: str, text: str) -> None:
+        text = text.strip()
+        if text and self._on_output is not None:
+            self._on_output(category, text)
+
     async def _query(self, text: str) -> str:
         await self._client.query(text)
-        parts: list[str] = []
+        # The response (agent_backend's atomic, non-streamed Antwort-Kanal)
+        # is built with one-message lookahead: an AssistantMessage's text is
+        # only *provisionally* the final reply until we see whether another
+        # AssistantMessage follows it in this same turn. If one does, this
+        # message wasn't the last word after all -- demote it to
+        # CATEGORY_THINKING (emitted live, right then) and the new message's
+        # text becomes the provisional reply instead. Whatever's still
+        # pending when the stream ends is the real, final response -- same
+        # "only the last message's text counts" rule
+        # docs/specs/thinking-channel-and-stop-marker.md already settled on,
+        # just implemented incrementally instead of only after the fact.
+        pending_text: str | None = None
+        last_result: str | None = None
         responses = self._client.receive_response()
         while True:
             try:
@@ -175,15 +207,38 @@ class ClaudeCodeConversation:
                 raise LlmTimeoutError(f"No activity for {_ACTIVITY_TIMEOUT_S}s") from exc
 
             if isinstance(msg, AssistantMessage):
+                message_text_parts: list[str] = []
                 for block in msg.content:
                     if isinstance(block, TextBlock):
-                        print(block.text, end="", flush=True)
-                        parts.append(block.text)
-            elif isinstance(msg, ResultMessage) and msg.result and not parts:
-                print(msg.result, flush=True)
-                return msg.result
+                        message_text_parts.append(block.text)
+                    elif isinstance(block, ThinkingBlock):
+                        self._emit(CATEGORY_THINKING, block.thinking)
+                    elif isinstance(block, ToolUseBlock):
+                        self._emit(CATEGORY_OTHER, f"→ {block.name}({block.input})")
+                    else:
+                        self._emit(CATEGORY_OTHER, str(block))
+
+                message_text = "".join(message_text_parts)
+                if message_text.strip():
+                    if pending_text is not None:
+                        # A later message showed up -- the earlier one
+                        # wasn't the last word, demote it now that we know.
+                        self._emit(CATEGORY_THINKING, pending_text)
+                    pending_text = message_text
+                    print(message_text, end="", flush=True)
+            elif isinstance(msg, UserMessage):
+                # Tool *results* stream back as a UserMessage, not on the
+                # AssistantMessage that requested them (unlike Pi, see
+                # pi_agent.py) -- same CATEGORY_OTHER bucket either way.
+                content = msg.content if isinstance(msg.content, list) else []
+                for block in content:
+                    if isinstance(block, ToolResultBlock):
+                        self._emit(CATEGORY_OTHER, f"← {block.content}")
+            elif isinstance(msg, ResultMessage) and msg.result:
+                last_result = msg.result
+
         print()
-        reply = "".join(parts).strip()
+        reply = (pending_text or last_result or "").strip()
         logger.info("Claude Code reply: %s", reply[:200])
         return reply
 

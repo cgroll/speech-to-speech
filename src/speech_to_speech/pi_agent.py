@@ -16,12 +16,18 @@ same send()/cancel()/close() surface (agent_backend.AgentConversation) so
 empirically (2026-08-12) that tool calls (bash/read/etc.) execute without an
 interactive approval prompt in this mode -- matching the Claude backend's
 `permission_mode="bypassPermissions"`, so no extra flag is needed here for
-that. The event we care about is the final `agent_end`, whose `messages[-1]`
-is the assistant's last message of the turn; its `text`-type content blocks
-are the actual reply (thinking/toolCall/toolResult blocks are the "reasoning
-out loud" and tool-use steps in between, not the answer -- same distinction
-docs/backlog.md's "Sprachausgabe liest Zwischenschritte" entry is about for
-the Claude backend).
+that.
+
+send() classifies each `message_end` event live as it streams (re-verified
+empirically 2026-10-02 against the actual event shapes, see
+docs/specs/thinking-channel-and-stop-marker.md): an assistant message's
+`text` blocks are the provisional reply, demoted to
+`agent_backend.CATEGORY_THINKING` the moment a *later* assistant message
+shows up in the same turn (only the last one was ever the real answer);
+`thinking` blocks and `toolCall`/`toolResult` messages are pushed to
+`on_output` immediately as `CATEGORY_THINKING`/`CATEGORY_OTHER` -- never
+part of the reply. Same distinction docs/backlog.md's "Sprachausgabe liest
+Zwischenschritte" entry is about for the Claude backend (llm.py).
 """
 
 import json
@@ -29,8 +35,14 @@ import logging
 import subprocess
 import threading
 import uuid
+from collections.abc import Callable
 
-from speech_to_speech.agent_backend import system_prompt_for, workspace_instruction
+from speech_to_speech.agent_backend import (
+    CATEGORY_OTHER,
+    CATEGORY_THINKING,
+    system_prompt_for,
+    workspace_instruction,
+)
 from speech_to_speech.config import DEFAULT_WORKSPACE
 
 logger = logging.getLogger(__name__)
@@ -49,6 +61,7 @@ class PiAgentConversation:
         self,
         resume: str | None = None,
         workspace: str | None = None,
+        on_output: Callable[[str, str], None] | None = None,
         voice_output: bool = False,
     ) -> None:
         # `resume` is a past session_id (see sessions.py) to continue;
@@ -65,11 +78,19 @@ class PiAgentConversation:
         # those two won't additionally be blocked by Pi, just not
         # specifically whitelisted either.
         self.workspace = workspace or str(DEFAULT_WORKSPACE)
+        # agent_backend.CATEGORY_THINKING/CATEGORY_OTHER, pushed live as
+        # events stream in -- see send()'s classification below.
+        self._on_output = on_output
         # Spoken vs. text reply formatting, appended to Pi's own system prompt
         # on every turn (see send()).
         self._voice_output = voice_output
         self._proc_lock = threading.Lock()
         self._proc: subprocess.Popen | None = None
+
+    def _emit(self, category: str, text: str) -> None:
+        text = text.strip()
+        if text and self._on_output is not None:
+            self._on_output(category, text)
 
     def send(self, text: str) -> str:
         logger.info("Sending to Pi Agent: %s", text)
@@ -103,7 +124,17 @@ class PiAgentConversation:
         )
         stderr_thread.start()
 
-        reply = ""
+        # Same one-message-lookahead approach as llm.py's _query(): a
+        # "message_end" assistant message's text is only *provisionally*
+        # the final reply until another assistant message follows it in
+        # this turn -- if one does, the earlier one gets reclassified to
+        # CATEGORY_THINKING (emitted live, right then) instead. Whatever's
+        # still pending once the process exits is the real reply -- same
+        # "only the last message's text counts" rule as before (previously
+        # only checked at `agent_end`/`messages[-1]`), just incremental now
+        # so CATEGORY_THINKING/CATEGORY_OTHER pieces surface as they happen
+        # instead of being silently dropped.
+        pending_text: str | None = None
         try:
             for line in proc.stdout:
                 line = line.strip()
@@ -113,14 +144,37 @@ class PiAgentConversation:
                     event = json.loads(line)
                 except json.JSONDecodeError:
                     continue
-                if event.get("type") == "agent_end":
-                    messages = event.get("messages") or []
-                    if messages and messages[-1].get("role") == "assistant":
-                        reply = "".join(
-                            block.get("text", "")
-                            for block in messages[-1].get("content", [])
-                            if block.get("type") == "text"
-                        ).strip()
+                if event.get("type") != "message_end":
+                    continue
+                message = event.get("message") or {}
+                role = message.get("role")
+                if role == "assistant":
+                    message_text_parts: list[str] = []
+                    for block in message.get("content", []):
+                        block_type = block.get("type")
+                        if block_type == "text":
+                            message_text_parts.append(block.get("text", ""))
+                        elif block_type == "thinking":
+                            self._emit(CATEGORY_THINKING, block.get("text", ""))
+                        elif block_type == "toolCall":
+                            self._emit(
+                                CATEGORY_OTHER,
+                                f"→ {block.get('name')}({block.get('arguments')})",
+                            )
+                        else:
+                            self._emit(CATEGORY_OTHER, str(block))
+                    message_text = "".join(message_text_parts)
+                    if message_text.strip():
+                        if pending_text is not None:
+                            self._emit(CATEGORY_THINKING, pending_text)
+                        pending_text = message_text
+                elif role == "toolResult":
+                    result_text = "".join(
+                        block.get("text", "")
+                        for block in message.get("content", [])
+                        if block.get("type") == "text"
+                    )
+                    self._emit(CATEGORY_OTHER, f"← {result_text}")
         finally:
             proc.stdout.close()
             try:
@@ -131,6 +185,8 @@ class PiAgentConversation:
             stderr_thread.join(timeout=5)
             with self._proc_lock:
                 self._proc = None
+
+        reply = (pending_text or "").strip()
 
         # -15/-9: killed by our own cancel()/timeout handling above -- not a
         # real failure, just means the reply (if any) is a partial one that

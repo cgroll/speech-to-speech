@@ -1,6 +1,9 @@
 # Spezifikation: Denkprozess-Kanal und Stop-Markierung
 
-Status: Entwurf (2026-10-02)
+Status: Teilweise umgesetzt (2026-10-02) -- Abschnitt 3 (Denkprozess-/
+Output-Kanal) ist implementiert und empirisch gegen beide echten Backends
+verifiziert, siehe Abschnitt 3a. Abschnitt 4 (Stop-Markierung im
+Chatverlauf) ist weiterhin nur Entwurf, noch nicht gebaut.
 
 Konkretisiert zwei Lücken, die beim Abgleich von
 `docs/specs/core-dialog-loop.md` gegen den aktuellen Code aufgefallen sind:
@@ -8,7 +11,8 @@ den fehlenden Denkprozess-Kanal und die fehlende Markierung im Chatverlauf,
 wenn ein Stop ohne Antwort endet. Baut direkt auf den dortigen Entscheidungen
 auf (Abschnitt 3 "Ausgabe-Kanäle", Abschnitt 4 "Stop").
 
-## 1. Ist-Zustand (Befund 2026-10-02)
+## 1. Ist-Zustand (Befund 2026-10-02, vor Umsetzung -- siehe Abschnitt 3a für
+den aktuellen Stand)
 
 - `llm.py`, `ClaudeCodeConversation._query()`: sammelt aktuell **alle**
   `TextBlock`-Textstücke aus **jeder** `AssistantMessage` der Runde ein --
@@ -41,7 +45,7 @@ auf (Abschnitt 3 "Ausgabe-Kanäle", Abschnitt 4 "Stop").
    wird, bevor der Antwort-Kanal Inhalt hatte (Regel siehe
    core-dialog-loop.md Abschnitt 4 -- hier nur die konkrete Umsetzung).
 
-## 3. Denkprozess-Kanal: Schnittstellen-Entwurf
+## 3. Denkprozess-Kanal: Schnittstellen-Entwurf (ursprünglich, teils überholt)
 
 Gleiches Muster wie das bestehende `on_image` (siehe `image_tool.py` /
 `create_conversation()`): ein optionaler Callback, der bei Erzeugung der
@@ -79,6 +83,66 @@ aufgerufen wird, bevor `send()` den finalen Antwort-String zurückgibt.
 - Telegram-Bot: bekommt `on_thinking` vorerst nicht verdrahtet (bleibt bei
   nur der finalen Antwort) -- ob/wie Denkprozess dort später sinnvoll ist,
   ist nicht Teil dieser Spec.
+
+## 3a. Tatsächliche Umsetzung (2026-10-02)
+
+Beim Bauen auf drei statt zwei Kanäle verallgemeinert, auf Wunsch aus der
+Diskussion zu möglichen Erweiterungen des Kern-Modells: **Antwort**
+(unverändert `send()`s Rückgabewert, atomar), **Denkprozess**
+(`agent_backend.CATEGORY_THINKING`) und **Sonstiges**
+(`agent_backend.CATEGORY_OTHER`) als bewusster Auffangkorb für alles, was
+noch nicht einzeln benannt ist -- aktuell Tool-Aufrufe/-Ergebnisse, aber
+offen für künftige, heute unbekannte Blocktypen (z.B. die Claude-SDK-eigenen
+`Task*`-Message-Typen, die bei der Recherche zu dieser Erweiterung auffielen
+-- vermutlich mit den noch offenen Hintergrund-Agenten-Fragen aus
+core-dialog-loop.md Abschnitt 7 verwandt, hier aber nicht weiter verfolgt).
+
+- `agent_backend.py`: `CATEGORY_THINKING`/`CATEGORY_OTHER`-Konstanten;
+  `create_conversation(..., on_output: Callable[[str, str], None] | None =
+  None)` (Signatur `(kategorie, text)`, nicht nur `(text)` wie im
+  ursprünglichen `on_thinking`-Entwurf oben) an beide Backends durchgereicht.
+- `llm.py`, `ClaudeCodeConversation._query()`: klassifiziert jeden Block
+  live beim Eintreffen -- `ThinkingBlock` -> `CATEGORY_THINKING`,
+  `ToolUseBlock` (auf der `AssistantMessage`) und `ToolResultBlock` (kommt
+  als eigene `UserMessage` zurück, nicht auf der anfragenden
+  `AssistantMessage` -- beim Umsetzen festgestellt, im ursprünglichen
+  Entwurf oben nicht erwähnt) -> `CATEGORY_OTHER`. Die `TextBlock`-Inhalte
+  bilden die Antwort per Ein-Nachricht-Vorausschau: provisorisch die
+  Antwort, bis eine *weitere* `AssistantMessage` mit Text folgt -- dann wird
+  der vorherige Text nachträglich als `CATEGORY_THINKING` nachgereicht und
+  der neue ist jetzt provisorisch die Antwort. Was am Ende noch offen ist,
+  ist die tatsächliche Antwort (ersetzt die reine "nur letzte Message
+  zählt"-Regel durch dieselbe Regel, nur jetzt live statt erst im
+  Nachhinein ausgewertet).
+- `pi_agent.py`, `PiAgentConversation.send()`: analog, aber über
+  `message_end`-Events (nicht erst `agent_end`) -- empirisch gegen das
+  echte `pi --mode json`-Event-Schema verifiziert (Event-Typen wie
+  `message_start`/`message_update`/`message_end`/`tool_execution_*`/
+  `turn_end`, nicht im ursprünglichen Entwurf oben bekannt). `thinking`-
+  und `toolCall`-Blöcke einer Assistant-`message_end` sowie `toolResult`-
+  Messages gehen sofort an `on_output`; Text-Blöcke laufen durch dieselbe
+  Ein-Nachricht-Vorausschau wie beim Claude-Pfad.
+- `App._append_output()` (statt generischem "role/Content-Flag" wie oben
+  skizziert): nutzt Gradio 6's eingebautes `ChatMessage.metadata`-Feld
+  (`{"title": ..., "status": "done"}`) -- `gr.Chatbot` rendert das von
+  Haus aus als eigene, farblich/optisch abgesetzte, einklappbare
+  "Gedanken"-Blase, ganz ohne eigenes CSS oder eigenen `role`-Wert (per
+  Gradio-Quellcode und isoliertem `Chatbot.postprocess()`-Aufruf
+  verifiziert). `_speak()` bekommt unverändert nur `reply`, nie
+  `on_output`-Inhalte -- strukturell gar nicht anders verdrahtet.
+- Terminal-Logging wie oben geplant **nicht** umgesetzt (nur
+  Chatverlauf/Gradio) -- bisher kein Bedarf.
+- Telegram-Bot: weiterhin nicht verdrahtet, wie oben entschieden. Das
+  Plumbing (`on_output`) ist aber jetzt da und backend-seitig fertig; nur
+  `telegram_bot/daemon.py` müsste es noch an `create_conversation()`
+  übergeben und selbst entscheiden, wie es Denkprozess-Nachrichten in
+  Telegram darstellt (eigene Nachricht? Präfix?) -- offen.
+- Verifikation: kein Fake-Backend-Pytest für die Block-Klassifizierung
+  selbst (bräuchte einen vollen Mock des Claude-SDK-Async-Clients bzw. der
+  `pi`-Subprocess-Ausgabe) -- stattdessen zwei echte End-to-End-Smoke-Tests
+  gegen beide laufenden Backends ("liste Dateien auf, dann sag Hallo"),
+  die bestätigen: Tool-Aufruf/-Ergebnis landen in `CATEGORY_OTHER`, der
+  finale Gruß ist exakt und ausschließlich der `send()`-Rückgabewert.
 
 ## 4. Stop-Markierung: Umsetzung
 
@@ -123,5 +187,8 @@ core-dialog-loop.md.)
 - Echtes Streaming des Antwort-Kanals selbst (siehe core-dialog-loop.md
   Abschnitt 7) -- bleibt atomar.
 - Standardmäßiges Ein-/Ausblenden des Denkprozess-Kanals im Cockpit, Styling
-  im Detail -- UI-Entscheidung von `cockpit.py`, nicht hier festgelegt.
-- Denkprozess-Anzeige im Telegram-Bot.
+  im Detail -- UI-Entscheidung von `cockpit.py`, nicht hier festgelegt
+  (in der Umsetzung, Abschnitt 3a: Gradios Standard-Darstellung für
+  `metadata`-Nachrichten übernommen, nicht weiter angepasst).
+- Denkprozess-Anzeige im Telegram-Bot -- Callback-seitig vorbereitet
+  (Abschnitt 3a), in `telegram_bot/daemon.py` aber nicht verdrahtet.
