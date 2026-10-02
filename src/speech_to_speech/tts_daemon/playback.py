@@ -6,6 +6,7 @@ Moved here from the app process's audio_io.py without behavior changes."""
 import logging
 import os
 import subprocess
+import sys
 import threading
 import time
 from collections.abc import Callable, Iterator
@@ -25,7 +26,14 @@ def _output_device() -> int | None:
     Jabra is the default *input* (mic), so TTS replies would otherwise come
     out of the laptop instead of the headset. Falls back to the default
     device (None) if the Jabra isn't connected, same graceful-degradation
-    pattern as the Jabra button (see input_button.py)."""
+    pattern as the Jabra button (see input_button.py).
+
+    macOS-only: on Linux the name match hits the raw ALSA device (hw:N,0),
+    which doesn't resample and rejects the TTS model's 24 kHz output
+    ("Invalid sample rate"). There the PipeWire/pulse default already routes
+    to the headset, so stick with it."""
+    if sys.platform != "darwin":
+        return None
     for i, info in enumerate(sd.query_devices()):
         if JABRA_DEVICE_NAME in info["name"] and info["max_output_channels"] > 0:
             return i

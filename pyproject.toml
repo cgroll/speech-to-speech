@@ -26,10 +26,13 @@ dependencies = [
     "pyobjc-framework-Cocoa>=10.3 ; sys_platform == 'darwin'",
     "python-dotenv>=1.2.2",
     # [ggml] pulls qwentts-cpp-python (the GGML/qwentts.cpp runtime). On native
-    # Apple Silicon that wheel bundles Metal and the backend is auto-selected;
-    # on Linux it's the CUDA build. Not pulled by the bare package at 0.3.2, so
-    # request the extra explicitly.
-    "faster-qwen3-tts[ggml]>=0.3.2",
+    # Apple Silicon that wheel bundles Metal and the backend is auto-selected.
+    # macOS-only: its Linux wheels need GLIBC 2.39 (manylinux_2_39), so on
+    # Ubuntu 22.04 (GLIBC 2.35) `uv sync` would fail outright -- Linux stays on
+    # the bare package and its torch/CUDA-graphs backend. Not pulled by the bare
+    # package at 0.3.2, so request the extra explicitly where it's wanted.
+    "faster-qwen3-tts>=0.3.2",
+    "faster-qwen3-tts[ggml]>=0.3.2 ; sys_platform == 'darwin'",
     "gradio>=6.17.3",
     "setuptools<81",
     "sounddevice>=0.5.5",
