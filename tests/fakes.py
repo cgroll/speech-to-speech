@@ -35,6 +35,14 @@ class FakeAgentConversation:
 
     This is what makes "catch App in Processing, then do X" deterministic
     in tests instead of relying on sleeps/timing.
+
+    `on_output` + `emits`: real backends take `on_output(category, text)` at
+    construction (agent_backend.create_conversation(..., on_output=...)) and
+    call it zero or more times *during* send(), before returning the
+    response -- see llm.py/pi_agent.py. `emits` is the list of
+    `(category, text)` pairs this fake calls `on_output` with, fired right
+    at the start of send(), before gating -- mirrors a backend emitting its
+    thinking/tool-call output before the final answer is ready.
     """
 
     def __init__(
@@ -43,10 +51,14 @@ class FakeAgentConversation:
         *,
         gate: bool = False,
         raises: Exception | None = None,
+        on_output: Callable[[str, str], None] | None = None,
+        emits: list[tuple[str, str]] = (),
     ):
         self.reply = reply
         self.raises = raises
         self.gate = gate
+        self.on_output = on_output
+        self.emits = list(emits)
         self.sent: list[str] = []
         self.cancel_calls = 0
         self.close_calls = 0
@@ -58,6 +70,9 @@ class FakeAgentConversation:
         release = threading.Event()
         self._release = release
         self.sent.append(text)
+        if self.on_output is not None:
+            for category, chunk in self.emits:
+                self.on_output(category, chunk)
         self.started.set()
         if self.gate:
             release.wait(timeout=5)
