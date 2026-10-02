@@ -108,130 +108,133 @@ def build(app) -> gr.Blocks:
     with gr.Blocks(title="Speech-to-Speech Cockpit") as demo:
         gr.Markdown("# Speech-to-Speech Cockpit")
 
-        state_box = gr.Textbox(label="Status", interactive=False)
-        # Gradio 6's Chatbot always takes {"role", "content"} message dicts
-        # now (the old type="messages" kwarg was removed as a no-longer-
-        # needed choice) -- matches App.get_history()'s format directly.
-        chatbot = gr.Chatbot(label="Verlauf", height=480)
-        stats_box = gr.Textbox(label="Kennzahlen", interactive=False)
-
-        # Agent-Wahl für die *nächste* neue Session (docs/backlog.md,
-        # "Mehrere Agent-Backends", Entscheidung 3): wirkt nur beim Klick auf
-        # "Neue Session", nicht mitten in einer laufenden -- kein
-        # Backend-Wechsel innerhalb einer Session.
-        agent_picker = gr.Radio(
-            label="Agent für neue Session",
-            choices=[(label, agent_id) for agent_id, label in AGENT_LABELS.items()],
-            value=app.get_agent_name(),
-        )
-
-        # Workspace-Wahl für die *nächste* neue Session (docs/backlog.md,
-        # "Mehrere Agent-Backends", Punkt 2), gleiches Muster wie
-        # agent_picker oben: wirkt nur beim Klick auf "Neue Session", kein
-        # Wechsel mitten in einer laufenden. workspace_box zeigt/erlaubt den
-        # Pfad direkt als Text.
-        #
-        # Der Ordner-Browser darunter ist bewusst kein gr.FileExplorer mehr:
-        # dort navigiert ein Klick auf einen Ordnernamen nur rein (auf-/
-        # zuklappen), ausgewählt wird er nur über eine winzige, leicht zu
-        # übersehende Checkbox daneben -- genau das Problem, das hier gelöst
-        # werden soll. Stattdessen ein simples Radio pro Verzeichnisebene:
-        # ein Klick auf einen Unterordner setzt ihn *sofort* als
-        # Workspace-Pfad *und* geht eine Ebene tiefer, sodass man sich ohne
-        # Extra-Bestätigung durchklicken kann; "Eine Ebene höher" geht
-        # zurück.
-        with gr.Accordion("Workspace für neue Session", open=False):
-            workspace_box = gr.Textbox(
-                label="Workspace-Pfad",
-                value=app.get_workspace(),
-            )
-            browse_dir_state = gr.State(str(Path.home()))
-            browse_label = gr.Markdown(f"📁 {Path.home()}")
-            browse_up_btn = gr.Button("⬆️ Eine Ebene höher", size="sm")
-            browse_list = gr.Radio(
-                label="Unterordner (anklicken: auswählen & reingehen)",
-                choices=_list_subdirs(str(Path.home())),
-                value=None,
-            )
-
+        # --- 1. Status & Voice Toggle ---
         with gr.Row():
-            toggle_btn = gr.Button("Aufnehmen / Stoppen / Unterbrechen", variant="primary")
-            # Separate from toggle_btn: pressing the toggle while "thinking"/
-            # "speaking" is a barge-in and jumps straight into a *new*
-            # recording (on_toggle()'s design -- see App docstring). This
-            # button is for the plain "stop talking, I'm not about to say
-            # anything" case instead: App.stop() cancels/interrupts and goes
-            # back to idle without starting to listen.
-            stop_btn = gr.Button("Nur stoppen (ohne neue Aufnahme)")
-            reset_btn = gr.Button("Neue Session")
+            state_box = gr.Textbox(label="Status", interactive=False, scale=3)
+            # Text-only-Modus (siehe docs/backlog.md): unterdrückt die
+            # tatsächliche TTS-Synthese/Wiedergabe (App._speak()/voice_turn()),
+            # lässt aber Status/Verlauf/Statistiken unangetastet -- Antworten
+            # erscheinen weiter sofort im Chat-Verlauf, nur eben lautlos. Wirkt
+            # sofort (kein Session-Neustart nötig), da es kein Teil des
+            # Backend-Zustands ist, der mit der Session wechselt.
+            voice_mute_box = gr.Checkbox(
+                label="Audio-Ausgabe stumm (nur Text)",
+                value=app.get_voice_muted(),
+                scale=1,
+            )
 
-        # Text-only-Modus (siehe docs/backlog.md): unterdrückt die
-        # tatsächliche TTS-Synthese/Wiedergabe (App._speak()/voice_turn()),
-        # lässt aber Status/Verlauf/Statistiken unangetastet -- Antworten
-        # erscheinen weiter sofort im Chat-Verlauf, nur eben lautlos. Wirkt
-        # sofort (kein Session-Neustart nötig), da es kein Teil des
-        # Backend-Zustands ist, der mit der Session wechselt.
-        voice_mute_box = gr.Checkbox(
-            label="Audio-Ausgabe stumm (nur Text)",
-            value=app.get_voice_muted(),
-        )
+        # --- 2. Ein- und Ausgaben ---
+        with gr.Group():
+            # Gradio 6's Chatbot always takes {"role", "content"} message dicts
+            # now (the old type="messages" kwarg was removed as a no-longer-
+            # needed choice) -- matches App.get_history()'s format directly.
+            chatbot = gr.Chatbot(label="Verlauf", height=480)
+            stats_box = gr.Textbox(label="Kennzahlen", interactive=False)
 
+            # Alternative to the mic: type or paste text directly, e.g. when
+            # dictating would be slower or more awkward than copy-pasting.
+            # Shares App.on_toggle()'s pipeline via App.submit_text(), just
+            # entering it at "thinking" instead of "recording".
+            with gr.Row():
+                text_input = gr.Textbox(
+                    label="Text eingeben (statt Sprache)",
+                    placeholder="Text hier einfügen und Enter drücken zum Senden …",
+                    scale=4,
+                )
+                send_btn = gr.Button("Senden", scale=1)
+
+            with gr.Row():
+                toggle_btn = gr.Button("Aufnehmen / Stoppen / Unterbrechen", variant="primary")
+                # Separate from toggle_btn: pressing the toggle while "thinking"/
+                # "speaking" is a barge-in and jumps straight into a *new*
+                # recording (on_toggle()'s design -- see App docstring). This
+                # button is for the plain "stop talking, I'm not about to say
+                # anything" case instead: App.stop() cancels/interrupts and goes
+                # back to idle without starting to listen.
+                stop_btn = gr.Button("Nur stoppen (ohne neue Aufnahme)")
+
+            # Browser-Mikrofon-Ein-/Ausgabe -- erster, bewusst einfacher
+            # (nicht-gestreamter) Test-Roundtrip für den mobilen Zugriff
+            # (docs/architecture-proposal.md, "Offene Frage: mobiler Zugriff
+            # (Handy)"): unabhängig vom Jabra-/Hotkey-Pfad oben, kein Barge-in.
+            # Aufnahme endet automatisch (stop_recording-Event, wie beim
+            # Loslassen einer Sprachnachrichtentaste), dann läuft der ganze
+            # Turn synchron durch (App.voice_turn) and die Antwort landet als
+            # Audio-Clip zum Abspielen rechts daneben.
+            with gr.Row():
+                voice_input = gr.Audio(
+                    label="Sprachnachricht aufnehmen (Test, für mobilen Zugriff)",
+                    sources=["microphone"],
+                    type="numpy",
+                )
+                voice_output = gr.Audio(
+                    label="Antwort",
+                    type="numpy",
+                    autoplay=True,
+                )
+
+        # --- 3. Agent Configuration (Agent, Session, Workspace) ---
+        with gr.Accordion("Agenten-Konfiguration (Agent, Session, Workspace)", open=False):
+            # Agent-Wahl für die *nächste* neue Session (docs/backlog.md,
+            # "Mehrere Agent-Backends", Entscheidung 3): wirkt nur beim Klick auf
+            # "Neue Session", nicht mitten in einer laufenden -- kein
+            # Backend-Wechsel innerhalb einer Session.
+            with gr.Row():
+                agent_picker = gr.Radio(
+                    label="Agent für neue Session",
+                    choices=[(label, agent_id) for agent_id, label in AGENT_LABELS.items()],
+                    value=app.get_agent_name(),
+                    scale=3,
+                )
+                reset_btn = gr.Button("Neue Session starten", scale=1)
+
+            # Session-Verlauf/-Wiederaufnahme (docs/backlog.md, "Frühere
+            # Sessions wieder aufnehmen können" / "Mehrere Agent-Backends").
+            # Persistierung übernimmt bereits der jeweilige Backend selbst
+            # (sessions.py liest beide Formate und tagged sie); hier nur Anzeige
+            # + Auswahl über eine gemeinsame Liste.
+            with gr.Group():
+                gr.Markdown("### Frühere Sessions")
+                session_picker = gr.Radio(
+                    label="Session auswählen",
+                    choices=sessions.session_choices(),
+                    value=None,
+                )
+                with gr.Row():
+                    refresh_sessions_btn = gr.Button("Liste aktualisieren")
+                    resume_session_btn = gr.Button("Ausgewählte Session fortsetzen", variant="secondary")
+
+            # Workspace-Wahl für die *nächste* neue Session (docs/backlog.md,
+            # "Mehrere Agent-Backends", Punkt 2), gleiches Muster wie
+            # agent_picker oben: wirkt nur beim Klick auf "Neue Session", kein
+            # Wechsel mitten in einer laufenden. workspace_box zeigt/erlaubt den
+            # Pfad direkt als Text.
+            with gr.Group():
+                gr.Markdown("### Workspace")
+                workspace_box = gr.Textbox(
+                    label="Workspace-Pfad",
+                    value=app.get_workspace(),
+                )
+                browse_dir_state = gr.State(str(Path.home()))
+                browse_label = gr.Markdown(f"📁 {Path.home()}")
+                browse_up_btn = gr.Button("⬆️ Eine Ebene höher", size="sm")
+                browse_list = gr.Radio(
+                    label="Unterordner (anklicken: auswählen & reingehen)",
+                    choices=_list_subdirs(str(Path.home())),
+                    value=None,
+                )
+
+        # --- 4. Infrastruktur-Steuerung ---
         # Manueller Neustart der Hintergrund-Daemons (docs/backlog.md,
         # "Daemon-Neustart aus der App/dem Cockpit heraus") -- für den Fall,
         # dass ein Daemon zwar noch antwortet, sich aber falsch/festgefahren
         # verhält, ohne dass der TTS-Watchdog anschlägt. Läuft über
         # App.restart_stt_daemon()/restart_tts_daemon(), die eine laufende
         # Aufnahme/Wiedergabe vorher sauber abbrechen.
-        with gr.Row():
-            restart_stt_btn = gr.Button("STT-Daemon neu starten", variant="secondary")
-            restart_tts_btn = gr.Button("TTS-Daemon neu starten", variant="secondary")
-
-        # Browser-Mikrofon-Ein-/Ausgabe -- erster, bewusst einfacher
-        # (nicht-gestreamter) Test-Roundtrip für den mobilen Zugriff
-        # (docs/architecture-proposal.md, "Offene Frage: mobiler Zugriff
-        # (Handy)"): unabhängig vom Jabra-/Hotkey-Pfad oben, kein Barge-in.
-        # Aufnahme endet automatisch (stop_recording-Event, wie beim
-        # Loslassen einer Sprachnachrichtentaste), dann läuft der ganze
-        # Turn synchron durch (App.voice_turn) und die Antwort landet als
-        # Audio-Clip zum Abspielen rechts daneben.
-        with gr.Row():
-            voice_input = gr.Audio(
-                label="Sprachnachricht aufnehmen (Test, für mobilen Zugriff)",
-                sources=["microphone"],
-                type="numpy",
-            )
-            voice_output = gr.Audio(
-                label="Antwort",
-                type="numpy",
-                autoplay=True,
-            )
-
-        # Session-Verlauf/-Wiederaufnahme (docs/backlog.md, "Frühere
-        # Sessions wieder aufnehmen können" / "Mehrere Agent-Backends").
-        # Persistierung übernimmt bereits der jeweilige Backend selbst
-        # (sessions.py liest beide Formate und tagged sie); hier nur Anzeige
-        # + Auswahl über eine gemeinsame Liste.
-        with gr.Accordion("Frühere Sessions", open=False):
-            session_picker = gr.Radio(
-                label="Session auswählen",
-                choices=sessions.session_choices(),
-                value=None,
-            )
+        with gr.Accordion("Infrastruktur-Steuerung (Daemons)", open=False):
             with gr.Row():
-                refresh_sessions_btn = gr.Button("Liste aktualisieren")
-                resume_session_btn = gr.Button("Ausgewählte Session fortsetzen", variant="secondary")
-
-        # Alternative to the mic: type or paste text directly, e.g. when
-        # dictating would be slower or more awkward than copy-pasting.
-        # Shares App.on_toggle()'s pipeline via App.submit_text(), just
-        # entering it at "thinking" instead of "recording".
-        with gr.Row():
-            text_input = gr.Textbox(
-                label="Text eingeben (statt Sprache)",
-                placeholder="Text hier einfügen und Enter drücken zum Senden …",
-                scale=4,
-            )
-            send_btn = gr.Button("Senden", scale=1)
+                restart_stt_btn = gr.Button("STT-Daemon neu starten", variant="secondary")
+                restart_tts_btn = gr.Button("TTS-Daemon neu starten", variant="secondary")
 
         outputs = [state_box, chatbot, stats_box]
         text_outputs = outputs + [text_input]
