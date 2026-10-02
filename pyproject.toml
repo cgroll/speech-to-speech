@@ -52,6 +52,11 @@ qwen-tts-daemon = "speech_to_speech.tts_daemon.daemon:main"
 speech-to-speech-telegram-bot = "speech_to_speech.telegram_bot.cli:main"
 speech-to-speech-telegram-bot-daemon = "speech_to_speech.telegram_bot.daemon:main"
 
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+]
+
 [build-system]
 requires = ["uv_build>=0.11.21,<0.12.0"]
 build-backend = "uv_build"
