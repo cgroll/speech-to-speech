@@ -5,17 +5,18 @@ eine nachträglich geschriebene Spezifikation. Quelle: README.md,
 docs/architecture-proposal.md, docs/telegram-bot-proposal.md,
 docs/backlog.md und der aktuelle Code-Stand (Stand 2026-10-02).
 
-## 1. Sprachdialog (Kern-Feature)
+## 1. Interaktionsmodell (Sprache & Text)
 
-- Push-to-toggle-Aufnahme, ausgelöst durch Jabra-Headset-Knopf (`evdev`) oder
-  lokalen Hotkey (Unix-Socket, `toggle_socket.py`).
-- Zustandsmaschine `idle -> recording -> thinking -> speaking -> idle`
-  (`app.py`), gegen Races per Lock abgesichert.
-- Antwort wird satzweise synthetisiert und abgespielt (`_speak_streaming`,
-  Producer/Consumer-Muster) -- Wiedergabe beginnt nach dem ersten Satz, nicht
-  erst nach der kompletten Antwort.
-- Barge-in: laufende Wiedergabe kann jederzeit unterbrochen werden (gleicher
-  Trigger wie Start/Stop).
+- **Eingabe-Modi:** Unterstützt Spracheingabe (Jabra/Hotkey) und Texteingabe (Cockpit/Telegram).
+- **Steuerung der Sprachausgabe (TTS):**
+    - **Sofortiger Stopp & Queue-Löschung:** Der Start einer Spracheingabe (Knopf drücken) oder das Abschicken einer Texteingabe (Enter/Button) bricht eine laufende Sprachausgabe sofort ab und löscht die gesamte Warteschlange für Sprachausgaben (**Speech-Queue**).
+    - **Audio-Unterdrückung bei aktiver Eingabe:** Während eine Aufnahme läuft oder eine Nachricht in der Warteschlange auf Verarbeitung wartet, wird für neu eintreffende Ereignisse (z. B. fertige Hintergrund-Prozesse) kein Audio generiert. Diese erscheinen nur textlich im Verlauf.
+    - **Keine Unterbrechung durch Tippen:** Das bloße Tippen im Text-Editor unterbricht die Sprachausgabe nicht.
+- **Steuerung des Agenten (LLM):**
+    - **Warteschlangen-Modell (Steering Messages):** Neue Eingaben (Sprache oder Text) unterbrechen den Denkprozess (Textgenerierung) des Agenten nicht hart. Stattdessen werden sie als Folge-Nachrichten eingereiht, die verarbeitet werden, sobald der Agent den aktuellen Turn (oder den nächsten Tool-Schritt) beendet hat.
+    - **Text-Session-Konsistenz:** Der neue Input wird am Ende der Text-Historie eingereiht, nachdem alle bis dahin eingegangenen (auch asynchronen) Text-Outputs verarbeitet wurden. Die Audio-Ebene ist flüchtig (wird bei Interrupt gelöscht), die Text-Ebene permanent (wird erweitert).
+- **Zustandsmaschine:** `idle -> recording -> thinking -> speaking -> idle`. Die Übergänge sind gegen Race-Conditions abgesichert.
+- **Streaming:** Antworten werden satzweise synthetisiert und abgespielt -- die Wiedergabe beginnt nach dem ersten Satz.
 
 ## 2. Daemon-Architektur (STT/TTS entkoppelt von der App)
 

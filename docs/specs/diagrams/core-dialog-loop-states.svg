@@ -1,6 +1,6 @@
-<svg viewBox="0 0 960 700" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">
+<svg viewBox="0 0 1180 760" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">
   <title>Zustandsmodell der Kern-Dialogschleife</title>
-  <desc>Idle, Processing und Responding mit ihren Übergängen; Processing erzeugt optional einen Denkprozess-Kanal und immer den atomaren Antwort-Kanal; Stop führt aus Processing oder Responding zurück nach Idle.</desc>
+  <desc>Idle, Eingabe, Processing und Responding mit ihren Übergängen; Eingabe und Responding sind im Textmodus augenblicklich bzw. nur Anzeige, im Sprachmodus dauern sie (Aufnahme bzw. Wiedergabe). Processing erzeugt optional einen Denkprozess-Kanal und immer den atomaren Antwort-Kanal. Stop führt aus jedem Nicht-Idle-Zustand zurück nach Idle.</desc>
 
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -18,10 +18,11 @@
     .surface   { fill: #fcfcfb; }
     .border    { stroke: rgba(11,11,11,0.10); }
     .state-box { fill: #f2f1ee; stroke: #52514e; stroke-width: 1.5; }
+    .state-box-adapter { fill: #f2f1ee; stroke: #52514e; stroke-width: 1.5; stroke-dasharray: 5 4; }
     .state-text{ fill: #0b0b0b; font-weight: 600; }
-    .sub-text  { fill: #52514e; font-size: 12px; }
+    .sub-text  { fill: #52514e; font-size: 11.5px; }
     .edge      { stroke: #52514e; stroke-width: 2; fill: none; }
-    .edge-label{ fill: #0b0b0b; font-size: 14px; }
+    .edge-label{ fill: #0b0b0b; font-size: 13.5px; }
     .edge-label-muted{ fill: #52514e; font-size: 12.5px; }
     .edge-stop { stroke: #898781; stroke-width: 2; stroke-dasharray: 6 5; fill: none; }
     .arrowhead { fill: #52514e; }
@@ -39,6 +40,7 @@
       .surface   { fill: #1a1a19; }
       .border    { stroke: rgba(255,255,255,0.10); }
       .state-box { fill: #2a2a28; stroke: #c3c2b7; }
+      .state-box-adapter { fill: #2a2a28; stroke: #c3c2b7; }
       .state-text{ fill: #ffffff; }
       .sub-text  { fill: #c3c2b7; }
       .edge      { stroke: #c3c2b7; }
@@ -58,61 +60,74 @@
     }
   </style>
 
-  <rect x="0" y="0" width="960" height="700" rx="16" class="surface border" />
+  <rect x="0" y="0" width="1180" height="760" rx="16" class="surface border" />
+  <text x="24" y="28" class="caption">Zustandsmodell: Kern-Dialogschleife (docs/specs/core-dialog-loop.md) -- gestrichelte Boxen: im Textmodus Dauer null</text>
 
   <!-- output channels, branching upward from Processing -->
-  <line x1="480" y1="260" x2="425" y2="122" class="chan-line" marker-end="url(#arrow-thin)" />
-  <line x1="480" y1="260" x2="635" y2="122" class="chan-line" marker-end="url(#arrow-thin)" />
+  <line x1="650" y1="260" x2="595" y2="122" class="chan-line" marker-end="url(#arrow-thin)" />
+  <line x1="650" y1="260" x2="805" y2="122" class="chan-line" marker-end="url(#arrow-thin)" />
 
-  <rect x="330" y="58" width="190" height="64" rx="10" class="chan-thinking" />
-  <text x="425" y="82" text-anchor="middle" class="chan-thinking-text" font-size="13.5">Denkprozess-Kanal</text>
-  <text x="425" y="99" text-anchor="middle" class="sub-text" font-size="11">optional, nie an die</text>
-  <text x="425" y="112" text-anchor="middle" class="sub-text" font-size="11">Sprachausgabe weitergereicht</text>
+  <rect x="500" y="58" width="190" height="64" rx="10" class="chan-thinking" />
+  <text x="595" y="82" text-anchor="middle" class="chan-thinking-text" font-size="13.5">Denkprozess-Kanal</text>
+  <text x="595" y="99" text-anchor="middle" class="sub-text" font-size="11">optional, nie an die</text>
+  <text x="595" y="112" text-anchor="middle" class="sub-text" font-size="11">Sprachausgabe weitergereicht</text>
 
-  <rect x="540" y="58" width="190" height="64" rx="10" class="chan-answer" />
-  <text x="635" y="82" text-anchor="middle" class="chan-answer-text" font-size="13.5">Antwort-Kanal</text>
-  <text x="635" y="99" text-anchor="middle" class="sub-text" font-size="11">atomar: ganz oder gar nicht,</text>
-  <text x="635" y="112" text-anchor="middle" class="sub-text" font-size="11">kein Text-Streaming</text>
+  <rect x="710" y="58" width="190" height="64" rx="10" class="chan-answer" />
+  <text x="805" y="82" text-anchor="middle" class="chan-answer-text" font-size="13.5">Antwort-Kanal</text>
+  <text x="805" y="99" text-anchor="middle" class="sub-text" font-size="11">atomar: ganz oder gar nicht,</text>
+  <text x="805" y="112" text-anchor="middle" class="sub-text" font-size="11">kein Text-Streaming</text>
 
   <!-- state boxes -->
-  <rect x="50" y="260" width="170" height="80" rx="16" class="state-box" />
-  <text x="135" y="306" text-anchor="middle" class="state-text" font-size="18">Idle</text>
+  <rect x="40" y="260" width="150" height="80" rx="16" class="state-box" />
+  <text x="115" y="306" text-anchor="middle" class="state-text" font-size="17">Idle</text>
 
-  <rect x="395" y="260" width="170" height="80" rx="16" class="state-box" />
-  <text x="480" y="306" text-anchor="middle" class="state-text" font-size="18">Processing</text>
+  <rect x="300" y="260" width="150" height="80" rx="16" class="state-box-adapter" />
+  <text x="375" y="300" text-anchor="middle" class="state-text" font-size="17">Eingabe</text>
+  <text x="375" y="318" text-anchor="middle" class="sub-text">Text: Dauer 0 -- Sprache: Aufnahme</text>
 
-  <rect x="740" y="260" width="170" height="80" rx="16" class="state-box" />
-  <text x="825" y="306" text-anchor="middle" class="state-text" font-size="18">Responding</text>
+  <rect x="560" y="260" width="180" height="80" rx="16" class="state-box" />
+  <text x="650" y="306" text-anchor="middle" class="state-text" font-size="17">Processing</text>
+
+  <rect x="860" y="260" width="170" height="80" rx="16" class="state-box-adapter" />
+  <text x="945" y="300" text-anchor="middle" class="state-text" font-size="17">Responding</text>
+  <text x="945" y="318" text-anchor="middle" class="sub-text">Text: Anzeige -- Sprache: Wiedergabe</text>
 
   <!-- forward transitions -->
-  <line x1="220" y1="300" x2="389" y2="300" class="edge" marker-end="url(#arrow)" />
-  <text x="305" y="286" text-anchor="middle" class="edge-label">Eingabe abgeschlossen</text>
+  <line x1="190" y1="300" x2="294" y2="300" class="edge" marker-end="url(#arrow)" />
+  <text x="242" y="286" text-anchor="middle" class="edge-label" font-size="12.5">Eingabe beginnt</text>
 
-  <line x1="565" y1="300" x2="734" y2="300" class="edge" marker-end="url(#arrow)" />
-  <text x="650" y="286" text-anchor="middle" class="edge-label">Antwort beginnt</text>
+  <line x1="450" y1="300" x2="554" y2="300" class="edge" marker-end="url(#arrow)" />
+  <text x="502" y="286" text-anchor="middle" class="edge-label" font-size="12.5">Eingabe abgeschlossen</text>
 
-  <!-- return arc: Responding -> Idle (Ausgabe abgeschlossen) -->
-  <path d="M 790,340 C 790,396 170,396 170,340" class="edge" marker-end="url(#arrow)" />
-  <rect x="368" y="399" width="224" height="21" class="surface" />
-  <text x="480" y="414" text-anchor="middle" class="edge-label">Ausgabe abgeschlossen</text>
+  <line x1="740" y1="300" x2="854" y2="300" class="edge" marker-end="url(#arrow)" />
+  <text x="797" y="286" text-anchor="middle" class="edge-label" font-size="12.5">Antwort beginnt</text>
+
+  <!-- Stop from Eingabe (shallowest) -->
+  <path d="M 375,340 C 375,386 160,386 160,340" class="edge-stop" marker-end="url(#arrow-muted)" />
+  <rect x="200" y="368" width="200" height="20" class="surface" />
+  <text x="300" y="383" text-anchor="middle" class="edge-label-muted" font-size="12.5">Stop: Eingabe verworfen</text>
+
+  <!-- Ausgabe abgeschlossen: Responding -> Idle (solid, normal path) -->
+  <path d="M 945,340 C 945,432 130,432 130,340" class="edge" marker-end="url(#arrow)" />
+  <rect x="440" y="420" width="220" height="24" class="surface" />
+  <text x="550" y="437" text-anchor="middle" class="edge-label" font-size="13">Ausgabe abgeschlossen</text>
 
   <!-- Stop from Responding -->
-  <path d="M 862,340 C 862,492 135,492 135,340" class="edge-stop" marker-end="url(#arrow-muted)" />
-  <rect x="560" y="458" width="300" height="38" class="surface" />
-  <text x="710" y="470" text-anchor="middle" class="edge-label-muted">Stop -- Antwort-Kanal schon voll:</text>
-  <text x="710" y="487" text-anchor="middle" class="edge-label-muted">nur Sprachausgabe wird unterdrückt, Text bleibt</text>
+  <path d="M 995,340 C 995,500 100,500 100,340" class="edge-stop" marker-end="url(#arrow-muted)" />
+  <rect x="430" y="488" width="320" height="24" class="surface" />
+  <text x="590" y="505" text-anchor="middle" class="edge-label-muted" font-size="12.5">Stop: Text bleibt, nur Audio stoppt</text>
 
   <!-- Stop from Processing -->
-  <path d="M 480,340 C 480,598 100,598 100,340" class="edge-stop" marker-end="url(#arrow-muted)" />
-  <rect x="122" y="564" width="336" height="38" class="surface" />
-  <text x="290" y="576" text-anchor="middle" class="edge-label-muted">Stop -- Antwort-Kanal noch leer:</text>
-  <text x="290" y="593" text-anchor="middle" class="edge-label-muted">Aufruf abgebrochen, Abbruch im Verlauf markiert</text>
+  <path d="M 650,340 C 650,590 70,590 70,340" class="edge-stop" marker-end="url(#arrow-muted)" />
+  <rect x="230" y="578" width="260" height="24" class="surface" />
+  <text x="360" y="595" text-anchor="middle" class="edge-label-muted" font-size="12.5">Stop: Aufruf abgebrochen</text>
 
   <!-- legend -->
-  <line x1="770" y1="645" x2="810" y2="645" class="edge" />
-  <text x="818" y="649" class="legend-text">regulärer Übergang</text>
-  <line x1="770" y1="668" x2="810" y2="668" class="edge-stop" />
-  <text x="818" y="672" class="legend-text">Stop</text>
-
-  <text x="24" y="28" class="caption">Zustandsmodell: Kern-Dialogschleife (docs/specs/core-dialog-loop.md)</text>
+  <line x1="940" y1="660" x2="980" y2="660" class="edge" />
+  <text x="988" y="664" class="legend-text">regulärer Übergang</text>
+  <line x1="940" y1="683" x2="980" y2="683" class="edge-stop" />
+  <text x="988" y="687" class="legend-text">Stop</text>
+  <rect x="60" y="650" width="760" height="60" rx="10" class="state-box-adapter" />
+  <text x="80" y="672" class="sub-text" font-size="12">Gestrichelte Box = Zustand mit modusabhängiger Dauer (Eingabe, Responding):</text>
+  <text x="80" y="690" class="sub-text" font-size="12">im Textmodus augenblicklich/reine Anzeige, im Sprachmodus so lange wie Aufnahme bzw. Wiedergabe dauern.</text>
 </svg>

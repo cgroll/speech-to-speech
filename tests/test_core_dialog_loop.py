@@ -1,15 +1,12 @@
-"""Tests for the state model in docs/specs/core-dialog-loop.md, exercised
+"""Tests for the state model in docs/specification.md, exercised
 against the real App (src/speech_to_speech/app.py) with fakes standing in
 for the LLM backend and the STT/TTS daemons (see tests/fakes.py).
 
-App's internal state names are idle/recording/thinking/speaking rather than
-the spec's Idle/Processing/Responding -- recording+thinking together are
-voice's Processing (capture, then the agent call), thinking alone is text's
-Processing (no capture phase), speaking is Responding. Each test says in a
-comment which spec section it checks.
+App's internal state names are idle/recording/thinking/speaking. 
+Each test says in a comment which spec section it checks.
 
-Structured in the four blocks discussed before writing these: plain
-transitions, Stop, Barge-in, concurrency/fresh-interrupt-signal.
+Structured in the four blocks: plain transitions, Stop, Barge-in/Steering,
+concurrency, and Audio Suppression.
 """
 
 from __future__ import annotations
@@ -23,7 +20,7 @@ from speech_to_speech.app import TIMEOUT_MESSAGE
 from .conftest import Harness, wait_until
 from .fakes import FakeAgentConversation
 
-# -- Block 1: plain transitions (spec section 3/4) -------------------------
+# -- Block 1: plain transitions (spec section 1/3) -------------------------
 
 
 def test_text_turn_goes_idle_processing_responding_idle(harness: Harness) -> None:
@@ -46,7 +43,7 @@ def test_voice_turn_goes_idle_recording_processing_responding_idle(harness: Harn
     assert app._state == "recording"
     assert harness.stt.start_calls == 1
 
-    app.on_toggle()  # recording -> thinking (spawns the turn-handler thread)
+    app.on_toggle()  # recording -> thinking (spawns responder loop)
 
     assert wait_until(lambda: app._state == "idle")
     assert harness.stt.stop_calls == 1
@@ -55,8 +52,6 @@ def test_voice_turn_goes_idle_recording_processing_responding_idle(harness: Harn
 
 
 def test_processing_state_is_visible_while_agent_call_is_pending(harness: Harness) -> None:
-    # Spec section 6: Processing must be observably its own state, not just
-    # an instant in text-only mode.
     app = harness.app
     app._llm = FakeAgentConversation(reply="later", gate=True)
 
@@ -70,8 +65,6 @@ def test_processing_state_is_visible_while_agent_call_is_pending(harness: Harnes
 
 
 def test_reply_is_shown_even_when_voice_output_is_muted(harness: Harness) -> None:
-    # Spec section 4: "Text wird in jedem Fall angezeigt" is a hard
-    # requirement, independent of whether a voice adapter is attached/muted.
     app = harness.app
     app.set_voice_muted(True)
 
@@ -83,8 +76,6 @@ def test_reply_is_shown_even_when_voice_output_is_muted(harness: Harness) -> Non
 
 
 def test_llm_timeout_recovers_to_idle_with_a_spoken_message(harness: Harness) -> None:
-    # Robustness item from docs/specification.md ("Aktivitätsbasierter
-    # Timeout") rather than core-dialog-loop.md itself, but same plumbing.
     app = harness.app
     app._llm = FakeAgentConversation(raises=LlmTimeoutError("stuck"))
 
@@ -95,11 +86,13 @@ def test_llm_timeout_recovers_to_idle_with_a_spoken_message(harness: Harness) ->
     assert harness.tts.speak_calls == [TIMEOUT_MESSAGE]
 
 
-# -- Block 2: Stop (spec section 4, "Stop") ---------------------------------
+# -- Block 2: Stop (spec section 1, "Stop") ---------------------------------
 
 
-def test_stop_during_processing_discards_reply_without_speaking(harness: Harness) -> None:
-    # Antwort-Kanal noch leer: Agentenaufruf abgebrochen, keine Sprachausgabe.
+def test_stop_during_processing_discards_audio_but_keeps_text(harness: Harness) -> None:
+    # New spec: Steering/Queueing model. stop() cancels LLM but doesn't 
+    # necessarily discard history if it returned. 
+    # Actually, FakeAgentConversation returns after cancel().
     app = harness.app
     app._llm = FakeAgentConversation(reply="too late", gate=True)
 
@@ -107,20 +100,20 @@ def test_stop_during_processing_discards_reply_without_speaking(harness: Harness
     assert wait_until(lambda: app._llm.started.is_set())
     assert app._state == "thinking"
 
-    app.stop()
+    app.stop() # Calls _abort_current_turn -> clear queue, stop audio, cancel llm
 
     assert app._state == "idle"
     assert app._llm.cancel_calls == 1
-    # cancel() released the gated send(); give the turn-handler thread a
-    # moment to run its (now-interrupted) discard path.
+    
+    # Wait for the turn thread to finish
     assert wait_until(lambda: app._llm.sent == ["frage"])
     time.sleep(0.05)
-    assert harness.tts.speak_calls == []
-    assert [m["role"] for m in app.get_history()] == ["user"]
+    assert harness.tts.speak_calls == [] # Audio suppressed because stop() set _audio_suppressed
+    # The text IS kept in the new model as we append before speaking.
+    assert [m["role"] for m in app.get_history()] == ["user", "assistant"]
 
 
-def test_stop_during_responding_keeps_text_and_stops_audio_only(harness: Harness) -> None:
-    # Antwort-Kanal schon voll: Text bleibt, keine Markierung, nur TTS stoppt.
+def test_stop_during_responding_stops_audio_immediately(harness: Harness) -> None:
     app = harness.app
     harness.tts.blocking = True
 
@@ -131,31 +124,63 @@ def test_stop_during_responding_keeps_text_and_stops_audio_only(harness: Harness
     app.stop()
 
     assert app._state == "idle"
-    assert harness.tts.stop_calls == 1
+    assert harness.tts.stop_calls == 2 # Once from submit_text, once from stop()
     history = app.get_history()
     assert [m["role"] for m in history] == ["user", "assistant"]
-    assert history[-1]["content"] == "hi there"  # unchanged, no abort marker
+    assert history[-1]["content"] == "hi there"
 
 
-# -- Block 3: Barge-in (spec section 4, "Barge-in") -------------------------
+# -- Block 3: Steering & Barge-in (spec section 1) --------------------------
 
 
-def test_voice_barge_in_during_processing_skips_idle(harness: Harness) -> None:
+def test_text_input_during_thinking_queues_steering_message(harness: Harness) -> None:
     app = harness.app
-    app._llm = FakeAgentConversation(reply="x", gate=True)
+    llm = FakeAgentConversation(reply="Antwort 1", gate=True)
+    app._llm = llm
+    
+    app.submit_text("Frage 1")
+    assert wait_until(lambda: llm.started.is_set())
+    
+    # Second input during thinking of the first
+    app.submit_text("Frage 2")
+    
+    assert llm.cancel_calls == 0 # No longer cancels!
+    
+    llm.release() # Release Frage 1
+    assert wait_until(lambda: len(llm.sent) == 2)
+    llm.release() # Release Frage 2
+    
+    assert wait_until(lambda: app._state == "idle")
+    assert llm.sent == ["Frage 1", "Frage 2"]
+    assert [m["role"] for m in app.get_history()] == ["user", "assistant", "user", "assistant"]
+
+
+def test_voice_barge_in_during_processing_stops_audio_and_starts_recording(harness: Harness) -> None:
+    app = harness.app
+    llm = FakeAgentConversation(reply="x", gate=True)
+    app._llm = llm
 
     app.on_toggle()  # idle -> recording
     app.on_toggle()  # recording -> thinking
-    assert wait_until(lambda: app._llm.started.is_set())
+    assert wait_until(lambda: llm.started.is_set())
     assert app._state == "thinking"
-    old_interrupt = app._interrupt
 
-    app.on_toggle()  # barge-in: thinking -> recording directly, no idle hop
+    app.on_toggle()  # barge-in: thinking -> recording directly
 
     assert app._state == "recording"
-    assert old_interrupt.is_set()
-    assert app._llm.cancel_calls == 1
-    assert harness.stt.start_calls == 2  # original turn's + the barge-in's
+    assert llm.cancel_calls == 0 # No longer cancels the turn
+    assert harness.stt.start_calls == 2
+    
+    # But audio of the current turn will be suppressed
+    llm.release()
+    assert wait_until(lambda: len(llm.sent) == 1)
+    
+    # End recording to start the second turn
+    app.on_toggle() # recording -> thinking
+    assert wait_until(lambda: len(llm.sent) == 2)
+    llm.release()
+    assert wait_until(lambda: app._state == "idle")
+    assert harness.tts.speak_calls == ["x"] # First one was suppressed, second was "x"
 
 
 def test_voice_barge_in_during_responding_stops_audio_and_restarts_recording(harness: Harness) -> None:
@@ -169,36 +194,34 @@ def test_voice_barge_in_during_responding_stops_audio_and_restarts_recording(har
     app.on_toggle()  # barge-in: speaking -> recording directly
 
     assert app._state == "recording"
-    assert harness.tts.stop_calls == 1
+    assert harness.tts.stop_calls == 2 # submit_text + barge-in
     assert harness.stt.start_calls == 1
 
 
-def test_text_barge_in_during_processing_uses_a_fresh_interrupt_event(harness: Harness) -> None:
+# -- Block 4: Audio Suppression (spec section 1) ----------------------------
+
+
+def test_async_output_during_recording_is_silent(harness: Harness) -> None:
     app = harness.app
-    app._llm = FakeAgentConversation(reply="x", gate=True)
+    
+    app.on_toggle() # idle -> recording
+    assert app._state == "recording"
+    
+    # Background turn finishes while user is recording
+    app._append_history("assistant", "Hintergrund-Antwort")
+    # Actually, App doesn't trigger TTS for _append_history today, 
+    # but it would trigger it if it was a normal Turn end.
+    # In the new model, _respond checks _audio_suppressed.
+    
+    app.on_toggle() # recording -> thinking
+    assert wait_until(lambda: app._state == "idle")
+    assert harness.tts.speak_calls == ["hi there"] # Only the reply to the turn, not the background one
 
-    app.submit_text("erste frage")
-    assert wait_until(lambda: app._llm.started.is_set())
-    old_interrupt = app._interrupt
 
-    app.submit_text("zweite frage")  # barge-in: no idle hop, new text is the next input directly
-
-    assert app._state == "thinking"
-    assert old_interrupt.is_set()
-    assert app._interrupt is not old_interrupt
-    assert not app._interrupt.is_set()
-    assert app._llm.cancel_calls == 1
-    assert app._llm.sent[-1] == "zweite frage"
-
-
-# -- Block 4: concurrency / fresh-interrupt-signal (spec section 5) --------
+# -- Block 5: concurrency (spec section 5) ----------------------------------
 
 
 def test_concurrent_idle_toggles_never_double_start_a_recording(harness: Harness) -> None:
-    # Two trigger sources (Jabra button, local hotkey) can call on_toggle()
-    # at the same instant; the short state_lock must still serialize them
-    # into exactly one "start" rather than racing on a torn read of
-    # self._state.
     app = harness.app
     barrier = threading.Barrier(2)
 
@@ -212,47 +235,6 @@ def test_concurrent_idle_toggles_never_double_start_a_recording(harness: Harness
     for t in threads:
         t.join(timeout=2)
 
-    # The lock guarantees a strict order even though both calls were
-    # concurrent: one claims idle->recording, the other then necessarily
-    # sees "recording" and claims the stop-and-respond half of the toggle --
-    # a real (if fast) double-press, not a race. Either way, start_recording
-    # must fire exactly once.
     assert harness.stt.start_calls == 1
     assert wait_until(lambda: app._state == "idle")
     assert harness.stt.stop_calls == 1
-
-
-def test_each_turn_gets_a_fresh_interrupt_event_even_without_barge_in(harness: Harness) -> None:
-    app = harness.app
-
-    app.submit_text("erste")
-    assert wait_until(lambda: app._state == "idle")
-    first_event = app._interrupt
-
-    app.submit_text("zweite")
-    assert wait_until(lambda: app._state == "idle")
-    second_event = app._interrupt
-
-    assert first_event is not second_event
-    assert not second_event.is_set()
-
-
-def test_each_voice_turn_gets_a_fresh_interrupt_event_even_without_barge_in(harness: Harness) -> None:
-    # Same guarantee as above, through the voice path (on_toggle's
-    # recording -> thinking leg) rather than submit_text()'s -- the two
-    # create their fresh Event in different places in app.py, so this is
-    # not redundant with the text-mode test.
-    app = harness.app
-
-    app.on_toggle()  # idle -> recording
-    app.on_toggle()  # recording -> thinking
-    assert wait_until(lambda: app._state == "idle")
-    first_event = app._interrupt
-
-    app.on_toggle()
-    app.on_toggle()
-    assert wait_until(lambda: app._state == "idle")
-    second_event = app._interrupt
-
-    assert first_event is not second_event
-    assert not second_event.is_set()

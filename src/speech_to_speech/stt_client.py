@@ -32,6 +32,8 @@ _STOP_TIMEOUT_S = 60.0
 # time for a few seconds/minutes of audio.
 _TRANSCRIBE_TIMEOUT_S = 60.0
 
+_is_recording = False
+
 
 class DaemonUnavailableError(RuntimeError):
     """Raised when the STT daemon isn't reachable over its Unix socket."""
@@ -51,20 +53,28 @@ def ensure_available() -> None:
 
 
 def start_recording() -> None:
+    global _is_recording
     result = send_command({"cmd": "start_recording"})
     if result is None:
         raise DaemonUnavailableError("STT daemon not running -- run `parakeet-dictate enable`.")
     if not result.get("ok"):
         raise RuntimeError(f"STT daemon error: {result.get('error')}")
+    _is_recording = True
 
 
 def stop_recording() -> str:
+    global _is_recording
     result = send_command({"cmd": "stop_recording"}, timeout=_STOP_TIMEOUT_S)
     if result is None:
         raise DaemonUnavailableError("STT daemon not running -- run `parakeet-dictate enable`.")
     if not result.get("ok"):
         raise RuntimeError(f"STT daemon error: {result.get('error')}")
+    _is_recording = False
     return result.get("text", "")
+
+
+def is_recording() -> bool:
+    return _is_recording
 
 
 def transcribe(audio: np.ndarray) -> str:

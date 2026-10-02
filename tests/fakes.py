@@ -98,16 +98,22 @@ class FakeSTT:
         self.transcript = transcript
         self.start_calls = 0
         self.stop_calls = 0
+        self._is_recording = False
 
     def ensure_available(self) -> None:
         pass
 
     def start_recording(self) -> None:
         self.start_calls += 1
+        self._is_recording = True
 
     def stop_recording(self) -> str:
         self.stop_calls += 1
+        self._is_recording = False
         return self.transcript
+
+    def is_recording(self) -> bool:
+        return self._is_recording
 
     def transcribe(self, audio: np.ndarray) -> str:
         return self.transcript
@@ -131,6 +137,7 @@ class FakeTTS:
 
     def speak(self, text: str) -> float | None:
         self.speak_calls.append(text)
+        self._release.clear()
         self.started.set()
         if self.blocking:
             self._release.wait(timeout=5)

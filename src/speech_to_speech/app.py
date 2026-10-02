@@ -84,7 +84,6 @@ class App:
         # (recording -> thinking); shared by the thinking and speaking
         # phases of that same turn. A barge-in sets it to tell whichever
         # phase is currently in flight to abort instead of continuing.
-        self._interrupt = threading.Event()
         # Cockpit "Audio stumm" checkbox (text-only mode): when set, _speak()
         # and voice_turn() skip actual TTS synthesis/playback but the normal
         # thinking -> speaking -> idle state flow and chat history still run
@@ -102,6 +101,13 @@ class App:
         # image the agent showed via the show_image tool -- both shapes are
         # what gr.Chatbot's message format accepts directly (cockpit.py).
         self._history: list[dict[str, object]] = []
+        self._input_queue: list[str] = []
+        self._responder_loop_running = False
+        # Flag set during recording or when a new text input is submitted
+        # while a turn is still active: prevents any *new* audio from
+        # starting until the user is done with their input and the resulting
+        # turn starts.
+        self._audio_suppressed = False
         self._stats = {
             "turns": 0,
             "last_stt_s": None,
@@ -125,6 +131,10 @@ class App:
         tts_client.ensure_available()
         logger.info("Ready. Press the Jabra button (or the local toggle hotkey) to start recording.")
 
+    def _set_state(self, new_state: str) -> None:
+        logger.info("State transition: %s -> %s", self._state, new_state)
+        self._state = new_state
+
     def on_toggle(self) -> None:
         # Two threads (evdev listener, socket server) can call this
         # concurrently -- claim the state transition inside a short lock so
@@ -137,23 +147,18 @@ class App:
         with self._state_lock:
             state = self._state
             if state == "idle":
-                self._state = "recording"
+                self._set_state("recording")
+                self._audio_suppressed = True
             elif state == "recording":
-                # Fresh Event, created atomically with the state flip so a
-                # concurrent barge-in either sees the old "recording" state
-                # (and is ignored) or sees "thinking" together with this
-                # exact Event -- never a stale one from a previous turn.
-                self._interrupt = threading.Event()
-                self._state = "thinking"
+                self._set_state("thinking")
             elif state in ("thinking", "speaking"):
-                # Barge-in: give control back to the user instead of
-                # ignoring the press. Flag whatever's in flight (LLM call or
-                # playback) to abort, and jump straight into a new recording
-                # -- no detour through idle. The interrupted handler thread
-                # notices the flag on its own and unwinds without touching
-                # state again.
-                self._interrupt.set()
-                self._state = "recording"
+                # Barge-in: start recording and suppress current/future audio.
+                # Unlike the old model, we DON'T set self._interrupt or call
+                # llm.cancel() here -- we want the current turn to finish
+                # its text-side work (Steering Message behavior). We only
+                # stop the audio.
+                self._set_state("recording")
+                self._audio_suppressed = True
             else:
                 logger.info("Busy (%s), ignoring toggle", state)
                 return
@@ -161,94 +166,100 @@ class App:
         if state == "idle":
             self._start_recording()
         elif state == "recording":
-            # Run off the calling thread (evdev read_loop or the socket
-            # server's accept loop): that thread is the only thing that can
-            # notice a barge-in, but _stop_recording_and_respond blocks for
-            # the LLM call and the full TTS playback. Blocking it there would
-            # make the trigger deaf to further presses for the whole turn --
-            # on the socket path, the server wouldn't even accept() the next
-            # connection until this one returned, silently dropping the
-            # barge-in press instead of interrupting playback.
-            threading.Thread(target=self._stop_recording_and_respond, daemon=True).start()
+            # Start the responder loop if not already running.
+            # (In the new model, we might already have one running from a
+            # previous turn that is now processing a queued message).
+            threading.Thread(target=self._run_responder_loop, daemon=True).start()
         else:
-            logger.info("Barge-in: interrupting %s, starting new recording.", state)
+            logger.info("Barge-in: suppressing audio, starting new recording.")
+            tts_client.stop()
             self._start_recording()
-            if state == "speaking":
-                tts_client.stop()
-            if self._llm is not None:
-                self._llm.cancel()
 
     def _start_recording(self) -> None:
         stt_client.start_recording()
-        self._state = "recording"
         logger.info("Recording... press the button again to stop.")
 
-    def _stop_recording_and_respond(self) -> None:
-        # Capture the Event on_toggle created for this turn -- self._interrupt
-        # will point at a *different* Event once the next turn starts, so a
-        # local reference is what makes the checks below race-safe.
-        interrupt = self._interrupt
-        stop_t0 = time.monotonic()
-        # Mic-stop-to-text delay: the daemon's stop_recording call blocks
-        # until it's drained whatever speech segments (including the final
-        # flushed one) hadn't been transcribed yet -- the lag a user
-        # actually feels between letting go of the button and something
-        # happening.
-        text = stt_client.stop_recording().strip()
-        stt_s = time.monotonic() - stop_t0
+    def _run_responder_loop(self) -> None:
+        """Central loop that drains the input queue. Started whenever a
+        recording is stopped or text is submitted while idle."""
+        with self._state_lock:
+            if self._responder_loop_running:
+                return
+            self._responder_loop_running = True
+        
+        logger.info("Responder loop started.")
+        try:
+            # Drain the mic first if we just came from recording
+            if stt_client.is_recording():
+                stop_t0 = time.monotonic()
+                text = stt_client.stop_recording().strip()
+                stt_s = time.monotonic() - stop_t0
+                if text:
+                    logger.info("Transcribed: %s", text)
+                    with self._history_lock:
+                        self._stats["last_stt_s"] = stt_s
+                    with self._state_lock:
+                        self._input_queue.append(text)
+                else:
+                    logger.info("No speech detected.")
 
-        if not text:
-            logger.info("No speech detected.")
+            while True:
+                with self._state_lock:
+                    if not self._input_queue:
+                        logger.info("Input queue empty, exiting loop.")
+                        # Nothing left to do for now. If we were thinking/speaking,
+                        # go back to idle.
+                        if self._state in ("thinking", "speaking"):
+                            self._set_state("idle")
+                        return
+                    text = self._input_queue.pop(0)
+                    # If a recording started while we were between queue items,
+                    # don't start the next turn yet -- the on_toggle(stop) will
+                    # spawn a new responder loop.
+                    if self._state == "recording":
+                        logger.info("Recording in progress, putting back input and exiting loop.")
+                        self._input_queue.insert(0, text) # put it back
+                        return
+                    self._set_state("thinking")
+                    self._audio_suppressed = False
+
+                logger.info("Processing input from queue: %s", text)
+                self._respond(text)
+        finally:
             with self._state_lock:
-                if self._state == "thinking":
-                    self._state = "idle"
-            return
-
-        logger.info("Transcribed: %s", text)
-        with self._history_lock:
-            self._stats["last_stt_s"] = stt_s
-        self._respond(text, interrupt)
+                self._responder_loop_running = False
 
     def submit_text(self, text: str) -> None:
         """Text-input path for the cockpit: lets you type or paste text
-        instead of speaking (handy for quickly dropping in a chunk of text
-        that would be awkward to dictate). Skips recording/STT entirely and
-        jumps straight to "thinking", but otherwise follows the exact same
-        thinking -> speaking -> idle flow -- including barge-in semantics --
-        as a voice turn, by sharing _respond() with
-        _stop_recording_and_respond().
-        """
+        instead of speaking. Queues the input and ensures the responder
+        loop is running."""
         text = text.strip()
         if not text:
             return
 
-        with self._state_lock:
-            state = self._state
-            if state == "idle":
-                self._interrupt = threading.Event()
-                self._state = "thinking"
-            elif state in ("thinking", "speaking"):
-                # Barge-in, same idea as on_toggle()'s: flag whatever's in
-                # flight to abort. Unlike the mic path there's no "recording"
-                # phase for this turn to create its own fresh Event at the
-                # end of, so it's created here instead, right away.
-                self._interrupt.set()
-                self._interrupt = threading.Event()
-                self._state = "thinking"
-            else:
-                logger.info("Busy (%s), ignoring text submit", state)
-                return
-            interrupt = self._interrupt
-
         logger.info("Text input: %s", text)
-        if state in ("thinking", "speaking"):
-            assert self._llm is not None
-            if state == "speaking":
-                tts_client.stop()
-            self._llm.cancel()
-        threading.Thread(target=self._respond, args=(text, interrupt), daemon=True).start()
+        start_loop = False
+        with self._state_lock:
+            self._input_queue.append(text)
+            # Suppress audio for anything currently playing/pending
+            self._audio_suppressed = True
+            tts_client.stop()
+            
+            if self._state == "idle":
+                self._set_state("thinking")
+                self._audio_suppressed = False # Only suppressed until we start processing
+                start_loop = True
+            elif self._state == "recording":
+                # Already have a responder loop waiting for recording to stop
+                pass
+            else:
+                # Already thinking/speaking; the loop will pick up the new item
+                pass
+        
+        if start_loop:
+            threading.Thread(target=self._run_responder_loop, daemon=True).start()
 
-    def _respond(self, text: str, interrupt: threading.Event) -> None:
+    def _respond(self, text: str) -> None:
         self._append_history("user", text)
         assert self._llm is not None
         t0 = time.monotonic()
@@ -256,29 +267,25 @@ class App:
             reply = self._llm.send(text)
         except LlmTimeoutError:
             logger.warning("LLM turn timed out -- resetting to idle.")
-            self._recover_from_llm_timeout(interrupt)
+            self._recover_from_llm_timeout()
             return
+        
         reply_ready = time.monotonic()
         response_s = reply_ready - t0
-
-        if interrupt.is_set():
-            logger.info("Interrupted while thinking -- discarding reply.")
-            return
 
         with self._history_lock:
             self._stats["turns"] += 1
             self._stats["last_response_s"] = response_s
         self._append_history("assistant", reply)
 
+        # Check if we should speak this reply
         with self._state_lock:
-            if self._state != "thinking":
-                return  # a barge-in already claimed the state for a new turn
-            self._state = "speaking"
+            if self._audio_suppressed or self._state == "recording":
+                logger.info("Audio suppressed or recording -- skipping playback of reply.")
+                return
+            self._set_state("speaking")
+        
         self._speak(reply)
-
-        with self._state_lock:
-            if self._state == "speaking":
-                self._state = "idle"
 
     def _speak(self, reply: str) -> None:
         if self._voice_muted:
@@ -311,59 +318,31 @@ class App:
                 self._stats["last_ttfa_s"] = first_chunk_s
             self._stats["last_speaking_s"] = time.monotonic() - t0
 
-    def _recover_from_llm_timeout(self, interrupt: threading.Event) -> None:
-        """Shared LlmTimeoutError handling for _respond()/voice_turn(): the
-        backend has already given up on (and best-effort interrupted) a
-        stuck turn (agent_backend.LlmTimeoutError), so unlike a normal reply
-        there's nothing to discard-if-interrupted -- just tell the user in
-        their own ears (same speaking->idle path a real reply takes, so
-        state comes back the same way either way) and free up "thinking" so
-        the next turn isn't left waiting behind a dead one forever."""
-        if interrupt.is_set():
-            logger.info("Interrupted while thinking -- timeout recovery moot.")
-            return
-
-        self._append_history("assistant", TIMEOUT_MESSAGE)
-
+    def _recover_from_llm_timeout(self) -> None:
+        """Shared LlmTimeoutError handling: tell the user and reset."""
         with self._state_lock:
-            if self._state != "thinking":
-                return  # a barge-in already claimed the state for a new turn
-            self._state = "speaking"
+            if self._audio_suppressed or self._state == "recording":
+                return
+            self._set_state("speaking")
+        
+        self._append_history("assistant", TIMEOUT_MESSAGE)
         self._speak(TIMEOUT_MESSAGE)
 
-        with self._state_lock:
-            if self._state == "speaking":
-                self._state = "idle"
-
     def voice_turn(self, audio: np.ndarray) -> tuple[np.ndarray, int] | None:
-        """Handles one complete, already-recorded turn from a remote client
-        (the Gradio cockpit's mic widget, reached e.g. over Tailscale from a
-        phone -- see docs/architecture-proposal.md, "Offene Frage: mobiler
-        Zugriff (Handy)"): transcribe -> agent -> synthesize, end to end.
-        `audio` must already be 16 kHz mono float32 (see cockpit.py's
-        conversion from whatever the browser recorded); returns the
-        synthesized reply as (samples, sample_rate) instead of playing it on
-        this machine's speakers (tts_client.synthesize(), not speak()), or
-        None if there was nothing to say (busy, no speech detected, or an
-        empty/cancelled synthesis).
-
-        A first, simple round trip: blocks the calling thread for the whole
-        turn, no barge-in/streaming yet -- same "busy, ignoring" behavior as
-        submit_text() rather than on_toggle()'s richer interrupt handling,
-        since there's no in-progress recording/thinking/speaking phase of
-        *this* turn for a second call to interrupt partway through."""
+        """Handles one complete, already-recorded turn from a remote client."""
+        # Simple blocking implementation, doesn't use the queue for now
+        # as it's a one-shot remote call.
         with self._state_lock:
             if self._state != "idle":
                 logger.info("Busy (%s), ignoring voice turn", self._state)
                 return None
-            self._interrupt = threading.Event()
-            self._state = "thinking"
+            self._set_state("thinking")
 
         text = stt_client.transcribe(audio).strip()
         if not text:
             logger.info("No speech detected (voice turn).")
             with self._state_lock:
-                self._state = "idle"
+                self._set_state("idle")
             return None
 
         logger.info("Voice turn (remote): %s", text)
@@ -374,34 +353,23 @@ class App:
         except LlmTimeoutError:
             logger.warning("LLM turn timed out (voice_turn) -- resetting to idle.")
             self._append_history("assistant", TIMEOUT_MESSAGE)
-            with self._state_lock:
-                self._state = "speaking"
             reply_audio, sample_rate = tts_client.synthesize(TIMEOUT_MESSAGE)
             with self._state_lock:
-                self._state = "idle"
-            if reply_audio.size == 0:
-                return None
+                self._set_state("idle")
             return reply_audio, sample_rate
+            
         self._append_history("assistant", reply)
         with self._history_lock:
             self._stats["turns"] += 1
 
-        with self._state_lock:
-            self._state = "speaking"
         if self._voice_muted:
-            # Text-only mode (cockpit "Audio stumm" checkbox): skip
-            # synthesis entirely -- the reply is already in history above,
-            # _voice_submit() just gets None back and leaves the audio
-            # player untouched, same as "no speech detected".
             with self._state_lock:
-                self._state = "idle"
+                self._set_state("idle")
             return None
+            
         reply_audio, sample_rate = tts_client.synthesize(reply)
         with self._state_lock:
-            self._state = "idle"
-
-        if reply_audio.size == 0:
-            return None
+            self._set_state("idle")
         return reply_audio, sample_rate
 
     def _append_history(self, role: str, content: str) -> None:
@@ -517,7 +485,7 @@ class App:
         with self._state_lock:
             state = self._state
             if state == "recording":
-                self._state = "idle"
+                self._set_state("idle")
         if state == "recording":
             stt_client.stop_recording()  # discard text, just stop+drain
         daemon_control.restart_stt_daemon()
@@ -530,34 +498,25 @@ class App:
         with self._state_lock:
             state = self._state
             if state == "speaking":
-                self._state = "idle"
+                self._set_state("idle")
         if state == "speaking":
             tts_client.stop()
         daemon_control.restart_tts_daemon()
         logger.info("TTS daemon restarted.")
 
     def _abort_current_turn(self) -> AgentConversation | None:
-        """Shared first half of reset() and resume_session(): claims idle,
-        aborts whatever's in flight (same interrupt/cancel plumbing as
-        barge-in -- self._interrupt, ClaudeCodeConversation.cancel() --
-        rather than a separate abort path, so the in-flight handler
-        thread's existing "discard reply if interrupted" / "don't touch
-        state if someone else already claimed it" checks apply unchanged),
-        and hands back the old LLM client (still open) for the caller to
-        replace and close once its replacement is ready."""
+        """Claims idle, clears queues, and stops audio."""
         with self._state_lock:
-            state = self._state
-            if state in ("thinking", "speaking"):
-                self._interrupt.set()
-            self._state = "idle"
+            self._input_queue = []
+            self._audio_suppressed = True
+            self._set_state("idle")
 
-        if state == "recording":
-            stt_client.stop_recording()  # discard text, just stop+drain the daemon
-        if state == "speaking":
-            tts_client.stop()
+        if stt_client.is_recording():
+            stt_client.stop_recording()
+        tts_client.stop()
 
         old_llm = self._llm
-        if old_llm is not None and state in ("thinking", "speaking"):
+        if old_llm is not None:
             old_llm.cancel()
         return old_llm
 
