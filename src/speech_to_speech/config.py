@@ -24,6 +24,12 @@ JABRA_DEVICE_NAME = "Jabra Link 390"
 # button sends KEY_PLAY (code 207), not KEY_PLAYPAUSE.
 JABRA_TOGGLE_KEY = "KEY_PLAY"
 
+# macOS: CGEventTap (input_button.py) only sees system-wide Play/Pause media
+# keys, not per-device identity -- NX_KEYTYPE_PLAY = 16 (IOKit/hidsystem/
+# ev_keymap.h). Any source of a system Play key triggers the toggle, not just
+# the Jabra (see docs/macos-setup.md).
+JABRA_TOGGLE_KEY_MACOS = 16
+
 # -- STT (Parakeet) ------------------------------------------------------
 # Used by the STT daemon (dictate/daemon.py) that owns the model and mic -- see
 # docs/architecture-proposal.md, "Daemon-Aufspaltung" step 4. The id differs by

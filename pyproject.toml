@@ -20,6 +20,10 @@ dependencies = [
     "numpy>=1.24",
     "onnx-asr[cpu,hub]>=0.12.0 ; sys_platform == 'linux'",
     "nano-parakeet>=0.2.1 ; sys_platform == 'darwin'",
+    # Jabra button on macOS: CGEventTap (input_button.py) to read the
+    # system-wide Play/Pause media key, in lieu of evdev.
+    "pyobjc-framework-Quartz>=10.3 ; sys_platform == 'darwin'",
+    "pyobjc-framework-Cocoa>=10.3 ; sys_platform == 'darwin'",
     "python-dotenv>=1.2.2",
     # [ggml] pulls qwentts-cpp-python (the GGML/qwentts.cpp runtime). On native
     # Apple Silicon that wheel bundles Metal and the backend is auto-selected;

@@ -13,9 +13,24 @@ from collections.abc import Callable, Iterator
 import numpy as np
 import sounddevice as sd
 
-from speech_to_speech.config import TTS_PLAYBACK_SPEED
+from speech_to_speech.config import JABRA_DEVICE_NAME, TTS_PLAYBACK_SPEED
 
 logger = logging.getLogger(__name__)
+
+
+def _output_device() -> int | None:
+    """Looks up the Jabra by name among output-capable devices, rather than
+    relying on sounddevice's default output -- that default tracks macOS'
+    system output setting, which stays on the Mac speakers even while the
+    Jabra is the default *input* (mic), so TTS replies would otherwise come
+    out of the laptop instead of the headset. Falls back to the default
+    device (None) if the Jabra isn't connected, same graceful-degradation
+    pattern as the Jabra button (see input_button.py)."""
+    for i, info in enumerate(sd.query_devices()):
+        if JABRA_DEVICE_NAME in info["name"] and info["max_output_channels"] > 0:
+            return i
+    logger.warning("No '%s' output device found, falling back to the system default.", JABRA_DEVICE_NAME)
+    return None
 
 
 def play_audio_streaming(
@@ -49,6 +64,7 @@ def play_audio_streaming(
     daemon.py's `_run_with_watchdog`).
     """
     t0 = time.monotonic()
+    device = _output_device()
     it = iter(chunks)
     try:
         first_chunk, sample_rate = next(it)
@@ -69,7 +85,7 @@ def play_audio_streaming(
             yield chunk
 
     if TTS_PLAYBACK_SPEED == 1.0:
-        with sd.OutputStream(samplerate=sample_rate, channels=1, dtype="float32") as stream:
+        with sd.OutputStream(samplerate=sample_rate, channels=1, dtype="float32", device=device) as stream:
             first = True
             for chunk in _all():
                 if first and on_first_chunk is not None:
@@ -108,7 +124,7 @@ def play_audio_streaming(
     feeder.start()
 
     stdout_fd = proc.stdout.fileno()
-    with sd.OutputStream(samplerate=sample_rate, channels=1, dtype="float32") as stream:
+    with sd.OutputStream(samplerate=sample_rate, channels=1, dtype="float32", device=device) as stream:
         first = True
         while data := os.read(stdout_fd, 4096):
             if first and on_first_chunk is not None:

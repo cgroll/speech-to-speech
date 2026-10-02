@@ -261,6 +261,14 @@ Daemon-Prozess dann selbst, `Restart=on-failure` in der systemd-Unit startet
 ihn automatisch neu (~10s Modell-Ladezeit statt unbegrenztem Hängen). Siehe
 `docs/architecture-proposal.md`, Nachtrag zu Schritt 5.
 
+`playback.py` sucht das Ausgabegerät explizit per Namen (`JABRA_DEVICE_NAME`)
+statt sich auf das System-Standard-Ausgabegerät zu verlassen -- auf macOS
+folgt nur das Standard-*Eingabe*gerät automatisch dem verbundenen Jabra, die
+Ausgabe bleibt sonst auf den Mac-Lautsprechern hängen, selbst während das
+Headset als Mikrofon genutzt wird. Ist kein Jabra verbunden, fällt die
+Wiedergabe auf das System-Standardgerät zurück (gleiches
+Graceful-Degradation-Muster wie der Jabra-Knopf).
+
 ### Setup
 
 ```bash

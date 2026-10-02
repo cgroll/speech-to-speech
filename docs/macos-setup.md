@@ -19,7 +19,7 @@ Telegram, Pi-Agent und Gemini sind nicht Teil dieses Setups.
 | Diktat-Tippen    | `ydotool` (+ QWERTZ-Keymap)    | Clipboard + AppleScript `Cmd+V` (layout-unabhängig) |
 | Feedback         | `canberra-gtk-play`/`notify-send` | `afplay` / `osascript`                       |
 | Hotkey           | GNOME Custom Shortcut          | **Shortcuts.app** → „Run Shell Script"          |
-| Jabra-Knopf      | `evdev`                        | noch nicht unterstützt (siehe unten)            |
+| Jabra-Knopf      | `evdev`                        | `CGEventTap` auf System-Play/Pause-Taste (siehe unten) |
 
 `uv sync` zieht die richtigen Abhängigkeiten automatisch: die Linux-only-Pakete
 (`evdev`, `onnx-asr`, `numba`, `llvmlite`) tragen `sys_platform == 'linux'`-Marker,
@@ -124,9 +124,10 @@ unten, bis er neu gestartet wird (Cockpit-Restart, `daemon_control`, oder erneut
 
 ### 5. Hotkeys via Shortcuts.app
 
-Die physische Jabra-Taste wird auf macOS noch nicht gelesen (siehe unten). Bis
-dahin: in **Shortcuts.app** je einen Kurzbefehl „Run Shell Script" anlegen und
-auf die absoluten venv-Pfade binden (Projekt-venv: `…/speech-to-speech/.venv`):
+Zusätzlich zum Jabra-Knopf (siehe unten) lässt sich derselbe Toggle auch über
+eine Tastenkombination auslösen: in **Shortcuts.app** je einen Kurzbefehl „Run
+Shell Script" anlegen und auf die absoluten venv-Pfade binden (Projekt-venv:
+`…/speech-to-speech/.venv`):
 
 - **Sprach-Dialog** (Turn starten/stoppen): `…/.venv/bin/speech-to-speech-toggle`
   – z. B. auf `Ctrl+Opt+D` legen. Setzt eine laufende `speech-to-speech`-App voraus.
@@ -140,11 +141,30 @@ auf die absoluten venv-Pfade binden (Projekt-venv: `…/speech-to-speech/.venv`)
 - **Accessibility**: der Diktat-Paste-Pfad (AppleScript `Cmd+V`) braucht die
   Freigabe unter *Systemeinstellungen → Datenschutz & Sicherheit →
   Bedienungshilfen*. Fehlt sie, meldet `typing_backend.py` einen klaren Hinweis.
+  Dieselbe Freigabe deckt in der Praxis auch den Jabra-`CGEventTap` unten ab;
+  falls `speech-to-speech` trotzdem mit "CGEventTap konnte nicht erstellt
+  werden" abbricht, zusätzlich *Input Monitoring* für das Terminal erteilen.
 
-## Später: physische Jabra-Taste
+## Physische Jabra-Taste
 
-macOS hat kein `evdev`. Ein künftiger darwin-Listener kann den HID-Knopf über
-IOKit/`hidapi` oder Karabiner-Elements abgreifen und auf
-`speech-to-speech-toggle` mappen (braucht „Input Monitoring"-Freigabe).
-`input_button.py` bleibt Linux-only; der Shortcuts-Hotkey deckt das Auslösen bis
-dahin ab.
+macOS hat kein `evdev`. Der Knopfdruck der Jabra Link 390 kommt dort nicht als
+rohes HID-Report an -- macOS übersetzt ihn schon auf Treiberebene in eine
+system-weite Play/Pause-Medientaste, bevor ein Userspace-HID-Client (auch
+nicht-exklusiv geöffnet) etwas sieht. `input_button.py` liest diese Taste
+stattdessen über einen `CGEventTap` auf `NX_SYSDEFINED`-Events
+(`NX_KEYTYPE_PLAY`, siehe `JABRA_TOGGLE_KEY_MACOS` in `config.py`) -- dieselbe
+`listen_for_toggle()`-Funktion wie unter Linux, nur mit anderem Mechanismus
+dahinter.
+
+Zwei bewusst in Kauf genommene Einschränkungen:
+- **System-weit statt Jabra-spezifisch**: der Tap sieht keine Geräte-Identität,
+  nur die Taste selbst -- jede Quelle einer System-Play-Taste löst den Toggle
+  aus, nicht nur die Jabra.
+- **Keine Unterdrückung**: die Taste bleibt gleichzeitig ihre normale
+  macOS-Funktion -- ein aktiver Tap, der das Event schluckt, wurde getestet
+  und verhindert z.B. das Starten/Pausieren eines Browser-Videos **nicht**,
+  da macOS' MediaRemote-System Medientasten an die "Now Playing"-App routet,
+  bevor ein App-Level-Tap greift. Falls das im Alltag stört, wäre
+  Karabiner-Elements (eigener Treiber unterhalb von MediaRemote, kann das
+  Event pro Gerät wirklich unterdrücken und umleiten) die nächste Eskalationsstufe
+  -- aktuell nicht umgesetzt.
