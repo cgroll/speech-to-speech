@@ -592,7 +592,7 @@ class App:
             }
         logger.info("Session reset.")
 
-    def resume_session(self, choice: str | None) -> None:
+    def resume_session(self, choice: str | None, workspace: str | None = None) -> None:
         """Resumes a past session picked in the cockpit's session list
         (docs/backlog.md, "Frühere Sessions wieder aufnehmen können"/"Mehrere
         Agent-Backends"): same abort/teardown as reset(), but the fresh
@@ -608,26 +608,30 @@ class App:
         switch mid-session), which is exactly what picking it back out of
         the tagged list means.
 
+        `workspace` (docs/backlog.md, "Mehrere Agent-Backends", point 2)
+        sets where the resumed session's file access is rooted. Defaults
+        to the currently active workspace if not given.
+
         Workspace isn't tagged per past session anywhere (unlike the
-        agent), so this keeps whatever `self._workspace` currently is
-        rather than trying to recover what the original session used --
-        fine as long as the resumed conversation's own file references are
-        still valid from the new workspace, but a mismatch is possible if
-        the workspace was since changed."""
+        agent), so we rely on the caller to provide the correct one
+        (e.g. the cockpit's workspace box used for filtering the list)
+        rather than trying to recover what the original session used."""
         if not choice or ":" not in choice:
             return
         agent, session_id = choice.split(":", 1)
+        workspace = workspace or self._workspace
 
         old_llm = self._abort_current_turn()
         self._llm = create_conversation(
             agent,
             resume=session_id,
-            workspace=self._workspace,
+            workspace=workspace,
             on_image=self._append_image,
             on_output=self._append_output,
             voice_output=True,
         )
         self._agent_name = agent
+        self._workspace = workspace
         if old_llm is not None:
             old_llm.close()
 

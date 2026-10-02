@@ -105,7 +105,11 @@ def _list_subdirs(path: str) -> list[str]:
 
 
 def build(app) -> gr.Blocks:
-    with gr.Blocks(title="Speech-to-Speech Cockpit") as demo:
+    css = """
+    .gradio-container { gap: 20px !important; }
+    button { margin: 4px !important; }
+    """
+    with gr.Blocks(title="Speech-to-Speech Cockpit", css=css) as demo:
         gr.Markdown("# Speech-to-Speech Cockpit")
 
         # --- 1. Status & Voice Toggle ---
@@ -124,117 +128,109 @@ def build(app) -> gr.Blocks:
             )
 
         # --- 2. Ein- und Ausgaben ---
-        with gr.Group():
-            # Gradio 6's Chatbot always takes {"role", "content"} message dicts
-            # now (the old type="messages" kwarg was removed as a no-longer-
-            # needed choice) -- matches App.get_history()'s format directly.
-            chatbot = gr.Chatbot(label="Verlauf", height=480)
-            stats_box = gr.Textbox(label="Kennzahlen", interactive=False)
+        # Chatbot always takes {"role", "content"} message dicts
+        # now (the old type="messages" kwarg was removed as a no-longer-
+        # needed choice) -- matches App.get_history()'s format directly.
+        chatbot = gr.Chatbot(label="Verlauf", height=480)
+        stats_box = gr.Textbox(label="Kennzahlen", interactive=False)
 
-            # Alternative to the mic: type or paste text directly, e.g. when
-            # dictating would be slower or more awkward than copy-pasting.
-            # Shares App.on_toggle()'s pipeline via App.submit_text(), just
-            # entering it at "thinking" instead of "recording".
-            with gr.Row():
-                text_input = gr.Textbox(
-                    label="Text eingeben (statt Sprache)",
-                    placeholder="Text hier einfügen und Enter drücken zum Senden …",
-                    scale=4,
-                )
-                send_btn = gr.Button("Senden", scale=1)
+        # Alternative to the mic: type or paste text directly, e.g. when
+        # dictating would be slower or more awkward than copy-pasting.
+        # Shares App.on_toggle()'s pipeline via App.submit_text(), just
+        # entering it at "thinking" instead of "recording".
+        with gr.Row():
+            text_input = gr.Textbox(
+                label="Text eingeben (statt Sprache)",
+                placeholder="Text hier einfügen und Enter drücken zum Senden …",
+                scale=4,
+            )
+            send_btn = gr.Button("Senden", scale=1)
 
-            with gr.Row():
-                toggle_btn = gr.Button("Aufnehmen / Stoppen / Unterbrechen", variant="primary")
-                # Separate from toggle_btn: pressing the toggle while "thinking"/
-                # "speaking" is a barge-in and jumps straight into a *new*
-                # recording (on_toggle()'s design -- see App docstring). This
-                # button is for the plain "stop talking, I'm not about to say
-                # anything" case instead: App.stop() cancels/interrupts and goes
-                # back to idle without starting to listen.
-                stop_btn = gr.Button("Nur stoppen (ohne neue Aufnahme)")
+        with gr.Row():
+            toggle_btn = gr.Button("Aufnehmen / Stoppen / Unterbrechen", variant="primary")
+            # Separate from toggle_btn: pressing the toggle while "thinking"/
+            # "speaking" is a barge-in and jumps straight into a *new*
+            # recording (on_toggle()'s design -- see App docstring). This
+            # button is for the plain "stop talking, I'm not about to say
+            # anything" case instead: App.stop() cancels/interrupts and goes
+            # back to idle without starting to listen.
+            stop_btn = gr.Button("Nur stoppen (ohne neue Aufnahme)")
 
-            # Browser-Mikrofon-Ein-/Ausgabe -- erster, bewusst einfacher
-            # (nicht-gestreamter) Test-Roundtrip für den mobilen Zugriff
-            # (docs/architecture-proposal.md, "Offene Frage: mobiler Zugriff
-            # (Handy)"): unabhängig vom Jabra-/Hotkey-Pfad oben, kein Barge-in.
-            # Aufnahme endet automatisch (stop_recording-Event, wie beim
-            # Loslassen einer Sprachnachrichtentaste), dann läuft der ganze
-            # Turn synchron durch (App.voice_turn) and die Antwort landet als
-            # Audio-Clip zum Abspielen rechts daneben.
-            with gr.Row():
-                voice_input = gr.Audio(
-                    label="Sprachnachricht aufnehmen (Test, für mobilen Zugriff)",
-                    sources=["microphone"],
-                    type="numpy",
-                )
-                voice_output = gr.Audio(
-                    label="Antwort",
-                    type="numpy",
-                    autoplay=True,
-                )
+        # Browser-Mikrofon-Ein-/Ausgabe -- erster, bewusst einfacher
+        # (nicht-gestreamter) Test-Roundtrip für den mobilen Zugriff
+        # (docs/architecture-proposal.md, "Offene Frage: mobiler Zugriff
+        # (Handy)"): unabhängig vom Jabra-/Hotkey-Pfad oben, kein Barge-in.
+        # Aufnahme endet automatisch (stop_recording-Event, wie beim
+        # Loslassen einer Sprachnachrichtentaste), dann läuft der ganze
+        # Turn synchron durch (App.voice_turn) and die Antwort landet als
+        # Audio-Clip zum Abspielen rechts daneben.
+        with gr.Row():
+            voice_input = gr.Audio(
+                label="Sprachnachricht aufnehmen (Test, für mobilen Zugriff)",
+                sources=["microphone"],
+                type="numpy",
+            )
+            voice_output = gr.Audio(
+                label="Antwort",
+                type="numpy",
+                autoplay=True,
+            )
 
-        # --- 3. Agent Configuration (Agent, Session, Workspace) ---
-        with gr.Accordion("Agenten-Konfiguration (Agent, Session, Workspace)", open=False):
-            # Agent-Wahl für die *nächste* neue Session (docs/backlog.md,
-            # "Mehrere Agent-Backends", Entscheidung 3): wirkt nur beim Klick auf
-            # "Neue Session", nicht mitten in einer laufenden -- kein
-            # Backend-Wechsel innerhalb einer Session.
-            with gr.Row():
-                agent_picker = gr.Radio(
-                    label="Agent für neue Session",
-                    choices=[(label, agent_id) for agent_id, label in AGENT_LABELS.items()],
-                    value=app.get_agent_name(),
-                    scale=3,
-                )
-                reset_btn = gr.Button("Neue Session starten", scale=1)
+        # --- 3. Agent Configuration & New Session ---
+        # "man sollte immer ohne ausklappbares Element eine neue Session mit
+        # einem bestimmbaren Agenten im aktuellen Workspace machen können.
+        # Beides muss sichtbar sein." (2026-10-02)
+        with gr.Row():
+            agent_picker = gr.Radio(
+                label="Agent für neue Session",
+                choices=[(label, agent_id) for agent_id, label in AGENT_LABELS.items()],
+                value=app.get_agent_name(),
+                scale=3,
+            )
+            reset_btn = gr.Button("Neue Session starten", variant="primary", scale=1)
 
-            # Session-Verlauf/-Wiederaufnahme (docs/backlog.md, "Frühere
-            # Sessions wieder aufnehmen können" / "Mehrere Agent-Backends").
-            # Persistierung übernimmt bereits der jeweilige Backend selbst
-            # (sessions.py liest beide Formate und tagged sie); hier nur Anzeige
-            # + Auswahl über eine gemeinsame Liste.
-            with gr.Group():
-                gr.Markdown("### Frühere Sessions")
-                session_picker = gr.Radio(
-                    label="Session auswählen",
-                    choices=sessions.session_choices(),
-                    value=None,
-                )
-                with gr.Row():
-                    refresh_sessions_btn = gr.Button("Liste aktualisieren")
-                    resume_session_btn = gr.Button("Ausgewählte Session fortsetzen", variant="secondary")
+        # --- 4. Workspace ---
+        # "Dann darunter ein ein-ausklappbares Element mit Workspace, damit man
+        # den Workspace für eine neue Session bestimmen kann." (2026-10-02)
+        with gr.Accordion("Workspace", open=False):
+            workspace_box = gr.Textbox(
+                label="Workspace-Pfad",
+                value=app.get_workspace(),
+            )
+            # Browser-Ansicht für den Workspace-Pfad oben.
+            gr.Markdown("### Workspace-Browser")
+            browse_dir_state = gr.State(str(Path.home()))
+            browse_label = gr.Markdown(f"📁 {Path.home()}")
+            browse_up_btn = gr.Button("⬆️ Eine Ebene höher", size="sm")
+            browse_list = gr.Radio(
+                label="Unterordner (anklicken: auswählen & reingehen)",
+                choices=_list_subdirs(str(Path.home())),
+                value=None,
+            )
 
-            # Workspace-Wahl für die *nächste* neue Session (docs/backlog.md,
-            # "Mehrere Agent-Backends", Punkt 2), gleiches Muster wie
-            # agent_picker oben: wirkt nur beim Klick auf "Neue Session", kein
-            # Wechsel mitten in einer laufenden. workspace_box zeigt/erlaubt den
-            # Pfad direkt als Text.
-            with gr.Group():
-                gr.Markdown("### Workspace")
-                workspace_box = gr.Textbox(
-                    label="Workspace-Pfad",
-                    value=app.get_workspace(),
-                )
-                browse_dir_state = gr.State(str(Path.home()))
-                browse_label = gr.Markdown(f"📁 {Path.home()}")
-                browse_up_btn = gr.Button("⬆️ Eine Ebene höher", size="sm")
-                browse_list = gr.Radio(
-                    label="Unterordner (anklicken: auswählen & reingehen)",
-                    choices=_list_subdirs(str(Path.home())),
-                    value=None,
-                )
+        # --- 5. Historical Sessions ---
+        # "Und darunter auch historische Sessions. Je nach workspace müssten
+        # sich die ja ändern und auch je nach ausgewähltem agent." (2026-10-02)
+        gr.Markdown("## Frühere Sessions")
+        session_picker = gr.Radio(
+            label="Session auswählen",
+            choices=sessions.session_choices(app.get_workspace(), app.get_agent_name()),
+            value=None,
+        )
+        with gr.Row():
+            refresh_sessions_btn = gr.Button("Liste aktualisieren")
+            resume_session_btn = gr.Button("Ausgewählte Session fortsetzen", variant="secondary")
 
-        # --- 4. Infrastruktur-Steuerung ---
+        # --- 6. Infrastruktur-Steuerung ---
         # Manueller Neustart der Hintergrund-Daemons (docs/backlog.md,
         # "Daemon-Neustart aus der App/dem Cockpit heraus") -- für den Fall,
         # dass ein Daemon zwar noch antwortet, sich aber falsch/festgefahren
         # verhält, ohne dass der TTS-Watchdog anschlägt. Läuft über
         # App.restart_stt_daemon()/restart_tts_daemon(), die eine laufende
         # Aufnahme/Wiedergabe vorher sauber abbrechen.
-        with gr.Accordion("Infrastruktur-Steuerung (Daemons)", open=False):
-            with gr.Row():
-                restart_stt_btn = gr.Button("STT-Daemon neu starten", variant="secondary")
-                restart_tts_btn = gr.Button("TTS-Daemon neu starten", variant="secondary")
+        with gr.Row():
+            restart_stt_btn = gr.Button("STT-Daemon neu starten", variant="secondary")
+            restart_tts_btn = gr.Button("TTS-Daemon neu starten", variant="secondary")
 
         outputs = [state_box, chatbot, stats_box]
         text_outputs = outputs + [text_input]
@@ -300,8 +296,8 @@ def build(app) -> gr.Blocks:
             app.submit_text(text)
             return (*_snapshot(app), "")
 
-        def _refresh_sessions():
-            return gr.update(choices=sessions.session_choices())
+        def _refresh_sessions(workspace: str, agent: str):
+            return gr.update(choices=sessions.session_choices(workspace, agent))
 
         def _restart_stt():
             try:
@@ -321,8 +317,13 @@ def build(app) -> gr.Blocks:
                 gr.Warning(f"TTS-Daemon-Neustart fehlgeschlagen: {exc}")
             return _snapshot(app)
 
-        def _resume_session(choice: str | None):
-            app.resume_session(choice)
+        def _resume_session(choice: str | None, workspace: str):
+            try:
+                workspace = resolve_workspace(workspace)
+            except ValueError as exc:
+                gr.Warning(f"Ungültiger Workspace, unverändert gelassen: {exc}")
+                workspace = app.get_workspace()
+            app.resume_session(choice, workspace=workspace)
             return (*_snapshot(app), app.get_agent_name(), app.get_workspace())
 
         toggle_btn.click(_toggle, outputs=outputs)
@@ -344,14 +345,28 @@ def build(app) -> gr.Blocks:
         reset_btn.click(_reset, inputs=[agent_picker, workspace_box], outputs=session_start_outputs)
         text_input.submit(_submit_text, inputs=text_input, outputs=text_outputs)
         send_btn.click(_submit_text, inputs=text_input, outputs=text_outputs)
-        refresh_sessions_btn.click(_refresh_sessions, outputs=session_picker)
+        refresh_sessions_btn.click(
+            _refresh_sessions, inputs=[workspace_box, agent_picker], outputs=session_picker
+        )
         # Refreshing after resume/reset keeps the list's "last modified"
         # ordering and the newly-started/continued session's own entry
         # current, without polling the filesystem on every timer tick.
         resume_session_btn.click(
-            _resume_session, inputs=session_picker, outputs=session_start_outputs
-        ).then(_refresh_sessions, outputs=session_picker)
-        reset_btn.click(_refresh_sessions, outputs=session_picker)
+            _resume_session,
+            inputs=[session_picker, workspace_box],
+            outputs=session_start_outputs,
+        ).then(_refresh_sessions, inputs=[workspace_box, agent_picker], outputs=session_picker)
+        reset_btn.click(
+            _refresh_sessions, inputs=[workspace_box, agent_picker], outputs=session_picker
+        )
+
+        # Reactive filtering: update session list when agent or workspace changes.
+        agent_picker.change(
+            _refresh_sessions, inputs=[workspace_box, agent_picker], outputs=session_picker
+        )
+        workspace_box.change(
+            _refresh_sessions, inputs=[workspace_box, agent_picker], outputs=session_picker
+        )
 
         timer = gr.Timer(COCKPIT_POLL_SECONDS)
         timer.tick(lambda: _snapshot(app), outputs=outputs)
@@ -360,7 +375,9 @@ def build(app) -> gr.Blocks:
         # state-poll timer -- listing sessions means a filesystem scan,
         # unlike the in-memory snapshot above) so a tab left open overnight
         # still shows sessions started elsewhere since the server booted.
-        demo.load(_refresh_sessions, outputs=session_picker)
+        demo.load(
+            _refresh_sessions, inputs=[workspace_box, agent_picker], outputs=session_picker
+        )
 
     return demo
 

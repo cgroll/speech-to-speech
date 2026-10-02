@@ -66,19 +66,18 @@ class UnifiedSessionInfo:
     title: str
 
 
-def _pi_project_session_dir() -> Path:
+def _pi_project_session_dir(workspace: Path) -> Path:
     """Mirrors pi's own project-directory slug: cwd's path with "/" turned
     into "-", wrapped in "--...--" -- e.g. /home/chris/research/foo becomes
     --home-chris-research-foo--. Verified empirically (2026-08-12) against
     pi's actual output directories; PiAgentConversation always launches `pi`
-    with cwd=PROJECT_DIR (see pi_agent.py), so this is the one directory
-    that matters here."""
-    slug = str(PROJECT_DIR).strip("/").replace("/", "-")
+    with cwd=workspace (see pi_agent.py)."""
+    slug = str(workspace).strip("/").replace("/", "-")
     return PI_SESSIONS_ROOT / f"--{slug}--"
 
 
-def _list_claude_sessions() -> list[UnifiedSessionInfo]:
-    infos = list_sessions(directory=str(PROJECT_DIR), limit=MAX_LISTED_SESSIONS)
+def _list_claude_sessions(workspace: Path) -> list[UnifiedSessionInfo]:
+    infos = list_sessions(directory=str(workspace), limit=MAX_LISTED_SESSIONS)
     result = []
     for info in infos:
         title = info.custom_title or info.summary or info.first_prompt or info.session_id
@@ -93,8 +92,8 @@ def _list_claude_sessions() -> list[UnifiedSessionInfo]:
     return result
 
 
-def _list_pi_sessions() -> list[UnifiedSessionInfo]:
-    session_dir = _pi_project_session_dir()
+def _list_pi_sessions(workspace: Path) -> list[UnifiedSessionInfo]:
+    session_dir = _pi_project_session_dir(workspace)
     if not session_dir.is_dir():
         return []
 
@@ -156,10 +155,16 @@ def _json_loads_safe(line: str) -> dict | None:
         return None
 
 
-def list_recent_sessions() -> list[UnifiedSessionInfo]:
-    """Both backends' sessions for this project, newest first, capped at
-    MAX_LISTED_SESSIONS combined (not per backend)."""
-    merged = _list_claude_sessions() + _list_pi_sessions()
+def list_recent_sessions(workspace: str, agent: str | None = None) -> list[UnifiedSessionInfo]:
+    """Both backends' sessions for the given workspace, newest first,
+    capped at MAX_LISTED_SESSIONS combined (not per backend). Optionally
+    filtered by agent."""
+    workspace_path = Path(workspace).expanduser().resolve()
+    merged = []
+    if agent is None or agent == AGENT_CLAUDE:
+        merged += _list_claude_sessions(workspace_path)
+    if agent is None or agent == AGENT_PI:
+        merged += _list_pi_sessions(workspace_path)
     merged.sort(key=lambda info: info.last_modified_ms, reverse=True)
     return merged[:MAX_LISTED_SESSIONS]
 
@@ -170,11 +175,14 @@ def session_label(info: UnifiedSessionInfo) -> str:
     return f"[{agent_label}] {when} — {info.title}"
 
 
-def session_choices() -> list[tuple[str, str]]:
+def session_choices(workspace: str, agent: str | None = None) -> list[tuple[str, str]]:
     """(label, value) pairs, ready for gr.Radio's `choices`. `value` packs
     both the backend and the id ("claude:<id>" / "pi:<id>") since Gradio's
     choice value is a single string -- App.resume_session() unpacks it."""
-    return [(session_label(info), f"{info.agent}:{info.session_id}") for info in list_recent_sessions()]
+    return [
+        (session_label(info), f"{info.agent}:{info.session_id}")
+        for info in list_recent_sessions(workspace, agent)
+    ]
 
 
 def load_session_history(agent: str, session_id: str) -> list[dict[str, str]]:
