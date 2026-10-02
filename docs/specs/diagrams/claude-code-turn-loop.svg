@@ -1,0 +1,102 @@
+<svg viewBox="0 0 1180 460" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">
+  <title>Claude Code: normaler Turn-Loop (animiert)</title>
+  <desc>Fünf wiederkehrende Zustände: Tippen, Senden, Verarbeitung (Tool-Nutzung/Denken), Antwort (streamt), Anzeige abgeschlossen -- dann zurück zu Tippen. Jede Box hellt sich der Reihe nach kurz auf, wenn sie "dran" ist (10s-Zyklus).</desc>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="arrowhead" />
+    </marker>
+    <marker id="arrow-muted" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="arrowhead-muted" />
+    </marker>
+  </defs>
+
+  <style>
+    .surface    { fill: #fcfcfb; }
+    .border     { stroke: rgba(11,11,11,0.10); }
+    .state-box  { fill: #f2f1ee; stroke: #52514e; stroke-width: 1.5; }
+    .state-text { fill: #0b0b0b; font-weight: 600; }
+    .sub-text   { fill: #52514e; font-size: 11.5px; }
+    .edge       { stroke: #52514e; stroke-width: 2; fill: none; }
+    .edge-loop  { stroke: #898781; stroke-width: 1.75; stroke-dasharray: 6 5; fill: none; }
+    .edge-label { fill: #0b0b0b; font-size: 13px; }
+    .edge-label-muted { fill: #52514e; font-size: 12px; }
+    .arrowhead  { fill: #52514e; }
+    .arrowhead-muted { fill: #898781; }
+    .caption    { fill: #898781; font-size: 12.5px; }
+    .legend-text{ fill: #52514e; font-size: 12px; }
+
+    @keyframes glow {
+      0%   { fill: #f2f1ee; stroke: #52514e; stroke-width: 1.5; }
+      15%  { fill: #fdece3; stroke: #d6563f; stroke-width: 2.5; }
+      35%  { fill: #f2f1ee; stroke: #52514e; stroke-width: 1.5; }
+      100% { fill: #f2f1ee; stroke: #52514e; stroke-width: 1.5; }
+    }
+    .box1 { animation: glow 10s ease-in-out infinite; animation-delay: 0s; }
+    .box2 { animation: glow 10s ease-in-out infinite; animation-delay: 2s; }
+    .box3 { animation: glow 10s ease-in-out infinite; animation-delay: 4s; }
+    .box4 { animation: glow 10s ease-in-out infinite; animation-delay: 6s; }
+    .box5 { animation: glow 10s ease-in-out infinite; animation-delay: 8s; }
+
+    @media (prefers-color-scheme: dark) {
+      .surface    { fill: #1a1a19; }
+      .border     { stroke: rgba(255,255,255,0.10); }
+      .state-box  { fill: #2a2a28; stroke: #c3c2b7; }
+      .state-text { fill: #ffffff; }
+      .sub-text   { fill: #c3c2b7; }
+      .edge       { stroke: #c3c2b7; }
+      .edge-loop  { stroke: #6b6a63; }
+      .edge-label { fill: #ffffff; }
+      .edge-label-muted { fill: #c3c2b7; }
+      .arrowhead  { fill: #c3c2b7; }
+      .arrowhead-muted { fill: #6b6a63; }
+      .caption    { fill: #898781; }
+      .legend-text{ fill: #c3c2b7; }
+
+      @keyframes glow {
+        0%   { fill: #2a2a28; stroke: #c3c2b7; stroke-width: 1.5; }
+        15%  { fill: #3a2317; stroke: #ef7a63; stroke-width: 2.5; }
+        35%  { fill: #2a2a28; stroke: #c3c2b7; stroke-width: 1.5; }
+        100% { fill: #2a2a28; stroke: #c3c2b7; stroke-width: 1.5; }
+      }
+    }
+  </style>
+
+  <rect x="0" y="0" width="1180" height="460" rx="16" class="surface border" />
+  <text x="24" y="28" class="caption">Claude Code -- normaler Turn-Loop (docs/reference-claude-code-turn-taking.md Abschnitt 1)</text>
+
+  <!-- state boxes -->
+  <rect x="40" y="180" width="150" height="90" rx="16" class="state-box box1" />
+  <text x="115" y="221" text-anchor="middle" class="state-text" font-size="16">Tippen</text>
+  <text x="115" y="239" text-anchor="middle" class="sub-text">Entwurf, Autocomplete</text>
+
+  <rect x="240" y="180" width="150" height="90" rx="16" class="state-box box2" />
+  <text x="315" y="221" text-anchor="middle" class="state-text" font-size="16">Senden</text>
+  <text x="315" y="239" text-anchor="middle" class="sub-text">Enter</text>
+
+  <rect x="420" y="180" width="250" height="90" rx="16" class="state-box box3" />
+  <text x="545" y="216" text-anchor="middle" class="state-text" font-size="16">Verarbeitung</text>
+  <text x="545" y="234" text-anchor="middle" class="sub-text">Tool-Nutzung / Denken</text>
+  <text x="545" y="250" text-anchor="middle" class="sub-text">(esc to interrupt)</text>
+
+  <rect x="700" y="180" width="190" height="90" rx="16" class="state-box box4" />
+  <text x="795" y="221" text-anchor="middle" class="state-text" font-size="16">Antwort</text>
+  <text x="795" y="239" text-anchor="middle" class="sub-text">streamt live, kein Instant-Block</text>
+
+  <rect x="930" y="180" width="220" height="90" rx="16" class="state-box box5" />
+  <text x="1040" y="221" text-anchor="middle" class="state-text" font-size="16">Anzeige abgeschlossen</text>
+  <text x="1040" y="239" text-anchor="middle" class="sub-text">Eingabefeld wieder frei</text>
+
+  <!-- static forward arrows -->
+  <line x1="190" y1="225" x2="234" y2="225" class="edge" marker-end="url(#arrow)" />
+  <line x1="390" y1="225" x2="414" y2="225" class="edge" marker-end="url(#arrow)" />
+  <line x1="670" y1="225" x2="694" y2="225" class="edge" marker-end="url(#arrow)" />
+  <line x1="890" y1="225" x2="924" y2="225" class="edge" marker-end="url(#arrow)" />
+
+  <!-- loop-back -->
+  <path d="M1040,270 C1040,350 115,350 115,270" class="edge-loop" marker-end="url(#arrow-muted)" />
+  <rect x="440" y="336" width="280" height="22" class="surface" />
+  <text x="580" y="352" text-anchor="middle" class="edge-label-muted">nächster Zyklus, sobald Antwort fertig ist</text>
+
+  <text x="24" y="430" class="legend-text">Die Boxen hellen sich nacheinander auf, 10s-Zyklus -- reine CSS-Animation, kein GIF/Video nötig.</text>
+</svg>

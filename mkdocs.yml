@@ -29,6 +29,7 @@ nav:
   - Spezifikationen:
       - Kern-Dialogschleife: specs/core-dialog-loop.md
       - "Denkprozess-Kanal & Stop-Markierung": specs/thinking-channel-and-stop-marker.md
+  - "Referenz: Turn-Taking in Claude Code": reference-claude-code-turn-taking.md
   - Architektur-Vorschlag: architecture-proposal.md
   - Telegram-Bot-Vorschlag: telegram-bot-proposal.md
   - Backlog: backlog.md
