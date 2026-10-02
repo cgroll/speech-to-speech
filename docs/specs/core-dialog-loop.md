@@ -34,6 +34,8 @@ Explizit nicht in Scope (eigene Specs):
 
 ## 3. Zustände
 
+![Zustandsmodell: Idle, Processing, Responding mit Übergängen, Ausgabe-Kanälen und Stop-Pfaden](diagrams/core-dialog-loop-states.svg)
+
 Drei Zustände, pro laufender Konversation:
 
 - **Idle** -- wartet auf eine neue Eingabe. Startzustand.
@@ -98,6 +100,8 @@ erst bei "Eingabe abgeschlossen" von Idle nach Processing.
     Textseite irrelevant, nur die Sprachausgabe für diese Antwort wird noch
     komplett unterdrückt: falls schon am Abspielen, sofort stoppen; falls
     noch nicht gestartet, startet sie gar nicht erst). Übergang nach Idle.
+![Barge-in: Stop, unmittelbar gefolgt vom nächsten Eingabe-Schritt, mit den zwei Varianten Sprach- und Text-Modus](diagrams/barge-in.svg)
+
 - **Barge-in**: keine eigene dritte Übergangsart, sondern eine Komposition
   aus zwei bereits definierten Schritten -- **Stop**, unmittelbar gefolgt vom
   nächsten Eingabe-Schritt. Was dieser zweite Schritt konkret ist, hängt
