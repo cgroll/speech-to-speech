@@ -72,6 +72,12 @@ class App:
         # phases of that same turn. A barge-in sets it to tell whichever
         # phase is currently in flight to abort instead of continuing.
         self._interrupt = threading.Event()
+        # Cockpit "Audio stumm" checkbox (text-only mode): when set, _speak()
+        # and voice_turn() skip actual TTS synthesis/playback but the normal
+        # thinking -> speaking -> idle state flow and chat history still run
+        # unchanged -- only the audio is suppressed, so typed/voice replies
+        # still show up in the chat pane right away.
+        self._voice_muted = False
         # Chat history + timing stats for the web cockpit (docs/architecture
         # -proposal.md, "Web-Cockpit"). Guarded by their own lock, separate
         # from _state_lock, since cockpit reads/writes here don't need to
@@ -261,6 +267,9 @@ class App:
                 self._state = "idle"
 
     def _speak(self, reply: str) -> None:
+        if self._voice_muted:
+            logger.info("Voice output muted -- skipping playback.")
+            return
         # Synthesis and playback both happen inside the TTS daemon now
         # (speech_to_speech.tts_daemon.daemon) -- this call blocks until
         # playback finishes or a barge-in's tts_client.stop() cancels it.
@@ -268,7 +277,21 @@ class App:
         # the call completes, since the cockpit stat is only read after the
         # fact anyway.
         t0 = time.monotonic()
-        first_chunk_s = tts_client.speak(reply)
+        try:
+            first_chunk_s = tts_client.speak(reply)
+        except RuntimeError as exc:
+            # The daemon can reject or vanish out from under us: a barge-in's
+            # tts_client.stop() racing this call's own request ("busy:
+            # speaking", see tts_daemon/daemon.py's _claim_speaking), or the
+            # process having crashed with no supervisor to restart it on
+            # macOS (DaemonUnavailableError, a RuntimeError subclass -- see
+            # daemon_launch.py). Previously uncaught here, which killed this
+            # thread before the state-reset in _respond()/
+            # _recover_from_llm_timeout ran, leaving App stuck in "speaking"
+            # until a manual barge-in forced it back to "recording". Log and
+            # return so the caller's normal reset-to-idle still happens.
+            logger.warning("TTS playback failed (%s) -- treating turn as done.", exc)
+            return
         with self._history_lock:
             if first_chunk_s is not None:
                 self._stats["last_ttfa_s"] = first_chunk_s
@@ -351,6 +374,14 @@ class App:
 
         with self._state_lock:
             self._state = "speaking"
+        if self._voice_muted:
+            # Text-only mode (cockpit "Audio stumm" checkbox): skip
+            # synthesis entirely -- the reply is already in history above,
+            # _voice_submit() just gets None back and leaves the audio
+            # player untouched, same as "no speech detected".
+            with self._state_lock:
+                self._state = "idle"
+            return None
         reply_audio, sample_rate = tts_client.synthesize(reply)
         with self._state_lock:
             self._state = "idle"
@@ -416,6 +447,26 @@ class App:
 
     def get_workspace(self) -> str:
         return self._workspace
+
+    def get_voice_muted(self) -> bool:
+        return self._voice_muted
+
+    def set_voice_muted(self, muted: bool) -> None:
+        self._voice_muted = muted
+        logger.info("Voice output %s.", "muted" if muted else "unmuted")
+
+    def stop(self) -> None:
+        """Dedicated cockpit "Stop" button: cancels whatever's in flight
+        (a pending LLM call or TTS playback) and returns straight to idle --
+        unlike on_toggle()'s barge-in handling, which treats a press during
+        "thinking"/"speaking" as the start of a *new* recording. This is for
+        the plain "stop talking, I don't want to record anything right now"
+        case (e.g. a long answer droning on) that barge-in doesn't cover.
+        Reuses _abort_current_turn() (also used by reset()/resume_session())
+        but, unlike those, keeps the current conversation and history
+        intact -- just interrupts and discards whatever reply was in
+        flight."""
+        self._abort_current_turn()
 
     def restart_stt_daemon(self) -> None:
         """Manual escape hatch (docs/backlog.md, "Daemon-Neustart aus der

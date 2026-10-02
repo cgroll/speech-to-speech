@@ -84,6 +84,26 @@ def _snapshot(app) -> tuple[str, list[dict[str, str]], str]:
     return app.get_state(), app.get_history(), app.get_stats_text()
 
 
+def _list_subdirs(path: str) -> list[str]:
+    """Sorted subfolder names directly inside `path`, for the workspace
+    folder browser below. Swallows permission/missing-dir errors (hitting
+    e.g. a restricted system folder shouldn't crash the cockpit) by just
+    returning an empty list, which renders as an empty Radio -- "Eine Ebene
+    höher" still works from there."""
+    try:
+        entries = sorted(Path(path).iterdir())
+    except OSError:
+        return []
+    names = []
+    for entry in entries:
+        try:
+            if entry.is_dir():
+                names.append(entry.name)
+        except OSError:
+            continue
+    return names
+
+
 def build(app) -> gr.Blocks:
     with gr.Blocks(title="Speech-to-Speech Cockpit") as demo:
         gr.Markdown("# Speech-to-Speech Cockpit")
@@ -109,28 +129,52 @@ def build(app) -> gr.Blocks:
         # "Mehrere Agent-Backends", Punkt 2), gleiches Muster wie
         # agent_picker oben: wirkt nur beim Klick auf "Neue Session", kein
         # Wechsel mitten in einer laufenden. workspace_box zeigt/erlaubt den
-        # Pfad direkt als Text (auch für Ordner, die im Explorer unten aus
-        # Berechtigungsgründen nicht sichtbar wären); workspace_picker ist
-        # ein reiner Ordner-Browser darüber -- glob="" lässt keine Datei den
-        # Glob-Test bestehen, Ordner werden von FileExplorer.ls() aber
-        # unabhängig vom Glob immer aufgelistet (siehe gradio's
-        # file_explorer.py), das Ergebnis ist ein Ordner-only-Picker.
+        # Pfad direkt als Text.
+        #
+        # Der Ordner-Browser darunter ist bewusst kein gr.FileExplorer mehr:
+        # dort navigiert ein Klick auf einen Ordnernamen nur rein (auf-/
+        # zuklappen), ausgewählt wird er nur über eine winzige, leicht zu
+        # übersehende Checkbox daneben -- genau das Problem, das hier gelöst
+        # werden soll. Stattdessen ein simples Radio pro Verzeichnisebene:
+        # ein Klick auf einen Unterordner setzt ihn *sofort* als
+        # Workspace-Pfad *und* geht eine Ebene tiefer, sodass man sich ohne
+        # Extra-Bestätigung durchklicken kann; "Eine Ebene höher" geht
+        # zurück.
         with gr.Accordion("Workspace für neue Session", open=False):
             workspace_box = gr.Textbox(
                 label="Workspace-Pfad",
                 value=app.get_workspace(),
             )
-            workspace_picker = gr.FileExplorer(
-                glob="",
-                file_count="single",
-                root_dir=str(Path.home()),
-                label="... im Home-Verzeichnis durchsuchen",
-                height=240,
+            browse_dir_state = gr.State(str(Path.home()))
+            browse_label = gr.Markdown(f"📁 {Path.home()}")
+            browse_up_btn = gr.Button("⬆️ Eine Ebene höher", size="sm")
+            browse_list = gr.Radio(
+                label="Unterordner (anklicken: auswählen & reingehen)",
+                choices=_list_subdirs(str(Path.home())),
+                value=None,
             )
 
         with gr.Row():
             toggle_btn = gr.Button("Aufnehmen / Stoppen / Unterbrechen", variant="primary")
+            # Separate from toggle_btn: pressing the toggle while "thinking"/
+            # "speaking" is a barge-in and jumps straight into a *new*
+            # recording (on_toggle()'s design -- see App docstring). This
+            # button is for the plain "stop talking, I'm not about to say
+            # anything" case instead: App.stop() cancels/interrupts and goes
+            # back to idle without starting to listen.
+            stop_btn = gr.Button("Nur stoppen (ohne neue Aufnahme)")
             reset_btn = gr.Button("Neue Session")
+
+        # Text-only-Modus (siehe docs/backlog.md): unterdrückt die
+        # tatsächliche TTS-Synthese/Wiedergabe (App._speak()/voice_turn()),
+        # lässt aber Status/Verlauf/Statistiken unangetastet -- Antworten
+        # erscheinen weiter sofort im Chat-Verlauf, nur eben lautlos. Wirkt
+        # sofort (kein Session-Neustart nötig), da es kein Teil des
+        # Backend-Zustands ist, der mit der Session wechselt.
+        voice_mute_box = gr.Checkbox(
+            label="Audio-Ausgabe stumm (nur Text)",
+            value=app.get_voice_muted(),
+        )
 
         # Manueller Neustart der Hintergrund-Daemons (docs/backlog.md,
         # "Daemon-Neustart aus der App/dem Cockpit heraus") -- für den Fall,
@@ -202,6 +246,13 @@ def build(app) -> gr.Blocks:
             app.on_toggle()
             return _snapshot(app)
 
+        def _stop():
+            app.stop()
+            return _snapshot(app)
+
+        def _set_voice_muted(muted: bool):
+            app.set_voice_muted(muted)
+
         def _voice_submit(audio: tuple[int, np.ndarray] | None):
             if audio is None:
                 return (*_snapshot(app), None)
@@ -213,10 +264,25 @@ def build(app) -> gr.Blocks:
             reply_audio, reply_sample_rate = result
             return (*_snapshot(app), (reply_sample_rate, reply_audio))
 
-        def _pick_workspace(path: str | None):
-            # FileExplorer.change() fires with None on deselect too --
-            # leave workspace_box untouched rather than clearing it.
-            return path if path else gr.update()
+        def _browse_into(current_dir: str, selected: str | None):
+            if not selected:
+                return gr.update(), gr.update(), gr.update(), current_dir
+            new_dir = str(Path(current_dir) / selected)
+            return (
+                new_dir,
+                f"📁 {new_dir}",
+                gr.update(choices=_list_subdirs(new_dir), value=None),
+                new_dir,
+            )
+
+        def _browse_up(current_dir: str):
+            new_dir = str(Path(current_dir).parent)
+            return (
+                new_dir,
+                f"📁 {new_dir}",
+                gr.update(choices=_list_subdirs(new_dir), value=None),
+                new_dir,
+            )
 
         def _reset(agent: str, workspace: str):
             try:
@@ -257,10 +323,21 @@ def build(app) -> gr.Blocks:
             return (*_snapshot(app), app.get_agent_name(), app.get_workspace())
 
         toggle_btn.click(_toggle, outputs=outputs)
+        stop_btn.click(_stop, outputs=outputs)
+        voice_mute_box.change(_set_voice_muted, inputs=voice_mute_box)
         restart_stt_btn.click(_restart_stt, outputs=outputs)
         restart_tts_btn.click(_restart_tts, outputs=outputs)
         voice_input.stop_recording(_voice_submit, inputs=voice_input, outputs=voice_outputs)
-        workspace_picker.change(_pick_workspace, inputs=workspace_picker, outputs=workspace_box)
+        browse_list.change(
+            _browse_into,
+            inputs=[browse_dir_state, browse_list],
+            outputs=[workspace_box, browse_label, browse_list, browse_dir_state],
+        )
+        browse_up_btn.click(
+            _browse_up,
+            inputs=browse_dir_state,
+            outputs=[workspace_box, browse_label, browse_list, browse_dir_state],
+        )
         reset_btn.click(_reset, inputs=[agent_picker, workspace_box], outputs=session_start_outputs)
         text_input.submit(_submit_text, inputs=text_input, outputs=text_outputs)
         send_btn.click(_submit_text, inputs=text_input, outputs=text_outputs)
