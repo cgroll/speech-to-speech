@@ -10,6 +10,7 @@ See docs/specs/core-dialog-loop.md for the model these are testing against.
 from __future__ import annotations
 
 import threading
+from collections.abc import Callable
 
 import numpy as np
 
@@ -18,7 +19,12 @@ class FakeAgentConversation:
     """Stands in for ClaudeCodeConversation/PiAgentConversation behind the
     AgentConversation protocol.
 
-    By default `send()` returns `reply` immediately. With `gate=True`,
+    `reply` is either a fixed string, or a callable `text -> str` for tests
+    where distinct calls need distinct replies (e.g. telling apart "the
+    original task's answer" from "the status question's own answer" when
+    both go through the same fake instance, since App reuses one backend
+    across turns in a session). By default `send()` returns it immediately.
+    With `gate=True`,
     every call to `send()` blocks until released -- either by the test
     calling `release()`, or by `cancel()` (a real backend's cancel() is a
     best-effort interrupt of whatever's in flight, so the fake's cancel()
@@ -31,7 +37,13 @@ class FakeAgentConversation:
     in tests instead of relying on sleeps/timing.
     """
 
-    def __init__(self, reply: str = "ok", *, gate: bool = False, raises: Exception | None = None):
+    def __init__(
+        self,
+        reply: str | Callable[[str], str] = "ok",
+        *,
+        gate: bool = False,
+        raises: Exception | None = None,
+    ):
         self.reply = reply
         self.raises = raises
         self.gate = gate
@@ -51,7 +63,7 @@ class FakeAgentConversation:
             release.wait(timeout=5)
         if self.raises is not None:
             raise self.raises
-        return self.reply
+        return self.reply(text) if callable(self.reply) else self.reply
 
     def cancel(self) -> None:
         self.cancel_calls += 1

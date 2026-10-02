@@ -161,3 +161,32 @@ Barge-in) keine offenen Fragen mehr offen; Status oben auf "final" gesetzt.
   Verhalten aus (siehe Abschnitt 3); ein Umbau auf echtes Antwort-Streaming
   wäre eine größere Änderung an der Agenten-Schnittstelle selbst und gehört
   in eine eigene, spätere Spec.
+
+- **Hintergrund-Agenten / mehr als eine Antwort pro Turn** (Lücke erkannt
+  2026-10-02): Das Modell geht davon aus, dass Processing ausschließlich
+  durch "Eingabe abgeschlossen" betreten wird und genau eine atomare
+  Antwort pro Turn liefert. Ein Agent, der eigenständig Hintergrundarbeit
+  anstößt und irgendwann später -- unabhängig von jedem `send()`-Aufruf --
+  ein zweites Ergebnis liefern will, passt in keines von beidem: weder gibt
+  es dafür ein auslösendes Ereignis (kein "Eingabe abgeschlossen" davor),
+  noch einen zweiten Antwort-Kanal für denselben oder einen neuen Turn.
+  `AgentConversation` (`agent_backend.py`) bietet aktuell auch keinen Weg,
+  so etwas zu liefern -- `send()` ist rein synchron, ein Ergebnis pro
+  Aufruf. Einziges bestehendes Vorbild im Projekt sind die
+  Telegram-Erinnerungen (`reminder`-Skill): die laufen komplett außerhalb
+  von `App`/dieser Zustandsmaschine, als eigener Push-Kanal über Google
+  Cloud Tasks direkt an die Telegram-API -- kein Teil von `AgentConversation`
+  oder `App._history`. Für `App` (Cockpit-Pfad) existiert aktuell *kein*
+  Mechanismus dafür, auch kein inoffizieller. Vor einer Modellierung sollen
+  Tests zuerst festhalten, wie der heutige Code sich in den beiden
+  konkreten Fällen tatsächlich verhält (s. `tests/`):
+  - ein Hintergrundergebnis trifft ein, während die Konversation idle ist,
+    bzw. während gerade ein anderer Turn läuft;
+  - der Nutzer fragt während eines laufenden Processing nach dem Status
+    ("wie weit bist du?"), ohne den laufenden Turn abbrechen zu wollen --
+    nach heutigem Stand nicht von einem normalen Barge-in unterscheidbar,
+    bricht also vermutlich den laufenden Turn ab, statt nur nachzufragen.
+
+  Erst auf Basis dieses Befunds wird entschieden, ob/wie das Modell erweitert
+  wird (z.B. ein dritter, vom Turn unabhängiger Hintergrund-Kanal). Bis
+  dahin bleibt das explizit außerhalb dieser Spec.
