@@ -144,11 +144,12 @@ class PiAgentConversation:
                     event = json.loads(line)
                 except json.JSONDecodeError:
                     continue
-                if event.get("type") != "message_end":
-                    continue
+
+                event_type = event.get("type")
                 message = event.get("message") or {}
                 role = message.get("role")
-                if role == "assistant":
+
+                if event_type == "message_end" and role == "assistant":
                     message_text_parts: list[str] = []
                     for block in message.get("content", []):
                         block_type = block.get("type")
@@ -169,12 +170,23 @@ class PiAgentConversation:
                             self._emit(CATEGORY_THINKING, pending_text)
                         pending_text = message_text
                 elif role == "toolResult":
-                    result_text = "".join(
-                        block.get("text", "")
-                        for block in message.get("content", [])
-                        if block.get("type") == "text"
-                    )
-                    self._emit(CATEGORY_OTHER, f"← {result_text}")
+                    # Tool results are usually their own messages (role=toolResult)
+                    # and arrive as message_end events as well.
+                    if event_type == "message_end":
+                        result_text = "".join(
+                            block.get("text", "")
+                            for block in message.get("content", [])
+                            if block.get("type") == "text"
+                        )
+                        self._emit(CATEGORY_OTHER, f"← {result_text}")
+                elif event_type == "thinking":
+                    # Some Pi versions/modes might send thinking events directly
+                    self._emit(CATEGORY_THINKING, event.get("text", ""))
+                elif event_type == "tool_execution_start":
+                    self._emit(CATEGORY_OTHER, f"→ {event.get('name')}")
+                elif event_type == "tool_execution_result":
+                    self._emit(CATEGORY_OTHER, f"← {event.get('result')}")
+
         finally:
             proc.stdout.close()
             try:

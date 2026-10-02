@@ -299,6 +299,12 @@ class App:
         if self._voice_muted:
             logger.info("Voice output muted -- skipping playback.")
             return
+
+        # Ensure we can speak the final response: stop any pending thinking-
+        # audio that might still be playing and racing us for the daemon's
+        # single playback slot.
+        tts_client.stop()
+
         # Synthesis and playback both happen inside the TTS daemon now
         # (speech_to_speech.tts_daemon.daemon) -- this call blocks until
         # playback finishes or a barge-in's tts_client.stop() cancels it.
@@ -405,11 +411,12 @@ class App:
         CATEGORY_THINKING/CATEGORY_OTHER chunk to the chat history as its
         own entry, live, as the backend produces it.
 
-        2026-10-02: CATEGORY_OTHER (tool usage) is filtered by default to
-        keep the cockpit clean, as requested by the user. CATEGORY_THINKING
-        is still shown as a collapsible bubble."""
+        2026-10-02: CATEGORY_OTHER (tool usage) is filtered by default from
+        the UI to keep it clean, but logged at INFO level so it's visible in
+        the terminal as requested. CATEGORY_THINKING is still shown as a
+        collapsible bubble."""
         if category == CATEGORY_OTHER:
-            logger.debug("Filtering CATEGORY_OTHER output: %s", text)
+            logger.info("🔧 Tool: %s", text)
             return
 
         title = OUTPUT_CATEGORY_TITLES.get(category, f"🔧 {category}")
