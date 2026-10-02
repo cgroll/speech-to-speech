@@ -115,12 +115,12 @@
   <!-- Stop from Responding -->
   <path d="M 995,340 C 995,500 100,500 100,340" class="edge-stop" marker-end="url(#arrow-muted)" />
   <rect x="430" y="488" width="320" height="24" class="surface" />
-  <text x="590" y="505" text-anchor="middle" class="edge-label-muted" font-size="12.5">Stop: Text bleibt, nur Audio stoppt</text>
+  <text x="590" y="505" text-anchor="middle" class="edge-label-muted" font-size="12.5">Stop/Barge-in: Text bleibt, nur Audio stoppt</text>
 
   <!-- Stop from Processing -->
   <path d="M 650,340 C 650,590 70,590 70,340" class="edge-stop" marker-end="url(#arrow-muted)" />
   <rect x="230" y="578" width="260" height="24" class="surface" />
-  <text x="360" y="595" text-anchor="middle" class="edge-label-muted" font-size="12.5">Stop: Aufruf abgebrochen</text>
+  <text x="360" y="595" text-anchor="middle" class="edge-label-muted" font-size="12.5">Stop-Button: Aufruf abgebrochen</text>
 
   <!-- legend -->
   <line x1="940" y1="660" x2="980" y2="660" class="edge" />

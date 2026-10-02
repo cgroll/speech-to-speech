@@ -103,6 +103,8 @@ from telegram.ext import (
 from speech_to_speech import daemon_control, sessions, stt_client, tts_client
 from speech_to_speech.agent_backend import (
     AGENT_LABELS,
+    CATEGORY_OTHER,
+    CATEGORY_THINKING,
     DEFAULT_AGENT,
     AgentConversation,
     create_conversation,
@@ -196,15 +198,38 @@ def _log_if_failed(future: "asyncio.Future") -> None:
         logger.warning("Sending image failed: %s", exc)
 
 
+def _make_on_output(chat_id: int, loop: asyncio.AbstractEventLoop) -> Callable[[str, str], None]:
+    """Builds the on_output callback for thinking/tool metadata for one chat.
+    Tool usage (CATEGORY_OTHER) is filtered; thinking is sent with a prefix."""
+
+    def _on_output(category: str, text: str) -> None:
+        if category == CATEGORY_OTHER:
+            return
+        # Thinking is sent as a separate message with a prefix
+        future = asyncio.run_coroutine_threadsafe(_send_thinking(chat_id, text), loop)
+        future.add_done_callback(_log_if_failed)
+
+    return _on_output
+
+
+async def _send_thinking(chat_id: int, text: str) -> None:
+    assert _bot is not None
+    await _bot.send_message(chat_id=chat_id, text=f"🤔 {text}")
+
+
 def _get_session(chat_id: int) -> _ChatSession:
     with _sessions_lock:
         session = _sessions.get(chat_id)
         if session is None:
             workspace = str(DEFAULT_WORKSPACE)
-            on_image = _make_on_image(chat_id, asyncio.get_running_loop())
+            loop = asyncio.get_running_loop()
+            on_image = _make_on_image(chat_id, loop)
+            on_output = _make_on_output(chat_id, loop)
             session = _ChatSession(
                 DEFAULT_AGENT,
-                create_conversation(DEFAULT_AGENT, workspace=workspace, on_image=on_image),
+                create_conversation(
+                    DEFAULT_AGENT, workspace=workspace, on_image=on_image, on_output=on_output
+                ),
                 workspace,
             )
             _sessions[chat_id] = session
@@ -244,25 +269,25 @@ async def _reset_session(
     chat_id: int, agent: str, resume: str | None = None, workspace: str | None = None
 ) -> None:
     """Shared implementation of /new, /workspace, and the /sessions resume
-    button: builds the new backend client *before* taking the lock
-    (construction can take seconds -- no reason to block a concurrent
-    send() on this chat for that long), then swaps it in and closes the old
-    one under the lock so a send() that's mid-flight on the old conversation
-    can't have it closed out from under it.
+    button: builds the new backend client *before* taking the lock. Swaps it
+    in and closes the old one under the lock.
 
     `workspace` defaults to the chat's current one, same "only overridden by
     the caller that's actually changing it" pattern as `agent` at the call
     sites below."""
     session = _get_session(chat_id)
     workspace = workspace or session.workspace
-    # Captured here (still on the event loop -- this function is a
-    # coroutine) rather than inside _do() below, which runs on a
-    # to_thread() worker thread where there is no running loop to get.
-    on_image = _make_on_image(chat_id, asyncio.get_running_loop())
+    loop = asyncio.get_running_loop()
+    on_image = _make_on_image(chat_id, loop)
+    on_output = _make_on_output(chat_id, loop)
 
     def _do() -> None:
         new_conversation = create_conversation(
-            agent, resume=resume, workspace=workspace, on_image=on_image
+            agent,
+            resume=resume,
+            workspace=workspace,
+            on_image=on_image,
+            on_output=on_output,
         )
         with session.lock:
             old_conversation = session.conversation

@@ -3,7 +3,9 @@
 Status: Teilweise umgesetzt (2026-10-02) -- Abschnitt 3 (Denkprozess-/
 Output-Kanal) ist implementiert und empirisch gegen beide echten Backends
 verifiziert, siehe Abschnitt 3a. Abschnitt 4 (Stop-Markierung im
-Chatverlauf) ist weiterhin nur Entwurf, noch nicht gebaut.
+Chatverlauf) ist weiterhin nur Entwurf, noch nicht gebaut, und wurde
+durch das Steering-Message-Modell (kein Abbruch bei Barge-in) teilweise
+überholt.
 
 Konkretisiert zwei Lücken, die beim Abgleich von
 `docs/specs/core-dialog-loop.md` gegen den aktuellen Code aufgefallen sind:
@@ -144,13 +146,13 @@ core-dialog-loop.md Abschnitt 7 verwandt, hier aber nicht weiter verfolgt).
   die bestätigen: Tool-Aufruf/-Ergebnis landen in `CATEGORY_OTHER`, der
   finale Gruß ist exakt und ausschließlich der `send()`-Rückgabewert.
 
-## 4. Stop-Markierung: Umsetzung
+## 4. Stop-Markierung: Umsetzung (Entwurf)
 
-- Greift in `App._respond()` (Zweig "Interrupted while thinking --
-  discarding reply") und überall, wo `_abort_current_turn()` einen Turn aus
-  dem Zustand "thinking" abbricht (`App.stop()`; nicht bei "speaking" --
-  dort hat der Antwort-Kanal schon Inhalt, siehe core-dialog-loop.md
-  Abschnitt 4, keine Markierung nötig).
+- Greift nur beim **dedizierten Stop-Button** (`App.stop()`), wenn dieser
+  einen Turn aus dem Zustand "thinking" hart abbricht.
+- Ein **Barge-in** (Tastendruck während Processing) führt im aktuellen
+  Steering-Modell **nicht** zu einer Abbruch-Markierung, da der Turn im
+  Hintergrund zu Ende geführt wird und die Antwort im Chat erscheint.
 - Fügt einen Eintrag in den Chatverlauf ein, der erkennbar kein normaler
   Assistant-Turn ist (z.B. eigener `role` oder Prefix), Inhalt sinngemäß
   "Abgebrochen durch Nutzer". Ein bis zu diesem Zeitpunkt bereits über

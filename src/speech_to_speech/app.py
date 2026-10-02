@@ -196,6 +196,8 @@ class App:
                 stt_s = time.monotonic() - stop_t0
                 if text:
                     logger.info("Transcribed: %s", text)
+                    # Append to history immediately (Input Separation)
+                    self._append_history("user", text)
                     with self._history_lock:
                         self._stats["last_stt_s"] = stt_s
                     with self._state_lock:
@@ -238,6 +240,10 @@ class App:
             return
 
         logger.info("Text input: %s", text)
+        # Append to history immediately so it shows up in the cockpit even
+        # while a previous turn is still active (Input Separation).
+        self._append_history("user", text)
+
         start_loop = False
         with self._state_lock:
             self._input_queue.append(text)
@@ -260,7 +266,9 @@ class App:
             threading.Thread(target=self._run_responder_loop, daemon=True).start()
 
     def _respond(self, text: str) -> None:
-        self._append_history("user", text)
+        # User input is now appended to history in submit_text() / 
+        # _run_responder_loop() immediately when it arrives, so we don't
+        # do it here anymore.
         assert self._llm is not None
         t0 = time.monotonic()
         try:
@@ -395,16 +403,15 @@ class App:
     def _append_output(self, category: str, text: str) -> None:
         """create_conversation()'s `on_output` callback: appends a
         CATEGORY_THINKING/CATEGORY_OTHER chunk to the chat history as its
-        own entry, live, as the backend produces it -- *not* via
-        _speak()/TTS (that only ever gets called with send()'s own return
-        value, the actual response, see _respond()/voice_turn() -- this
-        method is never in that path). Tagged with `metadata` so
-        cockpit.py's gr.Chatbot renders it as a visually distinct
-        collapsible "thought" bubble instead of a normal reply. Same
-        threading note as _append_image(): may run on a backend's own
-        background thread (Claude SDK's event loop; Pi's send() call runs
-        on whatever thread called it, so no extra thread there), never
-        assume the caller already holds _history_lock."""
+        own entry, live, as the backend produces it.
+
+        2026-10-02: CATEGORY_OTHER (tool usage) is filtered by default to
+        keep the cockpit clean, as requested by the user. CATEGORY_THINKING
+        is still shown as a collapsible bubble."""
+        if category == CATEGORY_OTHER:
+            logger.debug("Filtering CATEGORY_OTHER output: %s", text)
+            return
+
         title = OUTPUT_CATEGORY_TITLES.get(category, f"🔧 {category}")
         with self._history_lock:
             self._history.append(
@@ -414,6 +421,21 @@ class App:
                     "metadata": {"title": title, "status": "done"},
                 }
             )
+
+        if category == CATEGORY_THINKING:
+            with self._state_lock:
+                should_speak = not self._audio_suppressed and not self._voice_muted and self._state != "recording"
+            if should_speak:
+                # Speak thinking blocks asynchronously to not block the
+                # LLM-stream processing. No stats tracking for these.
+                threading.Thread(target=self._speak_thinking, args=(text,), daemon=True).start()
+
+    def _speak_thinking(self, text: str) -> None:
+        """Simplified speech for thinking blocks: no stats, just audio."""
+        try:
+            tts_client.speak(text)
+        except Exception as exc:
+            logger.warning("Thinking-audio failed: %s", exc)
 
     # -- Cockpit-facing read/write API ------------------------------------
     # Called from cockpit.py's Gradio callbacks, which run on Gradio's own

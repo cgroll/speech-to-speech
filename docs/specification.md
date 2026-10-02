@@ -1,11 +1,18 @@
 # Specification (retroactive)
 
-Diese Datei fasst die Kernfeatures des Projekts zusammen, als Grundlage für
-eine nachträglich geschriebene Spezifikation. Quelle: README.md,
-docs/architecture-proposal.md, docs/telegram-bot-proposal.md,
-docs/backlog.md und der aktuelle Code-Stand (Stand 2026-10-02).
+Diese Datei fasst die Kernfeatures des Projekts zusammen.
 
-## 1. Interaktionsmodell (Sprache & Text)
+## 1. Hauptmerkmale
+
+- **Saubere Zustandsmodelle**: Klare Trennung zwischen [Kern-Text-Dialog](specs/core-text-dialog-loop.md) und [Sprach-Erweiterung](specs/speech-extension.md).
+- **STT + TTS**: Lokale Spracherkennung und Sprachausgabe über entkoppelte Daemons.
+- **Mehrere Kanäle**: Lokales [Gradio-Cockpit](channels.md) und [Telegram-Bot](channels.md) für die Remote-Nutzung.
+- **Steuerung des persönlichen Agenten**:
+    - **Agenten-Wahl**: Wechsel zwischen verschiedenen Backends (z.B. Claude Code vs. Pi).
+    - **Workspace-Scoping**: Auswahl des Arbeitsverzeichnisses (`root`), das die Agent-Konfiguration (`AGENTS.md`) und den Dateizugriff bestimmt.
+    - **Session-Management**: Fortsetzen früherer Sessions über beide Backends hinweg.
+
+## 2. Interaktionsmodell (Sprache & Text)
 
 - **Eingabe-Modi:** Unterstützt Spracheingabe (Jabra/Hotkey) und Texteingabe (Cockpit/Telegram).
 - **Steuerung der Sprachausgabe (TTS):**
@@ -15,7 +22,7 @@ docs/backlog.md und der aktuelle Code-Stand (Stand 2026-10-02).
 - **Steuerung des Agenten (LLM):**
     - **Warteschlangen-Modell (Steering Messages):** Neue Eingaben (Sprache oder Text) unterbrechen den Denkprozess (Textgenerierung) des Agenten nicht hart. Stattdessen werden sie als Folge-Nachrichten eingereiht, die verarbeitet werden, sobald der Agent den aktuellen Turn (oder den nächsten Tool-Schritt) beendet hat.
     - **Text-Session-Konsistenz:** Der neue Input wird am Ende der Text-Historie eingereiht, nachdem alle bis dahin eingegangenen (auch asynchronen) Text-Outputs verarbeitet wurden. Die Audio-Ebene ist flüchtig (wird bei Interrupt gelöscht), die Text-Ebene permanent (wird erweitert).
-- **Zustandsmaschine:** `idle -> recording -> thinking -> speaking -> idle`. Die Übergänge sind gegen Race-Conditions abgesichert.
+- **Zustandsmaschine:** Das System basiert auf einer Kern-Text-Dialogschleife (`idle -> thinking -> responding`), die für den Sprachmodus um dedizierte Zustände für Aufnahme (`recording`) und Wiedergabe (`speaking`) erweitert wird. Details siehe [Kern-Text-Dialogschleife](specs/core-text-dialog-loop.md) und [Sprach-Erweiterung](specs/speech-extension.md).
 - **Streaming:** Antworten werden satzweise synthetisiert und abgespielt -- die Wiedergabe beginnt nach dem ersten Satz.
 
 ## 2. Daemon-Architektur (STT/TTS entkoppelt von der App)

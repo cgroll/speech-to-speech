@@ -1,0 +1,77 @@
+<svg viewBox="0 0 1000 500" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">
+  <title>Sprach-Erweiterung Zustände und Queues</title>
+
+  <style>
+    .surface   { fill: #fcfcfb; }
+    .border    { stroke: rgba(11,11,11,0.10); }
+    .state-box { fill: #f2f1ee; stroke: #52514e; stroke-width: 1.5; }
+    .state-text{ fill: #0b0b0b; font-weight: 600; }
+    .edge      { stroke: #52514e; stroke-width: 2; fill: none; }
+    .edge-label{ fill: #0b0b0b; font-size: 13px; }
+    .queue-box { fill: #e7f0fb; stroke: #2a78d6; stroke-width: 1.5; }
+    .queue-text{ fill: #184f95; font-size: 12px; font-weight: 600; }
+    .audio-suppress { fill: #fdece3; stroke: #eb6834; stroke-width: 1.5; stroke-dasharray: 4 2; }
+    .suppress-text { fill: #9a3f18; font-size: 11px; font-weight: 600; }
+
+    @media (prefers-color-scheme: dark) {
+      .surface   { fill: #1a1a19; }
+      .border    { stroke: rgba(255,255,255,0.10); }
+      .state-box { fill: #2a2a28; stroke: #c3c2b7; }
+      .state-text{ fill: #ffffff; }
+      .edge      { stroke: #c3c2b7; }
+      .edge-label{ fill: #ffffff; }
+      .queue-box { fill: #142a42; stroke: #3987e5; }
+      .queue-text{ fill: #86b6ef; }
+      .audio-suppress { fill: #3a2317; stroke: #d95926; }
+      .suppress-text { fill: #f0a884; }
+    }
+  </style>
+
+  <rect x="0" y="0" width="1000" height="500" rx="16" class="surface border" />
+
+  <!-- Queues -->
+  <rect x="50" y="40" width="180" height="50" rx="8" class="queue-box" />
+  <text x="140" y="72" text-anchor="middle" class="queue-text">User-Input-Queue</text>
+
+  <rect x="770" y="40" width="180" height="50" rx="8" class="audio-suppress" />
+  <text x="860" y="72" text-anchor="middle" class="suppress-text">_audio_suppressed Flag</text>
+
+  <!-- States -->
+  <rect x="50" y="250" width="120" height="70" rx="12" class="state-box" />
+  <text x="110" y="290" text-anchor="middle" class="state-text">Idle</text>
+
+  <rect x="250" y="250" width="120" height="70" rx="12" class="state-box" />
+  <text x="310" y="290" text-anchor="middle" class="state-text">Recording</text>
+
+  <rect x="450" y="250" width="120" height="70" rx="12" class="state-box" />
+  <text x="510" y="290" text-anchor="middle" class="state-text">Thinking</text>
+
+  <rect x="650" y="250" width="120" height="70" rx="12" class="state-box" />
+  <text x="710" y="290" text-anchor="middle" class="state-text">Speaking</text>
+
+  <!-- Barge-in Loop -->
+  <path d="M 510,320 C 510,400 310,400 310,328" class="edge" stroke-dasharray="6 4" marker-end="url(#arrow)" />
+  <text x="410" y="390" text-anchor="middle" class="edge-label">Barge-in (Thinking)</text>
+
+  <path d="M 710,320 C 710,450 310,450 310,328" class="edge" stroke-dasharray="6 4" marker-end="url(#arrow)" />
+  <text x="510" y="440" text-anchor="middle" class="edge-label">Barge-in (Speaking)</text>
+
+  <!-- Normal Transitions -->
+  <line x1="170" y1="285" x2="242" y2="285" class="edge" marker-end="url(#arrow)" />
+  <text x="206" y="275" text-anchor="middle" class="edge-label">Trigger</text>
+
+  <line x1="370" y1="285" x2="442" y2="285" class="edge" marker-end="url(#arrow)" />
+  <text x="406" y="275" text-anchor="middle" class="edge-label">Stop Rec</text>
+
+  <line x1="570" y1="285" x2="642" y2="285" class="edge" marker-end="url(#arrow)" />
+  <text x="606" y="275" text-anchor="middle" class="edge-label">Antwort</text>
+
+  <path d="M 770,285 L 850,285 C 930,285 930,480 500,480 C 110,480 110,328 110,328" class="edge" marker-end="url(#arrow)" />
+  <text x="940" y="380" text-anchor="middle" class="edge-label" transform="rotate(90 940,380)">Wiedergabe Ende</text>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#52514e" />
+    </marker>
+  </defs>
+</svg>

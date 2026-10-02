@@ -1,6 +1,6 @@
 <svg viewBox="0 0 900 460" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">
   <title>Barge-in als Komposition</title>
-  <desc>Barge-in ist kein eigener Übergang, sondern Stop unmittelbar gefolgt vom nächsten Eingabe-Schritt -- im Sprachmodus Eingabe-Beginn (neue Aufnahme), im Textmodus direkt Eingabe abgeschlossen mit dem schon fertig getippten Text.</desc>
+  <desc>Barge-in ist kein eigener Übergang, sondern Audio-Stop unmittelbar gefolgt vom nächsten Eingabe-Schritt -- im Sprachmodus Eingabe-Beginn (neue Aufnahme), im Textmodus direkt Eingabe abgeschlossen. Der abgebrochene Turn läuft im Hintergrund weiter (Steering).</desc>
 
   <defs>
     <marker id="bi-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -82,5 +82,5 @@
 
   <rect x="310" y="362" width="300" height="64" rx="12" class="state-box" />
   <text x="460" y="390" text-anchor="middle" class="state-text" font-size="15">Processing</text>
-  <text x="460" y="406" text-anchor="middle" class="sub-text">neuer Turn, frisches Abbruch-Signal</text>
+  <text x="460" y="406" text-anchor="middle" class="sub-text">neuer Turn, alter läuft im Hintergrund weiter</text>
 </svg>
