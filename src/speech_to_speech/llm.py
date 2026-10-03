@@ -17,9 +17,20 @@ its reply. `_route()` is the dispatcher: while a turn is in flight (i.e.
 `_query()` is awaiting its own reply), everything -- including task
 lifecycle messages -- flows into that turn's own queue, same as before
 this change. Once nothing is waiting, a *terminal* task message instead
-goes to `on_background_result`, the new push channel a caller (App,
-telegram_bot) wires up to actually say/show it -- this is the mechanism
-behind "the agent sets a timer and reports back on its own".
+opens a short background-continuation window (`_finish_background_capture()`):
+the CLI typically wakes the model for a follow-up turn right after a task
+it was waiting on finishes, and that follow-up's own `AssistantMessage` is
+the actual, natural-language thing to say ("Hallo, der Timer ist
+abgelaufen"), not the terminal message's own bare `summary` field. Delivery
+through `on_background_result` -- the push channel a caller (App,
+telegram_bot) wires up to actually say/show it -- prefers that generated
+reply and only falls back to the raw summary/description if nothing
+streams in before the window closes. Fixed 2026-10-03: `_route()` used to
+call `on_background_result` with the terminal message's raw text
+immediately and had no branch at all for the `AssistantMessage`/
+`ResultMessage` that follows once `_turn_queue` is already `None` again --
+that follow-up was silently dropped, so only the bland "task completed"
+line ever reached the user, never the model's own reply.
 """
 
 import asyncio
@@ -100,6 +111,18 @@ _ACTIVITY_TIMEOUT_S = 300
 # ~5min) without the turn ever actually finishing -- unlikely, but send()
 # should still return eventually rather than block its caller forever.
 _HARD_TIMEOUT_S = 20 * 60
+
+# How long _finish_background_capture() waits, after a terminal task
+# message with no turn in flight, for the model's own follow-up reply
+# before giving up and delivering just the raw summary/description
+# instead. Deliberately much shorter than _ACTIVITY_TIMEOUT_S: that one
+# bounds a real, possibly tool-heavy turn the caller is actively waiting
+# on, while this is "will the CLI wake the model up for a reaction at
+# all" -- not every backgroundable task is guaranteed to get a follow-up
+# turn (a plain `Bash(run_in_background=True)` shell isn't tracked the
+# same way a delegated sub-agent task is), so this shouldn't make a
+# background delivery that has no reaction coming sit around for minutes.
+_BACKGROUND_CONTINUATION_TIMEOUT_S = 15
 
 
 class ClaudeCodeConversation:
@@ -214,12 +237,15 @@ class ClaudeCodeConversation:
 
     def _route(self, message: object) -> None:
         """Dispatches one message from the stream: into the currently
-        waiting turn's queue if `_query()` is actively waiting on one, or
-        -- for a *terminal* task-lifecycle message with nobody waiting --
-        to `_deliver_background()` instead. Runs entirely on `self._loop`'s
-        thread (called only from `_dispatch_loop()`), same as `_turn_queue`
-        being set/cleared only from `_query()` on that same thread, so the
-        two never race despite not sharing a lock."""
+        waiting turn's queue if `_query()` (or an in-progress background
+        capture, see `_finish_background_capture()`) is actively waiting on
+        one, or -- for a *terminal* task-lifecycle message with nobody
+        waiting -- opens a new background-continuation window instead of
+        delivering straight away. Runs entirely on `self._loop`'s thread
+        (called only from `_dispatch_loop()`), same as `_turn_queue` being
+        set/cleared only from `_query()`/`_finish_background_capture()` on
+        that same thread, so the two never race despite not sharing a
+        lock."""
         if isinstance(message, TaskStartedMessage):
             self._active_tasks[message.task_id] = message.description
 
@@ -229,15 +255,29 @@ class ClaudeCodeConversation:
         )
 
         if self._turn_queue is not None:
-            # A turn is actively being awaited -- everything (including
-            # task-lifecycle messages) flows through it, same as before
-            # this restructuring; _query() classifies task messages into
+            # A turn (or a background capture already in progress) is
+            # actively being awaited -- everything (including task-lifecycle
+            # messages) flows through it, same as before this restructuring;
+            # whoever's draining it classifies task messages into
             # CATEGORY_OTHER via _describe_task_message().
             self._turn_queue.put_nowait(message)
         elif terminal:
             # Nobody is waiting and this task just finished -- the exact
-            # "agent reports back on its own" case this was built for.
-            self._deliver_background(message)
+            # "agent reports back on its own" case this was built for. The
+            # terminal message's own text (summary/description) is only a
+            # fallback: the CLI typically wakes the model for a follow-up
+            # turn right after this, and *that* AssistantMessage is the
+            # real, natural-language thing to say. Open a capture window
+            # (a fresh `_turn_queue`, same convention `_query()` uses) so
+            # that follow-up isn't silently dropped the way it used to be
+            # when this branch delivered immediately and nothing was left
+            # listening for what came next.
+            description = self._active_tasks.get(getattr(message, "task_id", None), "Hintergrundaufgabe")
+            summary = getattr(message, "summary", None)
+            fallback_text = (summary or f"{description} ({getattr(message, 'status', 'fertig')})").strip()
+            queue: asyncio.Queue = asyncio.Queue()
+            self._turn_queue = queue
+            self._loop.create_task(self._finish_background_capture(queue, description, fallback_text))
         # else: non-terminal task chatter (started/progress) with no turn
         # waiting and no terminal status yet -- nothing to deliver, the
         # TaskStartedMessage bookkeeping above is all that's needed from it.
@@ -245,16 +285,71 @@ class ClaudeCodeConversation:
         if terminal:
             self._active_tasks.pop(getattr(message, "task_id", None), None)
 
-    def _deliver_background(self, message: object) -> None:
+    async def _finish_background_capture(self, queue: asyncio.Queue, source: str, fallback_text: str) -> None:
+        """Drains the capture window `_route()` opened for a terminal task
+        message that arrived with no turn in flight. Mirrors `_query()`'s
+        own loop (same last-message-wins lookahead for `AssistantMessage`,
+        same CATEGORY_THINKING/CATEGORY_OTHER classification) but never
+        calls `self._client.query()` itself -- nothing here originated the
+        turn, it only might still be coming from the CLI waking the model
+        up on its own. Stops at the first `ResultMessage` (that follow-up
+        turn's own end) or after `_BACKGROUND_CONTINUATION_TIMEOUT_S` of
+        silence, whichever comes first, then delivers whatever text was
+        generated -- falling back to `fallback_text` (the terminal
+        message's own summary/description) if nothing came in at all."""
+        pending_text: str | None = None
+        try:
+            while True:
+                try:
+                    msg = await asyncio.wait_for(queue.get(), timeout=_BACKGROUND_CONTINUATION_TIMEOUT_S)
+                except TimeoutError:
+                    break
+
+                if isinstance(msg, AssistantMessage):
+                    message_text_parts: list[str] = []
+                    for block in msg.content:
+                        if isinstance(block, TextBlock):
+                            message_text_parts.append(block.text)
+                        elif isinstance(block, ThinkingBlock):
+                            self._emit(CATEGORY_THINKING, block.thinking)
+                        elif isinstance(block, ToolUseBlock):
+                            self._emit(CATEGORY_OTHER, f"→ {block.name}({block.input})")
+                        else:
+                            self._emit(CATEGORY_OTHER, str(block))
+
+                    message_text = "".join(message_text_parts)
+                    if message_text.strip():
+                        if pending_text is not None:
+                            self._emit(CATEGORY_THINKING, pending_text)
+                        pending_text = message_text
+                elif isinstance(msg, UserMessage):
+                    content = msg.content if isinstance(msg.content, list) else []
+                    for block in content:
+                        if isinstance(block, ToolResultBlock):
+                            self._emit(CATEGORY_OTHER, f"← {block.content}")
+                elif isinstance(msg, _TASK_MESSAGE_TYPES):
+                    self._emit(CATEGORY_OTHER, _describe_task_message(msg))
+                elif isinstance(msg, ResultMessage):
+                    break
+        finally:
+            # Only clear if still ours -- a real send() may have already
+            # taken over _turn_queue for a new turn while we were waiting
+            # (e.g. the user asked something else in the meantime); in that
+            # case leave it alone, _query() owns clearing it.
+            if self._turn_queue is queue:
+                self._turn_queue = None
+
+        text = (pending_text or fallback_text).strip()
+        self._deliver_background(source, text)
+
+    def _deliver_background(self, source: str, text: str) -> None:
         if self._on_background_result is None:
             return
-        description = self._active_tasks.get(getattr(message, "task_id", None), "Hintergrundaufgabe")
-        summary = getattr(message, "summary", None)
-        text = (summary or f"{description} ({getattr(message, 'status', 'fertig')})").strip()
+        text = text.strip()
         if not text:
             return
-        logger.info("Background task result (%s): %s", description, text[:200])
-        self._on_background_result(description, text)
+        logger.info("Background task result (%s): %s", source, text[:200])
+        self._on_background_result(source, text)
 
     def send(self, text: str) -> str:
         logger.info("Sending to Claude Code: %s", text)

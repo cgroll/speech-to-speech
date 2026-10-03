@@ -22,10 +22,13 @@ from __future__ import annotations
 import asyncio
 
 from claude_agent_sdk import (
+    AssistantMessage,
+    ResultMessage,
     TaskNotificationMessage,
     TaskProgressMessage,
     TaskStartedMessage,
     TaskUpdatedMessage,
+    TextBlock,
 )
 
 from speech_to_speech import app as app_module
@@ -74,40 +77,124 @@ def _task_notification(
     )
 
 
-def _bare_conversation(on_background_result=None) -> ClaudeCodeConversation:
+def _bare_conversation(on_background_result=None, loop=None) -> ClaudeCodeConversation:
     """A ClaudeCodeConversation with none of __init__'s real connection work
-    done -- just the attributes _route()/_deliver_background() touch, so
-    this is testable without a live SDK client or API key."""
+    done -- just the attributes _route()/_deliver_background()/
+    _finish_background_capture() touch, so this is testable without a live
+    SDK client or API key. `loop` only matters for `_route()`-level tests
+    that schedule the background-capture task via `self._loop.create_task()`
+    -- `_finish_background_capture()` itself is driven directly with
+    `asyncio.run()` and never touches `_loop`."""
     conv = object.__new__(ClaudeCodeConversation)
     conv._active_tasks = {}
     conv._turn_queue = None
     conv._on_background_result = on_background_result
+    conv._on_output = None
+    conv._loop = loop
     return conv
+
+
+class _RecordingLoop:
+    """Stand-in for the real `asyncio` event loop in `_route()`-level
+    tests: records the coroutine a background-capture task would run
+    without actually running it (there's no real loop thread backing this
+    bare conversation), and closes it so pytest doesn't warn about an
+    un-awaited coroutine."""
+
+    def __init__(self) -> None:
+        self.scheduled: list[object] = []
+
+    def create_task(self, coro):
+        self.scheduled.append(coro)
+        coro.close()
+        return None
+
+
+def _assistant_text(text: str) -> AssistantMessage:
+    return AssistantMessage(content=[TextBlock(text=text)], model="claude")
+
+
+def _result(result: str | None = None) -> ResultMessage:
+    return ResultMessage(
+        subtype="result",
+        duration_ms=1,
+        duration_api_ms=1,
+        is_error=False,
+        num_turns=1,
+        session_id="s1",
+        result=result,
+    )
 
 
 # -- llm.py: _route() / _deliver_background() -------------------------------
 
 
-def test_route_terminal_notification_while_idle_delivers_background_result() -> None:
+def test_route_terminal_notification_while_idle_opens_capture_window_instead_of_delivering_immediately() -> None:
+    # Regression for the bug found 2026-10-03: this used to call
+    # on_background_result synchronously, right here, with just the
+    # notification's own text -- which meant the model's own follow-up
+    # reply (the actual "Hallo, der Timer ist abgelaufen") that the CLI
+    # typically streams in right after had nothing left listening for it
+    # and was silently dropped. Now a capture window is opened instead
+    # (see test_finish_background_capture_* below for what happens in it).
     calls: list[tuple[str, str]] = []
-    conv = _bare_conversation(on_background_result=lambda source, text: calls.append((source, text)))
+    loop = _RecordingLoop()
+    conv = _bare_conversation(on_background_result=lambda source, text: calls.append((source, text)), loop=loop)
 
     conv._route(_task_started(description="Build läuft"))
     conv._route(_task_notification(summary="Build erfolgreich."))
 
-    assert calls == [("Build läuft", "Build erfolgreich.")]
-    # Bookkeeping cleared once the task reached a terminal status.
+    assert calls == []
+    assert conv._turn_queue is not None
+    assert len(loop.scheduled) == 1
+    # Bookkeeping cleared once the task reached a terminal status, same as
+    # before -- that part doesn't wait on the capture window.
     assert conv._active_tasks == {}
+
+
+def test_finish_background_capture_prefers_the_models_follow_up_reply_over_the_raw_summary() -> None:
+    calls: list[tuple[str, str]] = []
+    conv = _bare_conversation(on_background_result=lambda source, text: calls.append((source, text)))
+    queue: asyncio.Queue = asyncio.Queue()
+    queue.put_nowait(_assistant_text("Hallo, der Timer ist abgelaufen."))
+    queue.put_nowait(_result())
+    conv._turn_queue = queue
+
+    asyncio.run(conv._finish_background_capture(queue, "Timer", "Build erfolgreich (fallback)."))
+
+    assert calls == [("Timer", "Hallo, der Timer ist abgelaufen.")]
+    assert conv._turn_queue is None
+
+
+def test_finish_background_capture_falls_back_to_summary_when_nothing_follows(monkeypatch) -> None:
+    import speech_to_speech.llm as llm_module
+
+    monkeypatch.setattr(llm_module, "_BACKGROUND_CONTINUATION_TIMEOUT_S", 0.05)
+    calls: list[tuple[str, str]] = []
+    conv = _bare_conversation(on_background_result=lambda source, text: calls.append((source, text)))
+    queue: asyncio.Queue = asyncio.Queue()  # nothing ever arrives
+    conv._turn_queue = queue
+
+    asyncio.run(conv._finish_background_capture(queue, "Timer", "Build erfolgreich (fallback)."))
+
+    assert calls == [("Timer", "Build erfolgreich (fallback).")]
+    assert conv._turn_queue is None
 
 
 def test_route_falls_back_to_description_when_notification_has_no_summary() -> None:
     calls: list[tuple[str, str]] = []
-    conv = _bare_conversation(on_background_result=lambda source, text: calls.append((source, text)))
+    loop = _RecordingLoop()
+    conv = _bare_conversation(on_background_result=lambda source, text: calls.append((source, text)), loop=loop)
 
     conv._route(_task_started(description="Aufräumen"))
     conv._route(_task_notification(summary="", status="failed"))
 
-    assert calls == [("Aufräumen", "Aufräumen (failed)")]
+    # Still just a scheduled capture window at this point -- the
+    # "Aufräumen (failed)" fallback text is only used if nothing else
+    # streams in (exercised directly in
+    # test_finish_background_capture_falls_back_to_summary_when_nothing_follows).
+    assert calls == []
+    assert len(loop.scheduled) == 1
 
 
 def test_route_with_turn_in_flight_goes_to_turn_queue_not_background() -> None:
@@ -150,12 +237,21 @@ def test_route_task_updated_with_non_terminal_status_is_not_delivered() -> None:
 
 
 def test_route_without_on_background_result_callback_is_a_noop() -> None:
-    conv = _bare_conversation(on_background_result=None)
+    conv = _bare_conversation(on_background_result=None, loop=_RecordingLoop())
 
     conv._route(_task_started())
     conv._route(_task_notification())  # must not raise
 
     assert conv._active_tasks == {}
+
+
+def test_finish_background_capture_without_on_background_result_callback_is_a_noop() -> None:
+    conv = _bare_conversation(on_background_result=None)
+    queue: asyncio.Queue = asyncio.Queue()
+    queue.put_nowait(_result())
+    conv._turn_queue = queue
+
+    asyncio.run(conv._finish_background_capture(queue, "Timer", "fallback"))  # must not raise
 
 
 def test_describe_task_message_formats_each_type() -> None:
