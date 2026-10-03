@@ -12,6 +12,13 @@ Beschreibt die Integration von Spracherkennung und Sprachausgabe, das Verhalten 
 
 👉 **[Spezifikation: Sprach-Erweiterung (STT/TTS)](speech-extension.md)**
 
+## 3. Hintergrund-Kanal und Status-Abfrage
+Beschreibt, wie Ergebnisse von Hintergrund-Agenten (späte, turn-unabhängige
+Rückmeldungen) in den Dialog eingespeist werden und wie eine reine
+Status-Nachfrage vom normalen Steering/Barge-in abgegrenzt wird.
+
+👉 **[Spezifikation: Hintergrund-Kanal und Status-Abfrage](background-channel.md)**
+
 ---
 
 *Diese Seite dient als Einstiegspunkt. Die ursprüngliche, monolithische Spezifikation wurde am 2026-10-02 in diese beiden Teile aufgespalten, um die Queue-Interaktionen klarer darstellen zu können.*

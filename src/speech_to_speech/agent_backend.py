@@ -144,6 +144,7 @@ def create_conversation(
     workspace: str | None = None,
     on_image: Callable[[str, str], None] | None = None,
     on_output: Callable[[str, str], None] | None = None,
+    on_background_result: Callable[[str, str], None] | None = None,
     voice_output: bool = False,
 ) -> AgentConversation:
     """Instantiates the right backend client for `agent` (one of
@@ -170,6 +171,17 @@ def create_conversation(
     before this existed); callers that do pass one still always get the
     response itself as send()'s plain return value, unchanged.
 
+    `on_background_result`, if given, is called `(source, text)` for a
+    result that arrives with no send() call waiting on it at all -- the
+    agent reporting back on its own, e.g. a backgroundable task Claude
+    started earlier that only finished after that turn's own reply was
+    already returned (docs/specs/background-channel.md). Claude-only for
+    now: Pi has no equivalent backgroundable-task primitive (confirmed via
+    its own docs -- "It intentionally does not include built-in ...
+    background bash"), so this is silently ignored for AGENT_PI, same
+    "accepted but no-op for a backend that can't do it" treatment as
+    `on_image` above.
+
     `voice_output` picks the reply-formatting half of the system prompt
     (system_prompt_for): True for conversations whose replies are spoken (the
     App's dialog and cockpit), False for text-delivered ones (Telegram). Set
@@ -184,11 +196,14 @@ def create_conversation(
             workspace=workspace,
             on_image=on_image,
             on_output=on_output,
+            on_background_result=on_background_result,
             voice_output=voice_output,
         )
     if agent == AGENT_PI:
         from speech_to_speech.pi_agent import PiAgentConversation
 
+        # on_background_result is deliberately not passed through -- see
+        # this function's docstring for why (no equivalent in Pi today).
         return PiAgentConversation(
             resume=resume, workspace=workspace, on_output=on_output, voice_output=voice_output
         )

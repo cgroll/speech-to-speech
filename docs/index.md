@@ -25,6 +25,7 @@ den Markdown-Dateien in `docs/`.
   - [Kern-Text-Dialogschleife](specs/core-text-dialog-loop.md) -- Grundmodell (Idle/Thinking/Responding) und User-Input-Queue.
   - [Sprach-Erweiterung (STT/TTS)](specs/speech-extension.md) -- Aufnahme-/Sprech-Zustände, Audio-Unterdrückung und Barge-in.
   - [Denkprozess-Kanal & Stop-Markierung](specs/thinking-channel-and-stop-marker.md)
+  - [Hintergrund-Kanal & Status-Abfrage](specs/background-channel.md) -- Entwurf: späte Ergebnisse von Hintergrund-Agenten, Status-Peek ohne Abbruch.
 - **Architektur & Design**:
   - [Architektur-Vorschlag](architecture-proposal.md) -- Ursprüngliches Design-Dokument.
   - [Telegram-Bot-Vorschlag](telegram-bot-proposal.md)

@@ -102,6 +102,15 @@ class App:
         # what gr.Chatbot's message format accepts directly (cockpit.py).
         self._history: list[dict[str, object]] = []
         self._input_queue: list[str] = []
+        # Results that didn't come from a send() call this App itself made
+        # -- today, a Claude backgroundable task reporting back on its own
+        # (llm.py's dispatch loop, wired in below via on_background_result)
+        # -- queued here instead of written straight to _history
+        # (docs/specs/background-channel.md section 3.2), so there's a
+        # single serialization point (the responder loop) for both this and
+        # _input_queue. Each entry is (source, text). Guarded by
+        # _state_lock, same as _input_queue.
+        self._background_queue: list[tuple[str, str]] = []
         self._responder_loop_running = False
         # Flag set during recording or when a new text input is submitted
         # while a turn is still active: prevents any *new* audio from
@@ -124,6 +133,7 @@ class App:
             workspace=self._workspace,
             on_image=self._append_image,
             on_output=self._append_output,
+            on_background_result=self.deliver_background_result,
             voice_output=True,
         )
         self._agent_name = self._default_agent
@@ -206,27 +216,48 @@ class App:
                     logger.info("No speech detected.")
 
             while True:
+                next_input: str | None = None
+                next_background: tuple[str, str] | None = None
                 with self._state_lock:
-                    if not self._input_queue:
-                        logger.info("Input queue empty, exiting loop.")
+                    if self._input_queue:
+                        text = self._input_queue.pop(0)
+                        # If a recording started while we were between queue items,
+                        # don't start the next turn yet -- the on_toggle(stop) will
+                        # spawn a new responder loop.
+                        if self._state == "recording":
+                            logger.info("Recording in progress, putting back input and exiting loop.")
+                            self._input_queue.insert(0, text) # put it back
+                            return
+                        self._set_state("thinking")
+                        self._audio_suppressed = False
+                        next_input = text
+                    elif self._background_queue:
+                        # Flush a pending background result (docs/specs/
+                        # background-channel.md section 3.3) before
+                        # considering the queues empty -- but never over an
+                        # active recording; it stays queued and gets picked
+                        # up after that recording's own resulting turn runs
+                        # through this same loop later instead.
+                        if self._state == "recording":
+                            logger.info("Recording in progress, deferring background delivery.")
+                            return
+                        next_background = self._background_queue.pop(0)
+                    else:
+                        logger.info("Queues empty, exiting loop.")
                         # Nothing left to do for now. If we were thinking/speaking,
                         # go back to idle.
                         if self._state in ("thinking", "speaking"):
                             self._set_state("idle")
                         return
-                    text = self._input_queue.pop(0)
-                    # If a recording started while we were between queue items,
-                    # don't start the next turn yet -- the on_toggle(stop) will
-                    # spawn a new responder loop.
-                    if self._state == "recording":
-                        logger.info("Recording in progress, putting back input and exiting loop.")
-                        self._input_queue.insert(0, text) # put it back
-                        return
-                    self._set_state("thinking")
-                    self._audio_suppressed = False
 
-                logger.info("Processing input from queue: %s", text)
-                self._respond(text)
+                if next_input is not None:
+                    logger.info("Processing input from queue: %s", next_input)
+                    self._respond(next_input)
+                else:
+                    assert next_background is not None
+                    source, bg_text = next_background
+                    logger.info("Delivering background result from %s: %s", source, bg_text)
+                    self._deliver_background_entry(source, bg_text)
         finally:
             with self._state_lock:
                 self._responder_loop_running = False
@@ -264,6 +295,50 @@ class App:
         
         if start_loop:
             threading.Thread(target=self._run_responder_loop, daemon=True).start()
+
+    def deliver_background_result(self, source: str, text: str) -> None:
+        """Sanctioned entry point (docs/specs/background-channel.md section
+        3.1) for a result that didn't come from a send() call this App
+        itself made -- today, Claude's own backgroundable-task completion
+        (llm.py's dispatch loop, wired in via create_conversation()'s
+        on_background_result). Thread/process-safe: called from the
+        backend's own event-loop thread, not any thread already holding
+        _state_lock.
+
+        Queues the result (never writes straight to _history, see
+        _run_responder_loop()'s flush of _background_queue) and, if nothing
+        else is going on, starts the responder loop itself -- mirrors
+        submit_text()'s "key off self._state == 'idle'" idiom so the same
+        atomic hand-off (state is only ever set to idle by the responder
+        loop itself, while still holding _state_lock) decides whether a
+        loop is already going to pick this up or a new one is needed."""
+        start_loop = False
+        with self._state_lock:
+            self._background_queue.append((source, text))
+            if self._state == "idle":
+                start_loop = True
+        if start_loop:
+            threading.Thread(target=self._run_responder_loop, daemon=True).start()
+
+    def _deliver_background_entry(self, source: str, text: str) -> None:
+        """Speaks/shows one entry popped off _background_queue by the
+        responder loop. Shown with a source-prefixed title via the same
+        gr.ChatMessage.metadata mechanism _append_output() uses for
+        thinking/tool output (docs/specs/background-channel.md section
+        3.4) -- but unlike those categories, this *is* spoken through the
+        normal _speak() path: a background result is a complete, standalone
+        message the user didn't just ask for, not an intermediate step of
+        one they did."""
+        title = f"🔔 {source}" if source else "🔔 Hintergrundaufgabe"
+        with self._history_lock:
+            self._history.append({"role": "assistant", "content": text, "metadata": {"title": title}})
+
+        with self._state_lock:
+            if self._audio_suppressed or self._state == "recording":
+                return
+            self._set_state("speaking")
+
+        self._speak(text)
 
     def _respond(self, text: str) -> None:
         # User input is now appended to history in submit_text() / 
@@ -425,7 +500,11 @@ class App:
                 {
                     "role": "assistant",
                     "content": text,
-                    "metadata": {"title": title, "status": "done"},
+                    # No "status" key: Gradio initializes the thought
+                    # accordion open when status is absent (it only starts
+                    # collapsed for status="done"), so thinking/tool output
+                    # shows expanded immediately instead of needing a click.
+                    "metadata": {"title": title},
                 }
             )
 
@@ -574,6 +653,7 @@ class App:
             workspace=workspace,
             on_image=self._append_image,
             on_output=self._append_output,
+            on_background_result=self.deliver_background_result,
             voice_output=True,
         )
         self._agent_name = agent
@@ -628,6 +708,7 @@ class App:
             workspace=workspace,
             on_image=self._append_image,
             on_output=self._append_output,
+            on_background_result=self.deliver_background_result,
             voice_output=True,
         )
         self._agent_name = agent

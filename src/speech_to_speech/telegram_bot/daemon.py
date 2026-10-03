@@ -67,6 +67,17 @@ from the SDK's own background thread -- asyncio.run_coroutine_threadsafe()
 is what bridges back across that thread boundary to actually call
 bot.send_photo(), same pattern llm.py's own cancel() uses for its
 fire-and-forget SDK calls.
+
+Background-task result delivery (docs/specs/background-channel.md,
+Claude backend only -- same reasoning as image delivery, see
+create_conversation()'s docstring): an on_background_result callback
+(_make_on_background_result()), same closure-over-chat-id-and-loop pattern
+as on_image above. Fires when a backgroundable task Claude started earlier
+finishes with nobody waiting on a reply anymore -- e.g. "I'll check and let
+you know" followed by a later, unprompted message. Unlike App's desktop
+loop, this daemon has no idle loop to flush a queue against between
+messages, so delivery here is always immediate (_send_background()) rather
+than queued.
 """
 
 import asyncio
@@ -198,6 +209,47 @@ def _log_if_failed(future: "asyncio.Future") -> None:
         logger.warning("Sending image failed: %s", exc)
 
 
+def _make_on_background_result(chat_id: int, loop: asyncio.AbstractEventLoop) -> Callable[[str, str], None]:
+    """Background-task completion delivery (llm.py's dispatch loop,
+    docs/specs/background-channel.md) for one chat -- Claude backend only,
+    see create_conversation()'s own docstring for why Pi doesn't trigger
+    this. Unlike App's desktop responder loop, this daemon has no idle loop
+    to opportunistically flush a queue against: it's purely reactive, woken
+    only by incoming Telegram updates. So delivery here is always
+    immediate -- the moment this fires, push the text out right away,
+    through the bot's event loop (same run_coroutine_threadsafe hop
+    _make_on_image()/_make_on_output() above use, since this also fires
+    from the SDK's own background thread)."""
+
+    def _on_background_result(source: str, text: str) -> None:
+        future = asyncio.run_coroutine_threadsafe(_send_background(chat_id, source, text), loop)
+        future.add_done_callback(_log_if_failed)
+
+    return _on_background_result
+
+
+async def _send_background(chat_id: int, source: str, text: str) -> None:
+    """Posts a background result as its own message -- a plain text reply
+    plus, if this chat has audio replies switched on (/voice), a
+    synthesized voice copy, same as _send_reply() does for a normal
+    answer. Not routed through _send_reply() itself: there's no Update
+    object to call .reply_text() on here, this wasn't triggered by an
+    incoming message."""
+    assert _bot is not None
+    labeled = f"🔔 {source}: {text}" if source else f"🔔 {text}"
+    await _bot.send_message(chat_id=chat_id, text=labeled)
+
+    if _get_session(chat_id).output_mode != "audio":
+        return
+    try:
+        audio, sample_rate = await asyncio.to_thread(tts_client.synthesize, labeled)
+        if audio.size > 0:
+            ogg_bytes = await asyncio.to_thread(_encode_pcm_to_ogg, audio, sample_rate)
+            await _bot.send_voice(chat_id=chat_id, voice=ogg_bytes)
+    except Exception:  # noqa: BLE001 - text already sent, keep the daemon alive
+        logger.exception("Background-result voice synthesis failed")
+
+
 def _make_on_output(chat_id: int, loop: asyncio.AbstractEventLoop) -> Callable[[str, str], None]:
     """Builds the on_output callback for thinking/tool metadata for one chat.
     Tool usage (CATEGORY_OTHER) is filtered; thinking is sent with a prefix."""
@@ -225,10 +277,15 @@ def _get_session(chat_id: int) -> _ChatSession:
             loop = asyncio.get_running_loop()
             on_image = _make_on_image(chat_id, loop)
             on_output = _make_on_output(chat_id, loop)
+            on_background_result = _make_on_background_result(chat_id, loop)
             session = _ChatSession(
                 DEFAULT_AGENT,
                 create_conversation(
-                    DEFAULT_AGENT, workspace=workspace, on_image=on_image, on_output=on_output
+                    DEFAULT_AGENT,
+                    workspace=workspace,
+                    on_image=on_image,
+                    on_output=on_output,
+                    on_background_result=on_background_result,
                 ),
                 workspace,
             )
@@ -280,6 +337,7 @@ async def _reset_session(
     loop = asyncio.get_running_loop()
     on_image = _make_on_image(chat_id, loop)
     on_output = _make_on_output(chat_id, loop)
+    on_background_result = _make_on_background_result(chat_id, loop)
 
     def _do() -> None:
         new_conversation = create_conversation(
@@ -288,6 +346,7 @@ async def _reset_session(
             workspace=workspace,
             on_image=on_image,
             on_output=on_output,
+            on_background_result=on_background_result,
         )
         with session.lock:
             old_conversation = session.conversation
