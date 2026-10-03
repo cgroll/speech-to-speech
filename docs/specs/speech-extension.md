@@ -51,6 +51,16 @@ Ein Barge-in tritt auf, wenn der Nutzer den Trigger betätigt, während das Syst
 ## 4. TTS-Daemon Queue
 Der TTS-Daemon selbst verarbeitet Anfragen seriell. Ein `speak`-Kommando blockiert die Verbindung, bis die Wiedergabe fertig oder abgebrochen ist. Ein `stop`-Kommando über eine separate Verbindung setzt ein Event im Daemon, das die laufende Wiedergabe (meist innerhalb von < 100ms) abbricht.
 
+**Präzisierung (2026-10-03):** "Seriell" heißt hier konkret nur eine
+Belegt-Sperre (`_claim_speaking()` in `tts_daemon/daemon.py`) -- eine zweite
+Anfrage, während schon gesprochen wird, wird sofort mit einem Fehler
+abgelehnt, nicht gepuffert. Heute konkurrieren Antwort-Audio und
+Denkprozess-Audio unkoordiniert um diese Sperre und können sich gegenseitig
+mit verworfener (nicht nachgeholter) Audio-Ausgabe ausstechen. Die fehlende
+echte Warteschlange auf `App`-Seite, die das behebt, sowie die zugehörige
+Ordnungsinvariante zwischen STT und TTS, sind jetzt eigenständig
+spezifiziert: 👉 **[Spezifikation: TTS-Ausgabe-Warteschlange](tts-output-queue.md)**.
+
 ## 5. Besonderheiten des Responder-Loops
 Der Responder-Loop in `app.py` ist der zentrale Orchestrator. Er:
 - Wartet auf das Ende der TTS-Wiedergabe, bevor er den nächsten Turn aus der `_input_queue` nimmt.

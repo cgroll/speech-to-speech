@@ -13,6 +13,7 @@ daemon/socket split was needed for the Jabra path itself, since (unlike a
 GNOME hotkey) evdev lets this same process listen for the button.
 """
 
+import dataclasses
 import logging
 import threading
 import time
@@ -57,10 +58,33 @@ OUTPUT_CATEGORY_TITLES = {
 }
 
 
+@dataclasses.dataclass
+class _TtsQueueItem:
+    """One pending TTS request, queued by `App._enqueue_tts()` and consumed
+    one at a time by `App._tts_worker_loop()` (docs/specs/tts-output-queue.md,
+    section 3). `done` is set by the worker once it has either played this
+    item or decided to skip it -- callers that need to block until then
+    (`App._speak()`) wait on it; fire-and-forget callers (thinking-chunk
+    speech) just enqueue and move on without ever looking at `done`."""
+
+    text: str
+    done: threading.Event = dataclasses.field(default_factory=threading.Event)
+    played: bool = False
+    first_chunk_s: float | None = None
+    speak_duration_s: float | None = None
+
+
 class App:
     def __init__(self, default_agent: str = DEFAULT_AGENT) -> None:
         self._state = "idle"
-        self._state_lock = threading.Lock()
+        # RLock, not a plain Lock: _purge_tts_queue() is sometimes called
+        # from inside a block that already holds this lock (submit_text(),
+        # _abort_current_turn()) and sometimes standalone (_start_recording()) --
+        # reentrancy lets the same method work both ways without splitting it
+        # into a locked/unlocked pair. _tts_cv (below) wraps this same lock so
+        # the TTS worker's wait/notify participates in the same critical
+        # section as every other state/queue check.
+        self._state_lock = threading.RLock()
         # Mic capture/STT and TTS synthesis/playback both live in shared
         # daemons now (speech_to_speech.dictate.daemon,
         # speech_to_speech.tts_daemon.daemon -- docs/architecture-proposal.md
@@ -112,6 +136,24 @@ class App:
         # _state_lock, same as _input_queue.
         self._background_queue: list[tuple[str, str]] = []
         self._responder_loop_running = False
+        # TTS output queue (docs/specs/tts-output-queue.md): the single
+        # serialization point for everything that wants to go through the
+        # TTS daemon (response audio, thinking-chunk audio, background-result
+        # audio), consumed one item at a time by _tts_worker_loop() (started
+        # in load()). Guarded by _state_lock/_tts_cv, same lock as
+        # _input_queue/_background_queue above, so a barge-in can clear it
+        # (_purge_tts_queue()) atomically with the state/_audio_suppressed
+        # change that triggers the clear.
+        self._tts_queue: list[_TtsQueueItem] = []
+        self._tts_cv = threading.Condition(self._state_lock)
+        # Started here, not in load(): this thread only idles on an empty
+        # queue until something is enqueued, so it needs no real daemon at
+        # startup -- unlike load()'s tts_client.ensure_available(), which
+        # deliberately fails fast if the real daemon isn't reachable.
+        # Starting it unconditionally in __init__ also means tests that
+        # construct App() directly without calling load() (see
+        # tests/conftest.py's harness fixture) still get a working queue.
+        threading.Thread(target=self._tts_worker_loop, daemon=True, name="tts-worker").start()
         # Flag set during recording or when a new text input is submitted
         # while a turn is still active: prevents any *new* audio from
         # starting until the user is done with their input and the resulting
@@ -186,6 +228,12 @@ class App:
             self._start_recording()
 
     def _start_recording(self) -> None:
+        # Covers both on_toggle() branches that call this (plain idle start
+        # and barge-in restart) -- see docs/specs/tts-output-queue.md,
+        # section 4: any new input immediately drops everything still
+        # waiting to be spoken, instead of letting it trickle out while the
+        # user is already talking about something else.
+        self._purge_tts_queue()
         stt_client.start_recording()
         logger.info("Recording... press the button again to stop.")
 
@@ -281,7 +329,13 @@ class App:
             # Suppress audio for anything currently playing/pending
             self._audio_suppressed = True
             tts_client.stop()
-            
+            # Same purge as a voice barge-in (docs/specs/tts-output-queue.md,
+            # section 4) -- typed steering is just as much "new input" as a
+            # recording restart. Safe to call while already holding
+            # _state_lock: _purge_tts_queue() takes the same lock, and it's
+            # an RLock.
+            self._purge_tts_queue()
+
             if self._state == "idle":
                 self._set_state("thinking")
                 self._audio_suppressed = False # Only suppressed until we start processing
@@ -371,41 +425,96 @@ class App:
         self._speak(reply)
 
     def _speak(self, reply: str) -> None:
+        """Blocking entry point used by _respond()/_deliver_background_entry()/
+        _recover_from_llm_timeout() -- same external contract as before
+        (returns only once this text has been played or definitively
+        skipped), but internally just enqueues onto _tts_queue and waits for
+        the one TTS worker (_tts_worker_loop()) to get to it, instead of
+        calling tts_client.speak() directly. See docs/specs/
+        tts-output-queue.md section 3.3 for why: a direct call here could
+        collide with a thinking-chunk's own direct call racing for the TTS
+        daemon's single busy-guard, silently dropping whichever one lost."""
         if self._voice_muted:
             logger.info("Voice output muted -- skipping playback.")
             return
 
-        # Ensure we can speak the final response: stop any pending thinking-
-        # audio that might still be playing and racing us for the daemon's
-        # single playback slot.
-        tts_client.stop()
+        item = self._enqueue_tts(reply)
+        item.done.wait()
+        if item.played:
+            with self._history_lock:
+                if item.first_chunk_s is not None:
+                    self._stats["last_ttfa_s"] = item.first_chunk_s
+                self._stats["last_speaking_s"] = item.speak_duration_s
 
-        # Synthesis and playback both happen inside the TTS daemon now
-        # (speech_to_speech.tts_daemon.daemon) -- this call blocks until
-        # playback finishes or a barge-in's tts_client.stop() cancels it.
-        # "Time to first audio" is measured daemon-side and returned once
-        # the call completes, since the cockpit stat is only read after the
-        # fact anyway.
+    def _enqueue_tts(self, text: str) -> _TtsQueueItem:
+        """Appends one item to _tts_queue and wakes the worker. Used both by
+        _speak() (which then blocks on the returned item's `done`) and by
+        _append_output()'s thinking-chunk path (fire-and-forget, never looks
+        at the return value) -- the single place that actually touches
+        _tts_queue, so every caller gets the same FIFO ordering and the same
+        purge/suppression handling (docs/specs/tts-output-queue.md)."""
+        item = _TtsQueueItem(text=text)
+        with self._tts_cv:
+            self._tts_queue.append(item)
+            self._tts_cv.notify()
+        return item
+
+    def _purge_tts_queue(self) -> None:
+        """Drops every item still waiting in _tts_queue without playing it
+        (docs/specs/tts-output-queue.md section 4) -- called wherever new
+        input is accepted (_start_recording(), submit_text(),
+        _abort_current_turn()), so stale output never trickles out after the
+        user has already moved on. Wakes any _speak() call blocked on one of
+        these items' `done` (played stays False, same as a worker-side
+        skip) instead of leaving it waiting forever."""
+        with self._tts_cv:
+            for item in self._tts_queue:
+                item.done.set()
+            self._tts_queue.clear()
+
+    def _tts_worker_loop(self) -> None:
+        """The single consumer of _tts_queue (docs/specs/tts-output-queue.md
+        section 3.2) -- started once in load(), runs for the process
+        lifetime. Takes items strictly one at a time, so the TTS daemon
+        never sees two concurrent speak requests racing for its single
+        busy-guard (tts_daemon/daemon.py's _claim_speaking) -- the bug that
+        let a thinking-chunk and the final response silently drop whichever
+        one lost that race."""
+        while True:
+            with self._tts_cv:
+                while not self._tts_queue:
+                    self._tts_cv.wait()
+                item = self._tts_queue.pop(0)
+            self._process_tts_item(item)
+
+    def _process_tts_item(self, item: _TtsQueueItem) -> None:
+        # Re-checked here, immediately before the actual daemon call, rather
+        # than trusting whatever the enqueuing caller decided earlier --
+        # closes the race (docs/specs/tts-output-queue.md section 1) where a
+        # thinking-chunk could still slip through after a barge-in if its
+        # speak() call hadn't reached the daemon yet when tts_client.stop()
+        # fired.
+        with self._state_lock:
+            skip = self._audio_suppressed or self._state == "recording" or self._voice_muted
+        if skip:
+            item.done.set()
+            return
+
         t0 = time.monotonic()
         try:
-            first_chunk_s = tts_client.speak(reply)
+            item.first_chunk_s = tts_client.speak(item.text)
+            item.played = True
         except RuntimeError as exc:
             # The daemon can reject or vanish out from under us: a barge-in's
-            # tts_client.stop() racing this call's own request ("busy:
-            # speaking", see tts_daemon/daemon.py's _claim_speaking), or the
-            # process having crashed with no supervisor to restart it on
-            # macOS (DaemonUnavailableError, a RuntimeError subclass -- see
-            # daemon_launch.py). Previously uncaught here, which killed this
-            # thread before the state-reset in _respond()/
-            # _recover_from_llm_timeout ran, leaving App stuck in "speaking"
-            # until a manual barge-in forced it back to "recording". Log and
-            # return so the caller's normal reset-to-idle still happens.
-            logger.warning("TTS playback failed (%s) -- treating turn as done.", exc)
-            return
-        with self._history_lock:
-            if first_chunk_s is not None:
-                self._stats["last_ttfa_s"] = first_chunk_s
-            self._stats["last_speaking_s"] = time.monotonic() - t0
+            # tts_client.stop() racing this call (shouldn't happen anymore --
+            # this worker is the only caller of tts_client.speak() now -- but
+            # the daemon itself can still vanish, e.g. DaemonUnavailableError
+            # on macOS, see daemon_launch.py). Logged and treated as skipped;
+            # the waiting _speak() call (if any) still gets unblocked below.
+            logger.warning("TTS playback failed (%s) -- treating as skipped.", exc)
+        finally:
+            item.speak_duration_s = time.monotonic() - t0
+            item.done.set()
 
     def _recover_from_llm_timeout(self) -> None:
         """Shared LlmTimeoutError handling: tell the user and reset."""
@@ -413,7 +522,7 @@ class App:
             if self._audio_suppressed or self._state == "recording":
                 return
             self._set_state("speaking")
-        
+
         self._append_history("assistant", TIMEOUT_MESSAGE)
         self._speak(TIMEOUT_MESSAGE)
 
@@ -509,19 +618,21 @@ class App:
             )
 
         if category == CATEGORY_THINKING:
+            # Cheap pre-check to avoid pointlessly queueing an item that's
+            # obviously unwanted right now; _tts_worker_loop() re-checks the
+            # same three conditions right before actually speaking (docs/
+            # specs/tts-output-queue.md section 3.2), so a barge-in that
+            # lands in the small window between this check and the worker
+            # getting to it is still caught there. Fire-and-forget: unlike
+            # _speak(), nothing waits on this item finishing (no stats, and
+            # the LLM-stream processing that produced this chunk must not
+            # block on it), and no state change here (stays "thinking",
+            # unchanged from before -- on_toggle()'s barge-in branch already
+            # covers that state too).
             with self._state_lock:
                 should_speak = not self._audio_suppressed and not self._voice_muted and self._state != "recording"
             if should_speak:
-                # Speak thinking blocks asynchronously to not block the
-                # LLM-stream processing. No stats tracking for these.
-                threading.Thread(target=self._speak_thinking, args=(text,), daemon=True).start()
-
-    def _speak_thinking(self, text: str) -> None:
-        """Simplified speech for thinking blocks: no stats, just audio."""
-        try:
-            tts_client.speak(text)
-        except Exception as exc:
-            logger.warning("Thinking-audio failed: %s", exc)
+                self._enqueue_tts(text)
 
     # -- Cockpit-facing read/write API ------------------------------------
     # Called from cockpit.py's Gradio callbacks, which run on Gradio's own
@@ -618,6 +729,10 @@ class App:
             self._input_queue = []
             self._audio_suppressed = True
             self._set_state("idle")
+            # Stop/reset/resume all go through here -- same "no stale output
+            # trickles out afterwards" guarantee as a barge-in (docs/specs/
+            # tts-output-queue.md section 4).
+            self._purge_tts_queue()
 
         if stt_client.is_recording():
             stt_client.stop_recording()

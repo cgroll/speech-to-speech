@@ -19,6 +19,16 @@ Status-Nachfrage vom normalen Steering/Barge-in abgegrenzt wird.
 
 👉 **[Spezifikation: Hintergrund-Kanal und Status-Abfrage](background-channel.md)**
 
+## 4. TTS-Ausgabe-Warteschlange und Ordnungsinvariante
+
+Beschreibt, warum die heutige Belegt-Sperre im TTS-Daemon keine echte
+Warteschlange ist (Antworten können dadurch unhörbar verworfen werden),
+und führt eine Ordnungsinvariante zwischen Text-Ein- und Ausgabe ein: eine
+Ausgabe, die im Chatverlauf vor einer bereits eingetroffenen neuen Eingabe
+liegt, wird nicht mehr nachträglich vorgelesen.
+
+👉 **[Spezifikation: TTS-Ausgabe-Warteschlange](tts-output-queue.md)**
+
 ---
 
 *Diese Seite dient als Einstiegspunkt. Die ursprüngliche, monolithische Spezifikation wurde am 2026-10-02 in diese beiden Teile aufgespalten, um die Queue-Interaktionen klarer darstellen zu können.*
