@@ -1,0 +1,955 @@
+
+<!doctype html>
+<html lang="de" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Dokumentation des Sprachassistenten-Projekts">
+      
+      
+      
+      
+        <link rel="prev" href="../backlog/">
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>macOS-Setup - Speech-to-Speech</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#speech-to-speech-auf-macos-apple-silicon" class="md-skip">
+          Zum Inhalt
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Kopfzeile">
+    <a href=".." title="Speech-to-Speech" class="md-header__button md-logo" aria-label="Speech-to-Speech" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Speech-to-Speech
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              macOS-Setup
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Suche" placeholder="Suche" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Suche">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Zurücksetzen" aria-label="Zurücksetzen" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Suche wird initialisiert
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/cgroll/speech-to-speech" title="Zum Repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    cgroll/speech-to-speech
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+  
+
+<nav class="md-nav md-nav--primary md-nav--integrated" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Speech-to-Speech" class="md-nav__button md-logo" aria-label="Speech-to-Speech" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Speech-to-Speech
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/cgroll/speech-to-speech" title="Zum Repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    cgroll/speech-to-speech
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../specification/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Feature-Übersicht
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Spezifikationen
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Spezifikationen
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../specs/core-dialog-loop/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kern-Dialogschleife
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../specs/thinking-channel-and-stop-marker/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Denkprozess-Kanal & Stop-Markierung
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference-claude-code-turn-taking/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Referenz: Turn-Taking in Claude Code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture-proposal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architektur-Vorschlag
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../telegram-bot-proposal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Telegram-Bot-Vorschlag
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backlog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backlog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    macOS-Setup
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    macOS-Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Inhaltsverzeichnis">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Inhaltsverzeichnis
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#was-anders-ist-als-unter-linux" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Was anders ist als unter Linux
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Setup
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Setup">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Dependencies
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-ca-bundle-fur-hugging-face-downloads-firmen-proxy-zscaler" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. CA-Bundle für Hugging-Face-Downloads (Firmen-Proxy / Zscaler)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-modelle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Modelle
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-daemons-starten-stoppen" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Daemons starten / stoppen
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-hotkeys-via-shortcutsapp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Hotkeys via Shortcuts.app
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-system-freigaben-beim-ersten-mal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. System-Freigaben (beim ersten Mal)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#physische-jabra-taste" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Physische Jabra-Taste
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="speech-to-speech-auf-macos-apple-silicon">speech-to-speech auf macOS (Apple Silicon)<a class="headerlink" href="#speech-to-speech-auf-macos-apple-silicon" title="Permanent link">&para;</a></h1>
+<p>Die App wurde ursprünglich für Linux gebaut (systemd, evdev, Wayland/ydotool,
+GNOME-Hotkeys). Auf macOS (M-Series) laufen dieselben Code-Pfade; plattform-
+spezifisches Verhalten kommt über <code>sys.platform == "darwin"</code>-Zweige dazu. Dieses
+Dokument beschreibt nur die macOS-Besonderheiten – der grundsätzliche Aufbau
+steht in der <code>README.md</code> und <code>docs/architecture-proposal.md</code>.</p>
+<p>Backend-Fokus auf diesem Rechner: <strong>Claude</strong> (Default in <code>agent_backend.py</code>).
+Telegram, Pi-Agent und Gemini sind nicht Teil dieses Setups.</p>
+<h2 id="was-anders-ist-als-unter-linux">Was anders ist als unter Linux<a class="headerlink" href="#was-anders-ist-als-unter-linux" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Thema</th>
+<th>Linux</th>
+<th>macOS</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>STT-Runtime</td>
+<td><code>onnx_asr</code> (CPU, int8)</td>
+<td><code>nano-parakeet</code> auf <strong>MPS</strong> (Apple-GPU)</td>
+</tr>
+<tr>
+<td>TTS-Runtime</td>
+<td><code>faster-qwen3-tts</code> (CUDA)</td>
+<td><code>faster-qwen3-tts</code> <strong>GGML/Metal</strong> (<code>backend="ggml"</code>)</td>
+</tr>
+<tr>
+<td>Daemon-Lifecycle</td>
+<td><code>systemctl --user</code></td>
+<td><code>subprocess.Popen</code> / <code>pkill</code> (<code>daemon_launch.py</code>)</td>
+</tr>
+<tr>
+<td>Diktat-Tippen</td>
+<td><code>ydotool</code> (+ QWERTZ-Keymap)</td>
+<td>Clipboard + AppleScript <code>Cmd+V</code> (layout-unabhängig)</td>
+</tr>
+<tr>
+<td>Feedback</td>
+<td><code>canberra-gtk-play</code>/<code>notify-send</code></td>
+<td><code>afplay</code> / <code>osascript</code></td>
+</tr>
+<tr>
+<td>Hotkey</td>
+<td>GNOME Custom Shortcut</td>
+<td><strong>Shortcuts.app</strong> → „Run Shell Script"</td>
+</tr>
+<tr>
+<td>Jabra-Knopf</td>
+<td><code>evdev</code></td>
+<td><code>CGEventTap</code> auf System-Play/Pause-Taste (siehe unten)</td>
+</tr>
+</tbody>
+</table>
+<p><code>uv sync</code> zieht die richtigen Abhängigkeiten automatisch: die Linux-only-Pakete
+(<code>evdev</code>, <code>onnx-asr</code>, <code>numba</code>, <code>llvmlite</code>) tragen <code>sys_platform == 'linux'</code>-Marker,
+<code>nano-parakeet</code> ist <code>darwin</code>-only, und <code>faster-qwen3-tts[ggml]</code> bringt das
+Metal-Backend (<code>qwentts-cpp-python</code>).</p>
+<h2 id="setup">Setup<a class="headerlink" href="#setup" title="Permanent link">&para;</a></h2>
+<h3 id="1-dependencies">1. Dependencies<a class="headerlink" href="#1-dependencies" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code>uv<span class="w"> </span>sync
+brew<span class="w"> </span>install<span class="w"> </span>ffmpeg<span class="w">   </span><span class="c1"># für die 1.5×-Wiedergabe (atempo) in playback.py</span>
+</code></pre></div>
+<p>Notausgang, falls ffmpeg fehlt: <code>TTS_PLAYBACK_SPEED=1.0</code> in <code>config.py</code> umgeht
+ffmpeg (dann Wiedergabe in Originalgeschwindigkeit).</p>
+<h3 id="2-ca-bundle-fur-hugging-face-downloads-firmen-proxy-zscaler">2. CA-Bundle für Hugging-Face-Downloads (Firmen-Proxy / Zscaler)<a class="headerlink" href="#2-ca-bundle-fur-hugging-face-downloads-firmen-proxy-zscaler" title="Permanent link">&para;</a></h3>
+<p>In Firmennetzen mit TLS-Interception (hier: E.ON Zscaler) präsentiert der Proxy
+ein eigenes Root-CA, das zwar im macOS-Schlüsselbund liegt, aber <strong>nicht</strong> im
+<code>certifi</code>-Bundle, das Pythons HTTPS nutzt. Ohne Gegenmaßnahme scheitern
+HF-Downloads mit <code>CERTIFICATE_VERIFY_FAILED</code>. Ein kombiniertes Bundle (certifi +
+Schlüsselbund-Roots) an einem festen Pfad behebt das:</p>
+<div class="highlight"><pre><span></span><code>mkdir<span class="w"> </span>-p<span class="w"> </span>~/.config/speech-to-speech
+<span class="nv">BUNDLE</span><span class="o">=</span>~/.config/speech-to-speech/ca-bundle.pem
+cat<span class="w"> </span><span class="s2">"</span><span class="k">$(</span>uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>-c<span class="w"> </span><span class="s1">'import certifi; print(certifi.where())'</span><span class="k">)</span><span class="s2">"</span><span class="w"> </span>&gt;<span class="w"> </span><span class="s2">"</span><span class="nv">$BUNDLE</span><span class="s2">"</span>
+security<span class="w"> </span>find-certificate<span class="w"> </span>-a<span class="w"> </span>-p<span class="w"> </span>/Library/Keychains/System.keychain<span class="w"> </span>&gt;&gt;<span class="w"> </span><span class="s2">"</span><span class="nv">$BUNDLE</span><span class="s2">"</span>
+security<span class="w"> </span>find-certificate<span class="w"> </span>-a<span class="w"> </span>-p<span class="w"> </span>/System/Library/Keychains/SystemRootCertificates.keychain<span class="w"> </span>&gt;&gt;<span class="w"> </span><span class="s2">"</span><span class="nv">$BUNDLE</span><span class="s2">"</span>
+</code></pre></div>
+<p><code>daemon_launch.py</code> setzt <code>SSL_CERT_FILE</code>/<code>REQUESTS_CA_BUNDLE</code> automatisch auf
+dieses Bundle, wenn die Datei existiert – die Daemons erben es also beim Start.
+Für manuelle Aufrufe (z. B. ein Modell-Download von Hand) selbst exportieren:</p>
+<div class="highlight"><pre><span></span><code><span class="nb">export</span><span class="w"> </span><span class="nv">SSL_CERT_FILE</span><span class="o">=</span>~/.config/speech-to-speech/ca-bundle.pem
+<span class="nb">export</span><span class="w"> </span><span class="nv">REQUESTS_CA_BUNDLE</span><span class="o">=</span>~/.config/speech-to-speech/ca-bundle.pem
+</code></pre></div>
+<h3 id="3-modelle">3. Modelle<a class="headerlink" href="#3-modelle" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>STT (Parakeet)</strong>: wird beim ersten Daemon-Start von Hugging Face geladen
+  (<code>nvidia/parakeet-tdt-0.6b-v3</code>) und im HF-Cache (<code>~/.cache/huggingface</code>)
+  abgelegt. Teilt sich den Cache mit dem Schwester-Repo <code>~/repos/parakeet-dictate</code>.</li>
+<li><strong>TTS (Qwen3-TTS GGUF)</strong>: zwei Dateien aus <code>Serveurperso/Qwen3-TTS-GGUF</code> –
+  <code>qwen-talker-0.6b-customvoice-BF16.gguf</code> und <code>qwen-tokenizer-12hz-BF16.gguf</code>.
+  Die CustomVoice-Stimmen (inkl. „aiden") stecken im talker-GGUF; diese zwei
+  Dateien sind alles, was das Metal-Backend braucht.</li>
+</ul>
+<blockquote>
+<p><strong>Achtung Zscaler + HF Xet:</strong> Diese GGUF-Dateien liegen in Hugging Faces
+Xet-Speicher. Der Download läuft über vorsignierte CDN-URLs
+(<code>us.aws.cdn.hf.co/xet-bridge-us/...</code>), in die der Zscaler-SmartProxy einen
+Parameter <code>_sm_nck=1</code> einfügt – das bricht die Signatur, Antwort <code>403</code>. Das
+betrifft <strong>jeden</strong> CLI-Client (Python, <code>curl</code>, nativer Xet-Client) und ist
+kein Zertifikatsproblem mehr. Der <strong>Browser</strong> läuft dagegen durch (dort greift
+die interaktive Zscaler-Auth).</p>
+</blockquote>
+<p><strong>Vorgehen (Browser-Download, einmalig):</strong> <code>tts.py</code> lädt die GGUFs direkt aus
+<code>~/.config/speech-to-speech/models/</code>, wenn sie dort liegen – komplett ohne
+HF-Download (per <code>gguf_talker_path</code>/<code>gguf_codec_path</code>). Also:</p>
+<ol>
+<li>Im Browser beide Dateien herunterladen (→ <code>~/Downloads</code>):</li>
+<li><a href="https://huggingface.co/Serveurperso/Qwen3-TTS-GGUF/resolve/main/qwen-talker-0.6b-customvoice-BF16.gguf?download=true">https://huggingface.co/Serveurperso/Qwen3-TTS-GGUF/resolve/main/qwen-talker-0.6b-customvoice-BF16.gguf?download=true</a></li>
+<li><a href="https://huggingface.co/Serveurperso/Qwen3-TTS-GGUF/resolve/main/qwen-tokenizer-12hz-BF16.gguf?download=true">https://huggingface.co/Serveurperso/Qwen3-TTS-GGUF/resolve/main/qwen-tokenizer-12hz-BF16.gguf?download=true</a></li>
+<li>In den Modell-Ordner verschieben:
+   <div class="highlight"><pre><span></span><code>mkdir<span class="w"> </span>-p<span class="w"> </span>~/.config/speech-to-speech/models
+mv<span class="w"> </span>~/Downloads/qwen-talker-0.6b-customvoice-BF16.gguf<span class="w"> </span><span class="se">\</span>
+<span class="w">   </span>~/Downloads/qwen-tokenizer-12hz-BF16.gguf<span class="w"> </span><span class="se">\</span>
+<span class="w">   </span>~/.config/speech-to-speech/models/
+</code></pre></div></li>
+<li><code>uv run qwen-tts enable</code> – lädt jetzt vom lokalen Pfad auf Metal.</li>
+</ol>
+<p>Alternativer Ordner via <code>TTS_GGUF_DIR</code>-Env. Fehlen die Dateien, fällt <code>tts.py</code>
+auf den (hier am Proxy scheiternden) HF-Pull zurück.</p>
+<h3 id="4-daemons-starten-stoppen">4. Daemons starten / stoppen<a class="headerlink" href="#4-daemons-starten-stoppen" title="Permanent link">&para;</a></h3>
+<p>Wie unter Linux, nur ohne systemd – die CLIs starten/killen die Prozesse direkt:</p>
+<div class="highlight"><pre><span></span><code>uv<span class="w"> </span>run<span class="w"> </span>parakeet-dictate<span class="w"> </span><span class="nb">enable</span><span class="w">     </span><span class="c1"># STT-Daemon (lädt Modell auf MPS)</span>
+uv<span class="w"> </span>run<span class="w"> </span>qwen-tts<span class="w"> </span><span class="nb">enable</span><span class="w">             </span><span class="c1"># TTS-Daemon (lädt Modell auf Metal)</span>
+uv<span class="w"> </span>run<span class="w"> </span>parakeet-dictate<span class="w"> </span>status<span class="w">     </span><span class="c1"># running, state=idle</span>
+uv<span class="w"> </span>run<span class="w"> </span>parakeet-dictate<span class="w"> </span>disable
+uv<span class="w"> </span>run<span class="w"> </span>qwen-tts<span class="w"> </span>disable
+</code></pre></div>
+<p>Oder in einem Rutsch inklusive App (wartet, bis beide Sockets antworten):</p>
+<div class="highlight"><pre><span></span><code>uv<span class="w"> </span>run<span class="w"> </span>speech-to-speech-start
+</code></pre></div>
+<p>Hinweis: Es gibt auf macOS keinen Supervisor. Stürzt ein Daemon ab, bleibt er
+unten, bis er neu gestartet wird (Cockpit-Restart, <code>daemon_control</code>, oder erneut
+<code>enable</code>).</p>
+<h3 id="5-hotkeys-via-shortcutsapp">5. Hotkeys via Shortcuts.app<a class="headerlink" href="#5-hotkeys-via-shortcutsapp" title="Permanent link">&para;</a></h3>
+<p>Zusätzlich zum Jabra-Knopf (siehe unten) lässt sich derselbe Toggle auch über
+eine Tastenkombination auslösen: in <strong>Shortcuts.app</strong> je einen Kurzbefehl „Run
+Shell Script" anlegen und auf die absoluten venv-Pfade binden (Projekt-venv:
+<code>…/speech-to-speech/.venv</code>):</p>
+<ul>
+<li><strong>Sprach-Dialog</strong> (Turn starten/stoppen): <code>…/.venv/bin/speech-to-speech-toggle</code>
+  – z. B. auf <code>Ctrl+Opt+D</code> legen. Setzt eine laufende <code>speech-to-speech</code>-App voraus.</li>
+<li><strong>Systemweites Diktieren</strong>: <code>…/.venv/bin/parakeet-dictate toggle</code>
+  – z. B. auf <code>Ctrl+Opt+F</code>. Setzt einen laufenden STT-Daemon voraus.</li>
+</ul>
+<h3 id="6-system-freigaben-beim-ersten-mal">6. System-Freigaben (beim ersten Mal)<a class="headerlink" href="#6-system-freigaben-beim-ersten-mal" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Mikrofon</strong>: beim ersten Aufnahme-Start fragt macOS die Freigabe für das
+  Terminal (bzw. die startende App) ab.</li>
+<li><strong>Accessibility</strong>: der Diktat-Paste-Pfad (AppleScript <code>Cmd+V</code>) braucht die
+  Freigabe unter <em>Systemeinstellungen → Datenschutz &amp; Sicherheit →
+  Bedienungshilfen</em>. Fehlt sie, meldet <code>typing_backend.py</code> einen klaren Hinweis.
+  Dieselbe Freigabe deckt in der Praxis auch den Jabra-<code>CGEventTap</code> unten ab;
+  falls <code>speech-to-speech</code> trotzdem mit "CGEventTap konnte nicht erstellt
+  werden" abbricht, zusätzlich <em>Input Monitoring</em> für das Terminal erteilen.</li>
+</ul>
+<h2 id="physische-jabra-taste">Physische Jabra-Taste<a class="headerlink" href="#physische-jabra-taste" title="Permanent link">&para;</a></h2>
+<p>macOS hat kein <code>evdev</code>. Der Knopfdruck der Jabra Link 390 kommt dort nicht als
+rohes HID-Report an -- macOS übersetzt ihn schon auf Treiberebene in eine
+system-weite Play/Pause-Medientaste, bevor ein Userspace-HID-Client (auch
+nicht-exklusiv geöffnet) etwas sieht. <code>input_button.py</code> liest diese Taste
+stattdessen über einen <code>CGEventTap</code> auf <code>NX_SYSDEFINED</code>-Events
+(<code>NX_KEYTYPE_PLAY</code>, siehe <code>JABRA_TOGGLE_KEY_MACOS</code> in <code>config.py</code>) -- dieselbe
+<code>listen_for_toggle()</code>-Funktion wie unter Linux, nur mit anderem Mechanismus
+dahinter.</p>
+<p>Zwei bewusst in Kauf genommene Einschränkungen:
+- <strong>System-weit statt Jabra-spezifisch</strong>: der Tap sieht keine Geräte-Identität,
+  nur die Taste selbst -- jede Quelle einer System-Play-Taste löst den Toggle
+  aus, nicht nur die Jabra.
+- <strong>Keine Unterdrückung</strong>: die Taste bleibt gleichzeitig ihre normale
+  macOS-Funktion -- ein aktiver Tap, der das Event schluckt, wurde getestet
+  und verhindert z.B. das Starten/Pausieren eines Browser-Videos <strong>nicht</strong>,
+  da macOS' MediaRemote-System Medientasten an die "Now Playing"-App routet,
+  bevor ein App-Level-Tap greift. Falls das im Alltag stört, wäre
+  Karabiner-Elements (eigener Treiber unterhalb von MediaRemote, kann das
+  Event pro Gerät wirklich unterdrücken und umleiten) die nächste Eskalationsstufe
+  -- aktuell nicht umgesetzt.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Zurück zum Seitenanfang
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "toc.integrate", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "In Zwischenablage kopiert", "clipboard.copy": "In Zwischenablage kopieren", "search.result.more.one": "1 weiteres Suchergebnis auf dieser Seite", "search.result.more.other": "# weitere Suchergebnisse auf dieser Seite", "search.result.none": "Keine Suchergebnisse", "search.result.one": "1 Suchergebnis", "search.result.other": "# Suchergebnisse", "search.result.placeholder": "Suchbegriff eingeben", "search.result.term.missing": "Es fehlt", "select.version": "Version ausw\u00e4hlen"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

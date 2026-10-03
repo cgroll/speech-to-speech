@@ -1,0 +1,1404 @@
+
+<!doctype html>
+<html lang="de" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Dokumentation des Sprachassistenten-Projekts">
+      
+      
+      
+      
+        <link rel="prev" href="../telegram-bot-proposal/">
+      
+      
+        <link rel="next" href="../macos-setup/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Backlog - Speech-to-Speech</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#backlog" class="md-skip">
+          Zum Inhalt
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Kopfzeile">
+    <a href=".." title="Speech-to-Speech" class="md-header__button md-logo" aria-label="Speech-to-Speech" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Speech-to-Speech
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Backlog
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Suche" placeholder="Suche" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Suche">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Zurücksetzen" aria-label="Zurücksetzen" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Suche wird initialisiert
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/cgroll/speech-to-speech" title="Zum Repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    cgroll/speech-to-speech
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+  
+
+<nav class="md-nav md-nav--primary md-nav--integrated" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Speech-to-Speech" class="md-nav__button md-logo" aria-label="Speech-to-Speech" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Speech-to-Speech
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/cgroll/speech-to-speech" title="Zum Repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    cgroll/speech-to-speech
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../specification/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Feature-Übersicht
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Spezifikationen
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Spezifikationen
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../specs/core-dialog-loop/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kern-Dialogschleife
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../specs/thinking-channel-and-stop-marker/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Denkprozess-Kanal & Stop-Markierung
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference-claude-code-turn-taking/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Referenz: Turn-Taking in Claude Code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture-proposal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architektur-Vorschlag
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../telegram-bot-proposal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Telegram-Bot-Vorschlag
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backlog
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backlog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Inhaltsverzeichnis">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Inhaltsverzeichnis
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#web-cockpit-scrollen-im-chat-verlauf-funktioniert-nicht" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Web-Cockpit: Scrollen im Chat-Verlauf funktioniert nicht
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Web-Cockpit: Scrollen im Chat-Verlauf funktioniert nicht">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nachste-schritte" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Nächste Schritte
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fruhere-sessions-wieder-aufnehmen-konnen" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Frühere Sessions wieder aufnehmen können
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Frühere Sessions wieder aufnehmen können">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nachste-schritte_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Nächste Schritte
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sprachausgabe-liest-zwischenschrittenachdenktext-statt-nur-die-finale-antwort" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sprachausgabe liest Zwischenschritte/Nachdenktext statt nur die finale Antwort
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Sprachausgabe liest Zwischenschritte/Nachdenktext statt nur die finale Antwort">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ideen-offene-fragen" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ideen / offene Fragen
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mehrere-agent-backends-claude-code-pi" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mehrere Agent-Backends (Claude Code / Pi)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Mehrere Agent-Backends (Claude Code / Pi)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-session-history-format-ist-claude-sdk-spezifisch-umgesetzt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Session-History-Format ist Claude-SDK-spezifisch (umgesetzt)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-wie-sagt-man-einem-agenten-sauber-in-welchem-workspace-er-bleiben-soll-umgesetzt-am-2026-08-14" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Wie sagt man einem Agenten sauber, in welchem Workspace er bleiben soll? (umgesetzt am 2026-08-14)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nachste-schritte_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Nächste Schritte
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-wie-wahlt-man-den-agenten-aus-umgesetzt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Wie wählt man den Agenten aus? (umgesetzt)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#daemon-neustart-aus-der-appdem-cockpit-heraus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Daemon-Neustart aus der App/dem Cockpit heraus
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Daemon-Neustart aus der App/dem Cockpit heraus">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nachste-schritte_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Nächste Schritte
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#telegram-erinnerungen-per-gcp-setzen-konnen" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Telegram-Erinnerungen per GCP setzen können
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Telegram-Erinnerungen per GCP setzen können">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nachste-schritte_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Nächste Schritte
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#webseiten-per-telegram-link-als-obsidian-bookmark-speichern" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Webseiten per Telegram-Link als Obsidian-Bookmark speichern
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Webseiten per Telegram-Link als Obsidian-Bookmark speichern">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nachste-schritte_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Nächste Schritte
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#bilder-an-den-nutzer-senden" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bilder an den Nutzer senden
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Bilder an den Nutzer senden">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nachste-schritte_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Nächste Schritte
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#claude-code-timeout-hangende-turns-sauber-abfangen-statt-nur-den-timeout-erhohen" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Claude-Code-Timeout: hängende Turns sauber abfangen statt nur den Timeout erhöhen
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Claude-Code-Timeout: hängende Turns sauber abfangen statt nur den Timeout erhöhen">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nachste-schritte_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Nächste Schritte
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../macos-setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    macOS-Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="backlog">Backlog<a class="headerlink" href="#backlog" title="Permanent link">&para;</a></h1>
+<p>Kleinere offene Punkte, die noch nicht angegangen wurden. Für größere
+Architektur-Vorschläge siehe stattdessen die eigenen Dateien unter <code>docs/</code>
+(z.B. <code>architecture-proposal.md</code>).</p>
+<h2 id="web-cockpit-scrollen-im-chat-verlauf-funktioniert-nicht">Web-Cockpit: Scrollen im Chat-Verlauf funktioniert nicht<a class="headerlink" href="#web-cockpit-scrollen-im-chat-verlauf-funktioniert-nicht" title="Permanent link">&para;</a></h2>
+<p>Status: Notiert am 2026-08-12, noch nicht untersucht.</p>
+<p>Im Gradio-Cockpit (<code>cockpit.py</code>) lässt sich im Chat-Messages-Bereich nicht
+nach oben scrollen, um ältere Nachrichten der laufenden Session einzusehen.</p>
+<h3 id="nachste-schritte">Nächste Schritte<a class="headerlink" href="#nachste-schritte" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Reproduzieren und eingrenzen, ob es an der Gradio-Chatbot-Komponente selbst
+  liegt (Konfiguration, CSS/Höhe) oder am periodischen Live-Refresh
+  (<code>COCKPIT_POLL_SECONDS</code>), der die Scroll-Position bei jedem Poll
+  zurücksetzen könnte.</li>
+</ul>
+<h2 id="fruhere-sessions-wieder-aufnehmen-konnen">Frühere Sessions wieder aufnehmen können<a class="headerlink" href="#fruhere-sessions-wieder-aufnehmen-konnen" title="Permanent link">&para;</a></h2>
+<p>Status: Cockpit-Teil am 2026-08-12 umgesetzt (<code>sessions.py</code>,
+<code>App.resume_session()</code>, Auswahl-Liste im Cockpit). Offen: Start-Flag-Variante
+ohne UI (siehe unten).</p>
+<p>Es stellte sich heraus, dass eine eigene JSON-Persistierung gar nicht nötig
+ist: Der Claude Agent SDK schreibt jede Session ohnehin als JSONL unter
+<code>~/.claude/projects/&lt;projekt&gt;/</code> und bringt <code>list_sessions()</code> /
+<code>get_session_messages()</code> sowie <code>ClaudeAgentOptions(resume=session_id)</code> schon
+mit. Umgesetzt wurde daher:
+- <code>sessions.py</code>: dünner Wrapper um <code>list_sessions()</code>/<code>get_session_messages()</code>
+  -- liefert Anzeige-Labels (Titel + Zeitstempel) sowie eine Rekonstruktion
+  des Cockpit-Chatverlaufs (nur Text-Turns, ohne Tool-Calls/Thinking-Blöcke)
+  aus einer alten Session.
+- <code>llm.py</code>: <code>ClaudeCodeConversation</code> akzeptiert jetzt <code>resume: str | None</code>.
+- <code>app.py</code>: <code>App.reset()</code> und die neue <code>App.resume_session(session_id)</code>
+  teilen sich jetzt <code>_abort_current_turn()</code> (Abbruch/Teardown); Resume baut
+  zusätzlich <code>self._history</code> aus der alten Session neu auf.
+- <code>cockpit.py</code>: Accordion "Frühere Sessions" mit Radio-Liste (Label +
+  Session-ID), "Liste aktualisieren" und "Ausgewählte Session fortsetzen".
+  Liste wird nicht vom schnellen Poll-Timer aktualisiert (Dateisystem-Scan),
+  sondern nur bei Seitenaufruf sowie nach Reset/Resume.</p>
+<h3 id="nachste-schritte_1">Nächste Schritte<a class="headerlink" href="#nachste-schritte_1" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Manuell im Cockpit durchklicken/verifizieren (Listenanzeige, Resume,
+  Chatverlauf-Wiederherstellung).</li>
+<li>Später ggf. Start-Flag (<code>--resume [SESSION_ID]</code> / <code>--continue</code>), damit eine
+  Session auch ganz ohne Cockpit-UI gesetzt werden kann.</li>
+<li>Liste enthält aktuell alle Claude-Code-Sessions dieses Projektverzeichnisses
+  (auch normale CLI-Coding-Sessions, nicht nur Sprach-Turns) -- eventuell
+  später filtern, falls das in der Praxis stört.</li>
+</ul>
+<h2 id="sprachausgabe-liest-zwischenschrittenachdenktext-statt-nur-die-finale-antwort">Sprachausgabe liest Zwischenschritte/Nachdenktext statt nur die finale Antwort<a class="headerlink" href="#sprachausgabe-liest-zwischenschrittenachdenktext-statt-nur-die-finale-antwort" title="Permanent link">&para;</a></h2>
+<p>Status: Notiert am 2026-08-12, noch nicht untersucht.</p>
+<p>Beim Sprechen kommt aktuell alles "in einem Rutsch" als Sprachausgabe: nicht
+nur die finale Antwort, sondern auch Zwischenkommentare/"Nachdenkgedanken"
+und Kommentare zu einzelnen Zwischenschritten (z.B. Tool-Aufrufen).</p>
+<p>Ursache vermutlich in <code>llm.py</code>, <code>ClaudeCodeConversation._query()</code>: dort
+werden aktuell <em>alle</em> <code>TextBlock</code>-Textstücke aus <em>jeder</em> <code>AssistantMessage</code>
+der Runde eingesammelt (<code>parts.append(block.text)</code>) und am Ende zu einem
+einzigen <code>reply</code>-String zusammengefügt, der dann komplett an <code>App._speak()</code>
+/ die TTS-Ausgabe geht -- unabhängig davon, ob der Text ein Zwischenkommentar
+vor einem Tool-Aufruf war oder die eigentliche finale Antwort.</p>
+<h3 id="ideen-offene-fragen">Ideen / offene Fragen<a class="headerlink" href="#ideen-offene-fragen" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Option A: Zwischenkommentare/Nachdenktext laufend/inkrementell als
+  Sprachausgabe streamen, sobald sie eintreffen (statt am Stück nach
+  Fertigstellung).</li>
+<li>Option B: Zwischenkommentare komplett aus der Sprachausgabe ausblenden --
+  nur die finale Antwort wird gesprochen.</li>
+<li>Option C: Zwischenschritte nur als Text im Cockpit-Chatverlauf anzeigen
+  (nicht sprechen), und ausschließlich die finale Antwort per TTS ausgeben.</li>
+<li>Dafür müsste <code>_query()</code> vermutlich unterscheiden können, welche
+  <code>AssistantMessage</code>/<code>TextBlock</code>s "Zwischenkommentar vor einem Tool-Aufruf"
+  sind vs. die abschließende Antwort ohne folgenden Tool-Use (z.B. anhand von
+  <code>stop_reason</code>/ob danach noch Tool-Use-Blöcke folgen), und müsste das an
+  <code>App._respond()</code>/<code>_speak()</code> getrennt weiterreichen statt nur einen
+  zusammengefassten <code>reply</code>-String zurückzugeben.</li>
+</ul>
+<h2 id="mehrere-agent-backends-claude-code-pi">Mehrere Agent-Backends (Claude Code / Pi)<a class="headerlink" href="#mehrere-agent-backends-claude-code-pi" title="Permanent link">&para;</a></h2>
+<p>Status: Punkte 1 und 3 am 2026-08-12 umgesetzt (<code>agent_backend.py</code>,
+<code>pi_agent.py</code>, <code>sessions.py</code>, <code>App</code>/Cockpit-Anpassungen, <code>--agent</code>-Flag in
+<code>cli.py</code>). Punkt 2 (Workspace-Eingrenzung) bewusst zurückgestellt -- eigenes,
+nicht triviales Thema, wird separat angegangen. Kontext: Idee, den Service
+wahlweise mit dem Pi Coding Agent (<code>@earendil-works/pi-coding-agent</code>, CLI
+<code>pi</code>, siehe <code>~/research/pi-test</code>) statt/neben dem Claude Agent SDK starten zu
+können.</p>
+<h3 id="1-session-history-format-ist-claude-sdk-spezifisch-umgesetzt">1. Session-History-Format ist Claude-SDK-spezifisch (umgesetzt)<a class="headerlink" href="#1-session-history-format-ist-claude-sdk-spezifisch-umgesetzt" title="Permanent link">&para;</a></h3>
+<p>Der oben beschriebene "Frühere Sessions"-Mechanismus (<code>sessions.py</code>) baut
+direkt auf Claude-Agent-SDK-Eigenheiten auf: JSONL unter
+<code>~/.claude/projects/&lt;projekt&gt;/</code>, <code>list_sessions()</code>/<code>get_session_messages()</code>,
+<code>ClaudeAgentOptions(resume=session_id)</code>. Pi hat ein eigenes, anders
+strukturiertes Session-Format (<code>~/.pi/agent/sessions/&lt;projekt&gt;/*.jsonl</code>,
+gesteuert über <code>--session</code>/<code>--session-id</code>/<code>--continue</code>/<code>--resume</code>) --
+vermutlich nicht 1:1 kompatibel zu unserem Parsing.</p>
+<p>Entscheidung (2026-08-12): keine getrennten Listen pro Backend. Stattdessen
+eine einzige, gemeinsame "Frühere Sessions"-Liste im Cockpit, in der pro
+Eintrag vermerkt ist, mit welchem Agenten-Backend die Session geführt wurde.
+Fortsetzen ("Ausgewählte Session fortsetzen") knüpft dann automatisch wieder
+an genau dieses Backend an -- kein Backend-Wechsel innerhalb einer
+fortgesetzten Session.</p>
+<p>Praktisch heißt das: <code>sessions.py</code> bekommt pro Backend weiterhin eigene
+<code>list_sessions()</code>/<code>get_session_messages()</code>-Implementierungen (die
+Formate/Speicherorte bleiben ja unterschiedlich -- Claude JSONL unter
+<code>~/.claude/projects/...</code> vs. Pis Format unter <code>~/.pi/agent/sessions/...</code>),
+aber eine gemeinsame Merge-Schicht führt beide Listen zu einer sortierten
+Gesamtliste zusammen, tag't jeden Eintrag mit dem Agenten-Namen (Label z.B.
+"Claude Code" / "Pi") und zeigt das im Cockpit mit an. <code>App.resume_session()</code>
+liest dieses Tag und instanziiert dafür die passende Backend-Klasse
+(<code>ClaudeCodeConversation</code> vs. künftiges <code>PiAgentConversation</code>) statt wie
+aktuell immer <code>ClaudeCodeConversation</code>. Die App-eigene <code>self._history</code> (nur
+Text-Turns, Backend-unabhängig) bleibt weiterhin die Quelle für die
+Cockpit-Anzeige der laufenden Session.</p>
+<h3 id="2-wie-sagt-man-einem-agenten-sauber-in-welchem-workspace-er-bleiben-soll-umgesetzt-am-2026-08-14">2. Wie sagt man einem Agenten sauber, in welchem Workspace er bleiben soll? (umgesetzt am 2026-08-14)<a class="headerlink" href="#2-wie-sagt-man-einem-agenten-sauber-in-welchem-workspace-er-bleiben-soll-umgesetzt-am-2026-08-14" title="Permanent link">&para;</a></h3>
+<p>Ziel: Agent arbeitet standardmäßig nur innerhalb eines festgelegten
+Workspace-Verzeichnisses (Dateien lesen/schreiben, Tool-Aufrufe) und
+verlässt es nur auf explizite Aufforderung.</p>
+<p>Entscheidung: gleiches "einmal pro neuer Session, kein Wechsel mittendrin"
+-Muster wie die Agenten-Wahl (Punkt 3 unten) -- kein separater
+Sprachbefehl/Slash-Command, der mitten in einer laufenden Session den
+Workspace verschiebt.</p>
+<p>Umgesetzt:
+- <strong>Claude Agent SDK</strong> (<code>llm.py</code>): <code>ClaudeAgentOptions.cwd</code> wird jetzt
+  gesetzt (<code>add_dirs</code>/<code>can_use_tool</code>-Hook bewusst nicht -- <code>cwd</code> allein
+  reicht für "einen Workspace pro Session", die härtere
+  Pfad-für-Pfad-Durchsetzung über <code>can_use_tool</code> ist nicht Teil dieser
+  Umsetzung).
+- <strong>Pi</strong> (<code>pi_agent.py</code>): Subprozess-<code>cwd</code> ist jetzt der Session-Workspace
+  statt fest <code>PROJECT_DIR</code>. Pis eigene Guardrails-Extension bleibt wie
+  beschrieben global auf <code>~/.agents</code>/<code>~/research</code> -- ein Workspace außerhalb
+  davon wird von Pi also nicht zusätzlich blockiert, aber auch nicht
+  spezifisch freigegeben; das enger zu fassen ist weiterhin offen.
+- <strong>Backend-unabhängig</strong> (<code>agent_backend.py</code>): <code>workspace_instruction()</code>
+  hängt die weiche System-Prompt-Instruktion an, kombiniert mit der harten
+  <code>cwd</code>-Durchsetzung oben. <code>resolve_workspace()</code> validiert/normalisiert
+  einen nutzereingegebenen Pfad (<code>~</code>-Expansion, Existenz-/Verzeichnis-Check)
+  -- von beiden UIs unten verwendet, bevor der Pfad an <code>App.reset()</code>/
+  <code>_reset_session()</code> durchgereicht wird.
+- Workspace-Pfad pro Session kommt jetzt von: <code>config.DEFAULT_WORKSPACE</code>
+  (=<code>PROJECT_DIR</code>) als Startwert, dann <code>App.reset(workspace=...)</code>
+  (Cockpit) bzw. <code>/workspace &lt;Pfad&gt;</code> (Telegram) für jede neue Session.
+  <code>App</code>/<code>_ChatSession</code> merken sich den aktuellen Workspace wie den
+  aktuellen Agenten und zeigen ihn: <code>get_stats_text()</code>s "Workspace: ..."
+  im Cockpit, <code>/workspace</code> sowie die Bestätigung nach <code>/new</code>/<code>/workspace</code>
+  in Telegram.
+- Cockpit (<code>cockpit.py</code>): "Workspace für neue Session"-Accordion mit einer
+  Textbox (Pfad direkt eingeb-/editierbar) und einem <code>gr.FileExplorer</code> als
+  reinem Ordner-Browser (<code>glob=""</code> lässt keine Datei durch, Ordner werden
+  davon unabhängig immer gelistet) im Home-Verzeichnis; Auswahl dort füllt
+  die Textbox. "Neue Session" validiert den Textbox-Wert über
+  <code>resolve_workspace()</code>, fällt bei ungültigem Pfad auf den bisherigen
+  Workspace zurück (mit Warnung) statt die Session kaputt zu starten.
+- Resume einer alten Session (<code>App.resume_session()</code>) übernimmt bewusst den
+  <em>aktuellen</em> Workspace statt zu versuchen, den ursprünglichen
+  wiederherzustellen -- der wird bislang nirgends pro Session
+  mitgeschrieben.</p>
+<h3 id="nachste-schritte_2">Nächste Schritte<a class="headerlink" href="#nachste-schritte_2" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Manuell verifizieren: Cockpit-Ordner-Browser durchklicken, Pfad
+  übernehmen, "Neue Session" -- prüfen, dass der Agent tatsächlich im neuen
+  Verzeichnis arbeitet (nicht nur <code>cwd</code> gesetzt, sondern auch tatsächlich
+  genutzt). Telegram <code>/workspace &lt;Pfad&gt;</code> ebenso.</li>
+<li>Offen geblieben: <code>can_use_tool</code>-Hook (Claude) / engere <code>pathAccess</code>-Liste
+  (Pi) für harte Pfad-für-Pfad-Durchsetzung statt nur <code>cwd</code> als Startpunkt
+  -- aktuell kann der Agent trotz gesetztem Workspace mit <code>bypassPermissions</code>
+  weiterhin überall lesen/schreiben, <code>cwd</code> ist nur der Default, keine
+  Sandbox.</li>
+</ul>
+<h3 id="3-wie-wahlt-man-den-agenten-aus-umgesetzt">3. Wie wählt man den Agenten aus? (umgesetzt)<a class="headerlink" href="#3-wie-wahlt-man-den-agenten-aus-umgesetzt" title="Permanent link">&para;</a></h3>
+<p>Entscheidung (2026-08-12): zwei Auswahlpunkte, kein Wechsel mitten in einer
+laufenden Session.
+- Start-Flag (<code>speech-to-speech --agent claude|pi</code>, Default <code>claude</code>, siehe
+  <code>cli.py</code>) legt fest, mit welchem Backend die allererste Session eines
+  Prozessstarts läuft.
+- Wichtiger/bevorzugt: beim Start einer <em>neuen</em> Session (Cockpit-Button
+  "Neue Session", also <code>App.reset()</code>) lässt sich der Agent explizit
+  mitbenennen -- nicht nur einmal beim App-Start festgelegt. Passt zur
+  Session-Tagging-Entscheidung aus Punkt 1: jede Session trägt ihr
+  Agenten-Label ab dem Moment, in dem sie beginnt.</p>
+<p>Skizze für die Umsetzung:
+- Gemeinsames Interface (Protocol/ABC) mit <code>send()</code>, <code>cancel()</code>, <code>close()</code>,
+  das <code>ClaudeCodeConversation</code> (<code>llm.py</code>) bereits erfüllt; neue
+  <code>PiAgentConversation</code> (neues Modul, z.B. <code>pi_agent.py</code>) implementiert es
+  gegen die <code>pi</code>-CLI als Subprozess (<code>pi --print --mode json --session-id
+  &lt;id&gt; --system-prompt ... "&lt;text&gt;"</code>), <code>cancel()</code> beendet den laufenden
+  Subprozess.
+- Kleine Factory (z.B. <code>make_llm(agent: str) -&gt; AgentConversation</code>) an einer
+  Stelle statt der bisher drei verstreuten <code>ClaudeCodeConversation()</code>-Aufrufe
+  (<code>App.load()</code>, <code>App.reset()</code>, künftig <code>App.resume_session()</code>).
+- <code>App</code> merkt sich zusätzlich zu <code>self._llm</code> den aktuellen Agenten-Namen
+  (<code>self._agent_name</code>), für Anzeige im Cockpit und zum Tagging beim
+  Schreiben/Anzeigen der Session-History (siehe Punkt 1).
+- <code>App.reset()</code> bekommt einen optionalen <code>agent</code>-Parameter; Cockpit-UI dafür
+  vermutlich eine kleine Auswahl (Radio/Dropdown "Claude" / "Pi") direkt
+  neben dem "Neue Session"-Button, Default = zuletzt genutzter bzw.
+  Start-Flag-Wert.
+- Hängt inhaltlich an Punkt 2 (Workspace): die Factory müsste den
+  Workspace-Pfad an beide Backends gleichermaßen durchreichen (<code>cwd</code> beim
+  Claude SDK, Subprozess-<code>cwd</code> bei Pi).</p>
+<h2 id="daemon-neustart-aus-der-appdem-cockpit-heraus">Daemon-Neustart aus der App/dem Cockpit heraus<a class="headerlink" href="#daemon-neustart-aus-der-appdem-cockpit-heraus" title="Permanent link">&para;</a></h2>
+<p>Status: Umgesetzt am 2026-08-14 (<code>daemon_control.py</code>,
+<code>App.restart_stt_daemon()</code>/<code>restart_tts_daemon()</code>, Cockpit-Buttons,
+Telegram-Slash-Commands <code>/restart_stt</code>/<code>/restart_tts</code>).</p>
+<p>Bislang ließ sich weder der STT- noch der TTS-Daemon von innerhalb der App
+(Cockpit) neu starten -- nur von außen per Terminal (<code>qwen-tts
+disable</code>/<code>enable</code>, <code>parakeet-dictate disable</code>/<code>enable</code>, die im Hintergrund
+<code>systemctl --user stop</code>/<code>start</code> auf die jeweilige Unit ausführen). Für den
+TTS-Daemon gibt es zwar schon einen automatischen Notfall-Mechanismus (Watchdog
++ <code>Restart=on-failure</code> in <code>qwen-tts.service</code>, siehe <code>tts_daemon/daemon.py</code>),
+aber keinen manuell auslösbaren Neustart für den Fall, dass ein Daemon zwar
+noch antwortet, aber sich falsch/festgefahren verhält, ohne dass der Watchdog
+anschlägt.</p>
+<p>Umgesetzt: <code>daemon_control.py</code> kapselt den <code>systemctl --user restart</code>-Aufruf
+für beide Units (Restart statt separatem stop+start, da systemd das schon
+atomar macht) mit den <code>SERVICE_NAME</code>-Konstanten aus <code>dictate/cli.py</code> und
+<code>tts_daemon/cli.py</code>. <code>App.restart_stt_daemon()</code>/<code>restart_tts_daemon()</code>
+(<code>app.py</code>) brechen eine laufende Aufnahme bzw. Wiedergabe vorher sauber ab
+(gleiche <code>stt_client.stop_recording()</code>/<code>tts_client.stop()</code>-Aufrufe wie beim
+Barge-in), bevor der jeweilige Daemon neu gestartet wird -- "thinking" bleibt
+unangetastet, da dabei kein Daemon involviert ist. Das Cockpit (<code>cockpit.py</code>)
+hat dafür zwei neue Buttons neben "Neue Session"; der Telegram-Bot
+(<code>telegram_bot/daemon.py</code>) die Slash-Commands <code>/restart_stt</code>/<code>/restart_tts</code>
+(Chat-unabhängig, da der Daemon geteilt wird).</p>
+<h3 id="nachste-schritte_3">Nächste Schritte<a class="headerlink" href="#nachste-schritte_3" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Manuell verifizieren: Cockpit-Buttons und Telegram-Commands während
+  laufender Aufnahme/Wiedergabe auslösen und prüfen, dass sauber in "idle"
+  zurückgekehrt wird statt in einem hängenden Zustand.</li>
+<li><code>systemctl --user</code> aus dem App-/Bot-Prozess heraus war unproblematisch
+  (gleicher User, gleiche Session) -- keine offene Berechtigungsfrage mehr.</li>
+</ul>
+<h2 id="telegram-erinnerungen-per-gcp-setzen-konnen">Telegram-Erinnerungen per GCP setzen können<a class="headerlink" href="#telegram-erinnerungen-per-gcp-setzen-konnen" title="Permanent link">&para;</a></h2>
+<p>Status: Umgesetzt am 2026-08-15 (<code>~/.claude/skills/reminder/SKILL.md</code>,
+<code>llm.py</code>).</p>
+<p>Ziel: der Agent (egal ob per Sprache, Cockpit oder Telegram angesprochen) soll
+zeitgesteuerte Telegram-Erinnerungen setzen können ("erinnere mich in 20
+Minuten ans Brot rausholen"), die zuverlässig zustellen -- auch wenn dieser
+Rechner zu dem Zeitpunkt aus/im Standby ist.</p>
+<p>Ist-Zustand: die Infrastruktur dafür existiert bereits und läuft
+(<code>~/research/gcp-telegram-reminders</code> als Deploy-Vorlage: Cloud Tasks Queue -&gt;
+Cloud Function -&gt; Telegram <code>sendMessage</code>), tatsächlich deployed unter dem GCP
+Projekt <code>pi-agent-gemini</code> (Account <code>[redacted-personal-email]</code> -- nicht das Projekt
+aus <code>gcp-telegram-reminders/.env</code>, das ist ein älterer/anderer Stand). Der Pi
+Coding Agent hatte darauf bereits Zugriff, global über eine eigene
+Skill-Definition <code>~/.agents/skills/reminder/</code> (referenziert in
+<code>~/.pi/agent/settings.json</code>s <code>"skills"</code>-Liste, projektunabhängig) mit
+Zeitparsing (relative Delays, Wochentage, "tomorrow 15:00" etc.) und dem
+eigentlichen GCP-Cloud-Tasks-Aufruf.</p>
+<p>Umgesetzt: der Claude-Backend hatte dieselbe Fähigkeit noch nicht, aus zwei
+Gründen. Behoben:
+- Neue, dünne Skill-Definition <code>~/.claude/skills/reminder/SKILL.md</code> (globaler
+  User-Skill, nicht projekt-gebunden unter <code>.claude/skills/</code> in diesem Repo --
+  Erinnerungen sind ein allgemeines Assistenz-Feature, kein Coding-Werkzeug für
+  gerade dieses Projekt, und sollen unabhängig vom per <code>/workspace</code> gewählten
+  Arbeitsverzeichnis verfügbar bleiben). Delegiert an dieselbe, schon
+  vorhandene ausführbare Datei <code>~/.agents/skills/reminder/bin/reminder</code> statt
+  die GCP-Konfiguration/Logik zu duplizieren -- ein Redeploy (neue
+  Function-URL, anderes Projekt) muss so nur an einer Stelle
+  (<code>reminder_cli.py</code>) gepflegt werden.
+- <code>llm.py</code>s <code>ClaudeAgentOptions</code> bekam <code>skills="all"</code>: laut SDK-Doku ist
+  unklar/CLI-abhängig, ob personenbezogene Skills ohne dieses Flag überhaupt
+  gelistet werden ("CLI defaults" ist nicht dasselbe wie "an"), daher explizit
+  statt implizit verlassen.</p>
+<h3 id="nachste-schritte_4">Nächste Schritte<a class="headerlink" href="#nachste-schritte_4" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Manuell verifizieren (in diesem Sandbox-Environment war weder <code>pi</code> noch
+  <code>claude</code> auf dem PATH, End-to-End-Test war daher nicht möglich): über
+  Sprache/Cockpit/Telegram eine Erinnerung setzen lassen ("erinnere mich in
+  30 Sekunden an X") und prüfen, dass die Telegram-Nachricht ankommt --
+  einmal mit Claude-, einmal mit Pi-Backend.</li>
+<li>Die beiden Skill-Kopien (<code>~/.agents/skills/reminder/SKILL.md</code> für Pi,
+  <code>~/.claude/skills/reminder/SKILL.md</code> für Claude) sind inhaltlich fast
+  identisch und leben beide außerhalb dieses Repos -- bei künftigen Änderungen
+  (z.B. neue Zeitformate) beide pflegen, oder die Doku zusammenlegen und nur
+  noch aus einer Datei generieren.</li>
+</ul>
+<p><strong>Nachtrag 2026-08-15:</strong> manueller Test im Cockpit ("remind me in 3 minutes
+...") zeigte, dass das Claude-Backend statt des <code>reminder</code>-Skills das
+eingebaute <code>CronCreate</code>-Tool (claude.ai-"Routines") benutzt hat -- eine
+Routine ruft später nur wieder eine claude.ai-Session auf, die hier niemand
+beobachtet, die Erinnerung kam also nie an. Behoben in <code>llm.py</code>
+(<code>disallowed_tools=["CronCreate", "ScheduleWakeup"]</code>, hartes Verbot statt nur
+Prompt-Hinweis) und <code>agent_backend.py</code>s <code>SYSTEM_PROMPT</code> (expliziter Hinweis,
+für Erinnerungen immer den <code>reminder</code>-Skill statt eingebauter
+Scheduling-Features zu nutzen). Noch offen: erneuter manueller Test nach
+Neustart des <code>speech-to-speech</code>-Prozesses (Code-Änderungen an <code>llm.py</code>/
+<code>agent_backend.py</code> wirken erst nach Neustart, der laufende Prozess hält einen
+persistenten SDK-Client).</p>
+<p><strong>Nachtrag 2026-08-15 (2):</strong> auf die Frage, ob es Feedback gibt, dass das
+Setzen einer Erinnerung wirklich geklappt hat, <code>reminder_cli.py</code> um zwei
+Dinge ergänzt (wirkt für beide Backends, da beide Skills auf dieselbe Datei
+delegieren): erstens verschickt <code>schedule_reminder()</code> nach erfolgreichem
+<code>create_task()</code> sofort eine eigene, vom Agenten-Chat unabhängige
+Telegram-Bestätigung ("✅ Reminder set for ... : ...") direkt per Bot-API --
+so hängt "hat es geklappt" nicht an der Zuverlässigkeit/Vollständigkeit der
+LLM-eigenen Antwort. Zweitens ein neuer <code>--list</code>-Modus
+(<code>reminder_cli.py list_reminders()</code>, nutzt <code>CloudTasksClient.list_tasks()</code>
+mit <code>response_view=FULL</code>, da die Standard-<code>BASIC</code>-View kein <code>http_request.body</code>
+liefert), der alle aktuell wartenden Reminder mit Zeit und Text auflistet --
+beantwortet "welche Erinnerung wurde gesetzt" auch später noch, unabhängig
+vom Chatverlauf. Live gegen die echte Queue getestet (<code>--list</code>, read-only,
+noch keine echten Reminder drin).</p>
+<p>Außerdem, auf Nachfrage geklärt: Erinnerungen laufen über denselben
+Telegram-Bot/Chat wie die normalen Assistenten-Antworten (Token/Chat-ID in
+diesem Repos <code>.env</code> sind identisch mit denen der Cloud Function) --
+<code>reminder_cli.py</code> stellt der eigentlichen Nachricht daher jetzt immer
+<code>⏰ Reminder:</code> voran, damit beides im Chat unterscheidbar bleibt.</p>
+<h2 id="webseiten-per-telegram-link-als-obsidian-bookmark-speichern">Webseiten per Telegram-Link als Obsidian-Bookmark speichern<a class="headerlink" href="#webseiten-per-telegram-link-als-obsidian-bookmark-speichern" title="Permanent link">&para;</a></h2>
+<p>Status: Umgesetzt am 2026-08-15 (<code>~/.claude/skills/bookmark/SKILL.md</code>,
+<code>~/.agents/skills/bookmark/SKILL.md</code>, <code>agent_backend.py</code>).</p>
+<p>Ziel: eine per Telegram geteilte URL soll automatisch (ohne Rückfrage) als
+Bookmark gespeichert werden -- mit Titel, ein paar sinnvollen Tags und einer
+Ein-Satz-Beschreibung, die der Agent selbst aus dem Seiteninhalt ableitet.</p>
+<p>Ablageort: <code>~/GlobalAgentKnowledgebase</code> (Obsidian-Vault), nicht
+<code>~/docubotics/docubotics-agent-harness/PersonalWiki</code> -- letzteres ist laut
+eigenem README explizit für Personen-/Versicherungs-/Steuer-/
+Immobilien-Notizen ("eine Notiz pro realem Ding") reserviert.
+<code>GlobalAgentKnowledgebase</code> ist dagegen bereits als die generelle
+Agenten-Metamemory dokumentiert (<code>Protocols/Multi-Context-Protocol.md</code>:
+"Global Manager"-Kontext, <code>reminder</code> steht dort schon als "Primary Tool"
+drin). Neue Notizen landen unter <code>Bookmarks/&lt;Titel&gt;.md</code>, Frontmatter
+(<code>type: bookmark</code>, <code>url</code>, <code>tags</code>, <code>added</code>) folgt derselben Konvention wie
+PersonalWiki (<code>type</code>-Feld fürs Dataview-Plugin), damit sich später z.B. "alle
+Bookmarks mit Tag X" abfragen lässt.</p>
+<p>Umsetzung analog zum <code>reminder</code>-Skill: zwei fast identische
+<code>SKILL.md</code>-Kopien (<code>~/.claude/skills/bookmark/</code> für Claude,
+<code>~/.agents/skills/bookmark/</code> für Pi, global statt projekt-gebunden, aus
+demselben Grund wie bei <code>reminder</code>). Anders als bei <code>reminder</code> gibt es aber
+kein eigenes CLI-Script -- Seite laden, Titel/Tags/Beschreibung ableiten und
+die Notiz-Datei schreiben passiert komplett über die ohnehin vorhandenen
+Bordmittel des Agenten (WebFetch, Write/Bash), das Skill ist reine
+Anleitung. <code>agent_backend.py</code>s <code>SYSTEM_PROMPT</code> bekam eine Zeile, die eine
+Nachricht, die nur aus einer URL besteht, als impliziten
+Bookmark-Auftrag markiert (kein Rückfragen-Zwang, passend zur
+"vollautomatisch"-Anforderung).</p>
+<h3 id="nachste-schritte_5">Nächste Schritte<a class="headerlink" href="#nachste-schritte_5" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Manuell verifizieren: URL per Telegram teilen, prüfen dass eine Notiz unter
+  <code>~/GlobalAgentKnowledgebase/Bookmarks/</code> entsteht (Titel, Tags,
+  Beschreibung sinnvoll) und die Bestätigungsantwort passt -- mit
+  Claude-Backend (Neustart nötig, siehe Nachtrag oben) und mit Pi.</li>
+<li>Offener Punkt beim Pi-Backend: Pis Guardrails-Extension
+  (<code>~/.pi/agent/extensions/guardrails.json</code>) hat <code>~/GlobalAgentKnowledgebase</code>
+  nicht in <code>pathAccess.allowedPaths</code> (nur <code>~/.agents</code> und <code>~/research</code>,
+  siehe "Mehrere Agent-Backends" oben). <code>pathAccess.mode</code> steht auf <code>"ask"</code>;
+  laut <code>pi_agent.py</code>s Docstring laufen Tool-Aufrufe im hier verwendeten
+  <code>--print --mode json</code>-Headless-Modus generell ohne interaktive
+  Rückfrage durch, was auch für Pfad-Asks gelten sollte -- aber nicht
+  spezifisch für diesen Pfad verifiziert. Falls das Schreiben dorthin mit
+  Pi tatsächlich blockiert: entweder <code>~/GlobalAgentKnowledgebase</code> zu
+  <code>allowedPaths</code> hinzufügen, oder das Bookmark-Skill stattdessen über einen
+  Pfad unter <code>~/.agents</code> ablegen lassen.</li>
+</ul>
+<h2 id="bilder-an-den-nutzer-senden">Bilder an den Nutzer senden<a class="headerlink" href="#bilder-an-den-nutzer-senden" title="Permanent link">&para;</a></h2>
+<p>Status: Umgesetzt am 2026-08-14 (<code>image_tool.py</code>, <code>App._append_image()</code>,
+Telegram <code>_make_on_image()</code>/<code>_send_image()</code>), Claude-Backend only.</p>
+<p>Der Agent hat vollen Dateisystemzugriff (Bash, Write) und kann Bilder
+erzeugen oder finden, hatte aber keine Möglichkeit, sie dem Nutzer auch
+tatsächlich zu zeigen -- ein Dateipfad in der (per TTS vorgelesenen)
+Text-Antwort ist für den Nutzer unsichtbar/nutzlos.</p>
+<p>Entscheidung: ein Tool (<code>show_image(path, caption)</code>), keine Skill -- die
+Tool-<code>description</code> selbst lehrt das Modell, wann/wie es aufzurufen ist
+(siehe image_tool.py), eine zusätzliche Skill-Ebene wäre für eine einzelne,
+schmal geschnittene Funktion unnötige Indirektion.</p>
+<p>Umgesetzt:
+- <code>image_tool.py</code>: <code>make_show_image_tool(workspace, on_image)</code> baut ein
+  In-Process-SDK-Tool (<code>@tool</code> + <code>create_sdk_mcp_server</code>, Claude Agent SDK)
+  pro Session -- Closure über Workspace (zum Auflösen relativer Pfade) und
+  eine Delivery-Callback <code>on_image(path, caption)</code>, die der jeweilige Aufrufer
+  (App fürs Cockpit, Telegram-Bot pro Chat) mitgibt. Validiert Pfad
+  (existiert, ist Datei, MIME-Typ beginnt mit <code>image/</code>) bevor <code>on_image</code>
+  aufgerufen wird; Fehler gehen als <code>is_error</code>-Tool-Result ans Modell zurück,
+  nicht als Exception.
+- Claude-only: <code>llm.py</code>s <code>ClaudeCodeConversation</code> registriert das Tool nur,
+  wenn ihr ein <code>on_image</code>-Callback mitgegeben wurde, und hängt dann
+  zusätzlich <code>SHOW_IMAGE_INSTRUCTION</code> an den System-Prompt. Pi bekommt das
+  Tool (noch) nicht -- <code>pi_agent.py</code> unverändert, <code>create_conversation()</code>
+  reicht <code>on_image</code> nur an den Claude-Zweig durch (siehe docs, warum Pi
+  schwerer ist: Subprozess pro Turn, kein In-Process-Callback-Pfad).
+- Cockpit (<code>app.py</code>): <code>App._append_image()</code> hängt eine History-Message mit
+  <code>content=[{"path": ...}, caption]</code> an -- <code>gr.Chatbot</code> rendert das
+  automatisch als Bild inline (verifiziert: Gradios <code>MessageContent</code>
+  akzeptiert Datei-Dicts direkt, kein Cockpit-Code-Änderung nötig).
+- Telegram (<code>telegram_bot/daemon.py</code>): <code>_make_on_image(chat_id, loop)</code>
+  baut pro Chat eine Callback, die den Tool-Aufruf (läuft auf dem SDKs
+  eigenem Event-Loop-Thread) über <code>run_coroutine_threadsafe()</code> zurück auf
+  den Bot-eigenen Event-Loop hebt (<code>loop</code> wird dafür an den bestehenden
+  Aufrufstellen, die schon <code>async def</code> sind, per <code>asyncio.get_running_loop()</code>
+  eingefangen) und dort <code>bot.send_photo()</code> aufruft -- unabhängig vom
+  ursprünglich auslösenden <code>Update</code>, da der Tool-Aufruf ja asynchron zur
+  laufenden <code>send()</code> passiert.
+- Manuell end-to-end verifiziert (<code>ClaudeCodeConversation</code> direkt, ohne
+  App/Bot): Agent erzeugt PNG per Bash+PIL (absoluter und relativer Pfad),
+  ruft <code>show_image</code> auf, Callback feuert mit aufgelöstem Pfad + Caption;
+  Nicht-Bild-Datei wird korrekt mit <code>is_error</code> abgelehnt, Callback feuert
+  nicht.</p>
+<h3 id="nachste-schritte_6">Nächste Schritte<a class="headerlink" href="#nachste-schritte_6" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Manuell im echten Cockpit/Telegram durchklicken (nicht nur die
+  <code>ClaudeCodeConversation</code>-Ebene direkt) -- insbesondere ob <code>gr.Chatbot</code> das
+  Bild wirklich inline rendert und <code>bot.send_photo()</code> in einem echten Chat
+  ankommt.</li>
+<li>Pi-Unterstützung offen (bräuchte einen echten MCP-Server-Prozess statt
+  einer In-Process-Closure, siehe image_tool.py's Docstring).</li>
+<li>Aktuell nur Bilder (MIME-Präfix <code>image/</code>); andere Dateitypen (PDF, Audio,
+  beliebige Dokumente) wären ein separates, ähnlich gebautes Tool
+  (<code>send_document</code> o.ä.), nicht Teil dieser Umsetzung.</li>
+</ul>
+<h2 id="claude-code-timeout-hangende-turns-sauber-abfangen-statt-nur-den-timeout-erhohen">Claude-Code-Timeout: hängende Turns sauber abfangen statt nur den Timeout erhöhen<a class="headerlink" href="#claude-code-timeout-hangende-turns-sauber-abfangen-statt-nur-den-timeout-erhohen" title="Permanent link">&para;</a></h2>
+<p>Status: Umgesetzt am 2026-09-14 (<code>llm.py</code>, <code>agent_backend.py</code>, <code>app.py</code>).</p>
+<p>Beobachtet: Ein hängender <code>ClaudeSDKClient.query()</code>/<code>receive_response()</code>
+führte nach dem alten flachen 300s-Timeout in <code>ClaudeCodeConversation.send()</code>
+zu einer unbehandelten <code>TimeoutError</code>, die den <code>_respond()</code>-Thread in
+<code>app.py</code> mit Traceback sterben ließ -- der <code>App</code>-State blieb dabei auf
+"thinking" hängen (der Code, der ihn zurücksetzt, wurde nie erreicht), und
+der zugrundeliegende Claude-Client blieb mit der alten Anfrage beschäftigt,
+statt für den nächsten Turn frei zu sein. Ein einfaches Hochsetzen des
+Timeouts hätte daran nichts geändert, nur das Zeitfenster bis zum Hängen
+vergrößert.</p>
+<p>Umgesetzt: <code>llm.py</code>s <code>_query()</code> liest jetzt Nachricht für Nachricht aus
+<code>receive_response()</code> per <code>asyncio.wait_for(..., timeout=_ACTIVITY_TIMEOUT_S)</code>
+(zunächst 60s, am 2026-09-14 auf 300s hochgesetzt -- ein echter Stall ist
+selten genug, dass ein engeres Fenster das Risiko nicht wert war, einen
+bloß langsamen, aber aktiven Turn abzuschneiden) statt eines einzigen
+Timeouts über den gesamten Turn -- der Timer wird bei jeder gestreamten
+Nachricht zurückgesetzt, sodass ein aktiver, aber langer (tool-lastiger)
+Turn nicht abbricht, ein wirklich hängender aber innerhalb von 300s
+auffliegt. Bei einem Stall wird zusätzlich best-effort
+<code>self._client.interrupt()</code> aufgerufen, damit der Client für den nächsten
+Turn wieder benutzbar ist. <code>send()</code> behält daneben ein äußeres
+<code>_HARD_TIMEOUT_S</code> (20 Minuten) als Sicherheitsnetz, falls trotz Aktivität nie
+fertig wird. Beide Fälle werfen jetzt <code>agent_backend.LlmTimeoutError</code> (neu,
+im gemeinsamen Backend-Contract-Modul, damit <code>App</code> unabhängig vom aktiven
+Backend denselben Typ fängt) statt der rohen <code>TimeoutError</code> durchzureichen.</p>
+<p><code>App._respond()</code>/<code>voice_turn()</code> fangen <code>LlmTimeoutError</code> jetzt ab: State
+zurück auf "idle" (gleicher speaking-&gt;idle-Pfad wie eine normale Antwort),
+Nutzer bekommt eine gesprochene/im Chat sichtbare Nachricht ("Entschuldigung,
+das hat zu lange gedauert. Versuch's gern nochmal.") statt stillem Hängen.
+<code>pi_agent.py</code> (Pi-Backend) ist von dieser Umsetzung unberührt -- war zum
+Zeitpunkt der Änderung nicht aktiv im Einsatz.</p>
+<h3 id="nachste-schritte_7">Nächste Schritte<a class="headerlink" href="#nachste-schritte_7" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Manuell einen echten Stall provozieren (z. B. Netzwerk kappen während
+  eines Turns) und verifizieren, dass nach ~300s die Timeout-Nachricht kommt
+  und der nächste Turn danach normal funktioniert.</li>
+<li><code>pi_agent.py</code>s eigener <code>TURN_TIMEOUT_S</code> greift aktuell nur beim
+  <code>proc.wait()</code> <em>nach</em> dem stdout-Lese-Loop, nicht während eines hängenden
+  <code>for line in proc.stdout</code>-Reads selbst -- gleiches aktivitätsbasiertes
+  Muster wäre dort nötig, falls Pi wieder aktiv genutzt wird.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Zurück zum Seitenanfang
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "toc.integrate", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "In Zwischenablage kopiert", "clipboard.copy": "In Zwischenablage kopieren", "search.result.more.one": "1 weiteres Suchergebnis auf dieser Seite", "search.result.more.other": "# weitere Suchergebnisse auf dieser Seite", "search.result.none": "Keine Suchergebnisse", "search.result.one": "1 Suchergebnis", "search.result.other": "# Suchergebnisse", "search.result.placeholder": "Suchbegriff eingeben", "search.result.term.missing": "Es fehlt", "select.version": "Version ausw\u00e4hlen"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

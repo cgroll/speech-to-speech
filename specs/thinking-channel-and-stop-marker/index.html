@@ -1,0 +1,945 @@
+
+<!doctype html>
+<html lang="de" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Dokumentation des Sprachassistenten-Projekts">
+      
+      
+      
+      
+        <link rel="prev" href="../core-dialog-loop/">
+      
+      
+        <link rel="next" href="../../reference-claude-code-turn-taking/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Denkprozess-Kanal & Stop-Markierung - Speech-to-Speech</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#spezifikation-denkprozess-kanal-und-stop-markierung" class="md-skip">
+          Zum Inhalt
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Kopfzeile">
+    <a href="../.." title="Speech-to-Speech" class="md-header__button md-logo" aria-label="Speech-to-Speech" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Speech-to-Speech
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Denkprozess-Kanal & Stop-Markierung
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Suche" placeholder="Suche" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Suche">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Zurücksetzen" aria-label="Zurücksetzen" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Suche wird initialisiert
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/cgroll/speech-to-speech" title="Zum Repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    cgroll/speech-to-speech
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+  
+
+<nav class="md-nav md-nav--primary md-nav--integrated" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Speech-to-Speech" class="md-nav__button md-logo" aria-label="Speech-to-Speech" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Speech-to-Speech
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/cgroll/speech-to-speech" title="Zum Repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    cgroll/speech-to-speech
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../specification/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Feature-Übersicht
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Spezifikationen
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Spezifikationen
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../core-dialog-loop/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kern-Dialogschleife
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Denkprozess-Kanal & Stop-Markierung
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Denkprozess-Kanal & Stop-Markierung
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Inhaltsverzeichnis">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Inhaltsverzeichnis
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-ist-zustand-befund-2026-10-02-vor-umsetzung-siehe-abschnitt-3a-fur" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Ist-Zustand (Befund 2026-10-02, vor Umsetzung -- siehe Abschnitt 3a für
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-ziel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Ziel
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-denkprozess-kanal-schnittstellen-entwurf-ursprunglich-teils-uberholt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Denkprozess-Kanal: Schnittstellen-Entwurf (ursprünglich, teils überholt)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3a-tatsachliche-umsetzung-2026-10-02" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3a. Tatsächliche Umsetzung (2026-10-02)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-stop-markierung-umsetzung-entwurf" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Stop-Markierung: Umsetzung (Entwurf)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-akzeptanzkriterien-testfalle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Akzeptanzkriterien / Testfälle
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-nicht-ziele" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Nicht-Ziele
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference-claude-code-turn-taking/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Referenz: Turn-Taking in Claude Code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture-proposal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architektur-Vorschlag
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../telegram-bot-proposal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Telegram-Bot-Vorschlag
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backlog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backlog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../macos-setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    macOS-Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="spezifikation-denkprozess-kanal-und-stop-markierung">Spezifikation: Denkprozess-Kanal und Stop-Markierung<a class="headerlink" href="#spezifikation-denkprozess-kanal-und-stop-markierung" title="Permanent link">&para;</a></h1>
+<p>Status: Teilweise umgesetzt (2026-10-02) -- Abschnitt 3 (Denkprozess-/
+Output-Kanal) ist implementiert und empirisch gegen beide echten Backends
+verifiziert, siehe Abschnitt 3a. Abschnitt 4 (Stop-Markierung im
+Chatverlauf) ist weiterhin nur Entwurf, noch nicht gebaut, und wurde
+durch das Steering-Message-Modell (kein Abbruch bei Barge-in) teilweise
+überholt.</p>
+<p>Konkretisiert zwei Lücken, die beim Abgleich von
+<code>docs/specs/core-dialog-loop.md</code> gegen den aktuellen Code aufgefallen sind:
+den fehlenden Denkprozess-Kanal und die fehlende Markierung im Chatverlauf,
+wenn ein Stop ohne Antwort endet. Baut direkt auf den dortigen Entscheidungen
+auf (Abschnitt 3 "Ausgabe-Kanäle", Abschnitt 4 "Stop").</p>
+<h2 id="1-ist-zustand-befund-2026-10-02-vor-umsetzung-siehe-abschnitt-3a-fur">1. Ist-Zustand (Befund 2026-10-02, vor Umsetzung -- siehe Abschnitt 3a für<a class="headerlink" href="#1-ist-zustand-befund-2026-10-02-vor-umsetzung-siehe-abschnitt-3a-fur" title="Permanent link">&para;</a></h2>
+<p>den aktuellen Stand)</p>
+<ul>
+<li><code>llm.py</code>, <code>ClaudeCodeConversation._query()</code>: sammelt aktuell <strong>alle</strong>
+  <code>TextBlock</code>-Textstücke aus <strong>jeder</strong> <code>AssistantMessage</code> der Runde ein --
+  nicht nur aus der letzten -- und reicht sie als einen zusammengefügten
+  <code>reply</code>-String weiter, der komplett an <code>_speak()</code> geht. Das heißt,
+  Zwischenkommentare vor Tool-Aufrufen landen heute mit in der gesprochenen
+  Antwort (siehe auch <code>docs/backlog.md</code>, "Sprachausgabe liest
+  Zwischenschritte...", 2026-08-12 notiert, bisher nicht umgesetzt).
+  <code>ThinkingBlock</code>-Inhalte werden dagegen komplett verworfen, gar nicht erst
+  eingesammelt.</li>
+<li><code>pi_agent.py</code>, <code>PiAgentConversation.send()</code>: nutzt nur die <code>text</code>-Blöcke
+  der <em>letzten</em> Assistant-Message (<code>agent_end</code>-Event, <code>messages[-1]</code>) als
+  <code>reply</code>. <code>thinking</code>/<code>toolCall</code>/<code>toolResult</code>-Blöcke werden ignoriert. Anders
+  als beim Claude-Pfad ist hier das Problem "Zwischenkommentar vor
+  Tool-Aufruf" vermutlich nicht vorhanden, weil ohnehin nur die letzte
+  Message zählt -- zu verifizieren, sobald der Denkprozess-Kanal gebaut wird.</li>
+<li><code>AgentConversation</code> (Protocol, <code>agent_backend.py</code>): <code>send()</code> liefert nur
+  einen fertigen String zurück, kein zweiter Kanal.</li>
+<li><code>App._respond()</code>/<code>_abort_current_turn()</code>: bei Stop/Barge-in während
+  "thinking" wird die verworfene (Nicht-)Antwort nirgends vermerkt -- der
+  Chatverlauf bleibt einfach bei der letzten Nutzer-Nachricht stehen, ohne
+  jeden Hinweis, dass abgebrochen wurde.</li>
+</ul>
+<h2 id="2-ziel">2. Ziel<a class="headerlink" href="#2-ziel" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Ein zweiter, optionaler Ausgabe-Kanal ("Denkprozess") pro Turn, getrennt
+   vom finalen Antwort-Kanal -- unabhängig vom Backend, über dasselbe
+   Interface.</li>
+<li>Eine sichtbare Markierung im Chatverlauf, wenn ein Turn per Stop beendet
+   wird, bevor der Antwort-Kanal Inhalt hatte (Regel siehe
+   core-dialog-loop.md Abschnitt 4 -- hier nur die konkrete Umsetzung).</li>
+</ol>
+<h2 id="3-denkprozess-kanal-schnittstellen-entwurf-ursprunglich-teils-uberholt">3. Denkprozess-Kanal: Schnittstellen-Entwurf (ursprünglich, teils überholt)<a class="headerlink" href="#3-denkprozess-kanal-schnittstellen-entwurf-ursprunglich-teils-uberholt" title="Permanent link">&para;</a></h2>
+<p>Gleiches Muster wie das bestehende <code>on_image</code> (siehe <code>image_tool.py</code> /
+<code>create_conversation()</code>): ein optionaler Callback, der bei Erzeugung der
+Konversation mitgegeben wird und während <code>send()</code> null- oder mehrfach
+aufgerufen wird, bevor <code>send()</code> den finalen Antwort-String zurückgibt.</p>
+<ul>
+<li><code>agent_backend.create_conversation(..., on_thinking: Callable[[str], None]
+  | None = None)</code>, durchgereicht an beide Backends.</li>
+<li><code>ClaudeCodeConversation._query()</code>: <code>ThinkingBlock</code>-Inhalte <strong>immer</strong> an
+  <code>on_thinking</code> statt zu verwerfen. Zusätzlich: <code>TextBlock</code>-Inhalte aus
+  AssistantMessages, auf die in derselben Runde noch eine
+  <code>ToolUseBlock</code>-Message folgt, gelten als Zwischenkommentar -&gt; auch an
+  <code>on_thinking</code>, nicht in <code>reply</code>. Nur die <code>TextBlock</code>-Inhalte der
+  <em>letzten</em> AssistantMessage der Runde bilden <code>reply</code> (= Antwort-Kanal,
+  weiterhin atomar als Ganzes zurückgegeben, siehe core-dialog-loop.md
+  Abschnitt 3/7).</li>
+<li><code>PiAgentConversation.send()</code>: <code>thinking</code>/<code>toolCall</code>/<code>toolResult</code>-Blöcke
+  aller Events (nicht nur <code>agent_end</code>) als lesbarer Text an <code>on_thinking</code>;
+  <code>reply</code> bleibt wie bisher auf die <code>text</code>-Blöcke der letzten Message
+  beschränkt.</li>
+<li><strong>Terminal-Sichtbarkeit zentral an einer Stelle</strong>: <code>on_thinking</code> wird nicht
+  in <code>llm.py</code>/<code>pi_agent.py</code> selbst geloggt, sondern einmal in <code>App</code>s
+  Verdrahtung (dort, wo <code>on_thinking</code> übergeben wird) -- druckt/loggt den
+  Text fürs Terminal <strong>und</strong> hängt ihn ans Chatverlauf-Modell an. Vermeidet,
+  dieselbe Logik in beiden Backend-Clients zu duplizieren.</li>
+<li><code>App</code>/<code>cockpit.py</code>: Denkprozess-Einträge im Chatverlauf-Modell
+  unterscheidbar markieren (z.B. eigenes <code>role</code> oder Content-Flag), damit
+  <code>cockpit.py</code> sie optisch absetzen kann (siehe core-dialog-loop.md
+  Abschnitt 3 -- Darstellung selbst, z.B. ob standardmäßig ein- oder
+  ausblendbar, ist UI-Detail dieser Oberfläche, nicht Teil dieser Spec).</li>
+<li>Sprachausgabe (<code>_speak()</code>) bekommt weiterhin ausschließlich <code>reply</code>, nie
+  Denkprozess-Inhalte -- das ändert sich durch diesen Umbau nicht, wird aber
+  durch die Trennung jetzt tatsächlich sauber eingehalten (Fix des
+  Backlog-Bugs "en passant").</li>
+<li>Telegram-Bot: bekommt <code>on_thinking</code> vorerst nicht verdrahtet (bleibt bei
+  nur der finalen Antwort) -- ob/wie Denkprozess dort später sinnvoll ist,
+  ist nicht Teil dieser Spec.</li>
+</ul>
+<h2 id="3a-tatsachliche-umsetzung-2026-10-02">3a. Tatsächliche Umsetzung (2026-10-02)<a class="headerlink" href="#3a-tatsachliche-umsetzung-2026-10-02" title="Permanent link">&para;</a></h2>
+<p>Beim Bauen auf drei statt zwei Kanäle verallgemeinert, auf Wunsch aus der
+Diskussion zu möglichen Erweiterungen des Kern-Modells: <strong>Antwort</strong>
+(unverändert <code>send()</code>s Rückgabewert, atomar), <strong>Denkprozess</strong>
+(<code>agent_backend.CATEGORY_THINKING</code>) und <strong>Sonstiges</strong>
+(<code>agent_backend.CATEGORY_OTHER</code>) als bewusster Auffangkorb für alles, was
+noch nicht einzeln benannt ist -- aktuell Tool-Aufrufe/-Ergebnisse, aber
+offen für künftige, heute unbekannte Blocktypen (z.B. die Claude-SDK-eigenen
+<code>Task*</code>-Message-Typen, die bei der Recherche zu dieser Erweiterung auffielen
+-- vermutlich mit den noch offenen Hintergrund-Agenten-Fragen aus
+core-dialog-loop.md Abschnitt 7 verwandt, hier aber nicht weiter verfolgt).</p>
+<ul>
+<li><code>agent_backend.py</code>: <code>CATEGORY_THINKING</code>/<code>CATEGORY_OTHER</code>-Konstanten;
+  <code>create_conversation(..., on_output: Callable[[str, str], None] | None =
+  None)</code> (Signatur <code>(kategorie, text)</code>, nicht nur <code>(text)</code> wie im
+  ursprünglichen <code>on_thinking</code>-Entwurf oben) an beide Backends durchgereicht.</li>
+<li><code>llm.py</code>, <code>ClaudeCodeConversation._query()</code>: klassifiziert jeden Block
+  live beim Eintreffen -- <code>ThinkingBlock</code> -&gt; <code>CATEGORY_THINKING</code>,
+  <code>ToolUseBlock</code> (auf der <code>AssistantMessage</code>) und <code>ToolResultBlock</code> (kommt
+  als eigene <code>UserMessage</code> zurück, nicht auf der anfragenden
+  <code>AssistantMessage</code> -- beim Umsetzen festgestellt, im ursprünglichen
+  Entwurf oben nicht erwähnt) -&gt; <code>CATEGORY_OTHER</code>. Die <code>TextBlock</code>-Inhalte
+  bilden die Antwort per Ein-Nachricht-Vorausschau: provisorisch die
+  Antwort, bis eine <em>weitere</em> <code>AssistantMessage</code> mit Text folgt -- dann wird
+  der vorherige Text nachträglich als <code>CATEGORY_THINKING</code> nachgereicht und
+  der neue ist jetzt provisorisch die Antwort. Was am Ende noch offen ist,
+  ist die tatsächliche Antwort (ersetzt die reine "nur letzte Message
+  zählt"-Regel durch dieselbe Regel, nur jetzt live statt erst im
+  Nachhinein ausgewertet).</li>
+<li><code>pi_agent.py</code>, <code>PiAgentConversation.send()</code>: analog, aber über
+  <code>message_end</code>-Events (nicht erst <code>agent_end</code>) -- empirisch gegen das
+  echte <code>pi --mode json</code>-Event-Schema verifiziert (Event-Typen wie
+  <code>message_start</code>/<code>message_update</code>/<code>message_end</code>/<code>tool_execution_*</code>/
+  <code>turn_end</code>, nicht im ursprünglichen Entwurf oben bekannt). <code>thinking</code>-
+  und <code>toolCall</code>-Blöcke einer Assistant-<code>message_end</code> sowie <code>toolResult</code>-
+  Messages gehen sofort an <code>on_output</code>; Text-Blöcke laufen durch dieselbe
+  Ein-Nachricht-Vorausschau wie beim Claude-Pfad.</li>
+<li><code>App._append_output()</code> (statt generischem "role/Content-Flag" wie oben
+  skizziert): nutzt Gradio 6's eingebautes <code>ChatMessage.metadata</code>-Feld
+  (<code>{"title": ..., "status": "done"}</code>) -- <code>gr.Chatbot</code> rendert das von
+  Haus aus als eigene, farblich/optisch abgesetzte, einklappbare
+  "Gedanken"-Blase, ganz ohne eigenes CSS oder eigenen <code>role</code>-Wert (per
+  Gradio-Quellcode und isoliertem <code>Chatbot.postprocess()</code>-Aufruf
+  verifiziert). <code>_speak()</code> bekommt unverändert nur <code>reply</code>, nie
+  <code>on_output</code>-Inhalte -- strukturell gar nicht anders verdrahtet.</li>
+<li>Terminal-Logging wie oben geplant <strong>nicht</strong> umgesetzt (nur
+  Chatverlauf/Gradio) -- bisher kein Bedarf.</li>
+<li>Telegram-Bot: weiterhin nicht verdrahtet, wie oben entschieden. Das
+  Plumbing (<code>on_output</code>) ist aber jetzt da und backend-seitig fertig; nur
+  <code>telegram_bot/daemon.py</code> müsste es noch an <code>create_conversation()</code>
+  übergeben und selbst entscheiden, wie es Denkprozess-Nachrichten in
+  Telegram darstellt (eigene Nachricht? Präfix?) -- offen.</li>
+<li>Verifikation: kein Fake-Backend-Pytest für die Block-Klassifizierung
+  selbst (bräuchte einen vollen Mock des Claude-SDK-Async-Clients bzw. der
+  <code>pi</code>-Subprocess-Ausgabe) -- stattdessen zwei echte End-to-End-Smoke-Tests
+  gegen beide laufenden Backends ("liste Dateien auf, dann sag Hallo"),
+  die bestätigen: Tool-Aufruf/-Ergebnis landen in <code>CATEGORY_OTHER</code>, der
+  finale Gruß ist exakt und ausschließlich der <code>send()</code>-Rückgabewert.</li>
+</ul>
+<h2 id="4-stop-markierung-umsetzung-entwurf">4. Stop-Markierung: Umsetzung (Entwurf)<a class="headerlink" href="#4-stop-markierung-umsetzung-entwurf" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Greift nur beim <strong>dedizierten Stop-Button</strong> (<code>App.stop()</code>), wenn dieser
+  einen Turn aus dem Zustand "thinking" hart abbricht.</li>
+<li>Ein <strong>Barge-in</strong> (Tastendruck während Processing) führt im aktuellen
+  Steering-Modell <strong>nicht</strong> zu einer Abbruch-Markierung, da der Turn im
+  Hintergrund zu Ende geführt wird und die Antwort im Chat erscheint.</li>
+<li>Fügt einen Eintrag in den Chatverlauf ein, der erkennbar kein normaler
+  Assistant-Turn ist (z.B. eigener <code>role</code> oder Prefix), Inhalt sinngemäß
+  "Abgebrochen durch Nutzer". Ein bis zu diesem Zeitpunkt bereits über
+  <code>on_thinking</code> gesammelter Denkprozess bleibt dabei stehen, wird nicht
+  rückwirkend entfernt (siehe Abschnitt 3/core-dialog-loop.md Abschnitt 4).</li>
+<li><code>reset()</code>/<code>resume_session()</code> nutzen <code>_abort_current_turn()</code> ebenfalls,
+  bauen danach aber ohnehin eine neue/andere Historie auf -- die Markierung
+  ist dort praktisch irrelevant, soll aber aus Konsistenzgründen (ein
+  Primitiv, eine Implementierung) nicht extra unterdrückt werden.</li>
+</ul>
+<h2 id="5-akzeptanzkriterien-testfalle">5. Akzeptanzkriterien / Testfälle<a class="headerlink" href="#5-akzeptanzkriterien-testfalle" title="Permanent link">&para;</a></h2>
+<p>(Ergänzt die allgemeinen State-Machine-Tests aus der Diskussion zu
+core-dialog-loop.md.)</p>
+<ul>
+<li>Fake-<code>AgentConversation</code>, die über <code>on_thinking</code> zwei Zwischenstücke feuert
+  und dann einen finalen String zurückgibt: <code>_speak()</code>/der Antwort-Kanal
+  bekommt nur den finalen String, nie die Zwischenstücke.</li>
+<li>Dieselbe Fake-Konversation ohne <code>on_thinking</code>-Aufrufe (Backend liefert
+  keinen Denkprozess): bestehendes Verhalten bleibt unverändert, kein Fehler.</li>
+<li>Stop während "thinking", kein <code>on_thinking</code>-Aufruf zuvor: Chatverlauf
+  bekommt genau einen neuen Eintrag, die Abbruch-Markierung.</li>
+<li>Stop während "thinking", nachdem <code>on_thinking</code> schon Inhalte geliefert
+  hat: Denkprozess-Einträge bleiben erhalten, zusätzlich die
+  Abbruch-Markierung.</li>
+<li>Stop während "speaking" (Antwort-Kanal war schon vollständig): kein neuer
+  Markierungs-Eintrag, Text unverändert, nur TTS wird gestoppt.</li>
+<li>Claude-Pfad: eine AssistantMessage mit Text vor einem Tool-Use, gefolgt von
+  der finalen AssistantMessage: nur der Text der letzten Message landet im
+  Antwort-Kanal, der vorherige im Denkprozess-Kanal.</li>
+</ul>
+<h2 id="6-nicht-ziele">6. Nicht-Ziele<a class="headerlink" href="#6-nicht-ziele" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Echtes Streaming des Antwort-Kanals selbst (siehe core-dialog-loop.md
+  Abschnitt 7) -- bleibt atomar.</li>
+<li>Standardmäßiges Ein-/Ausblenden des Denkprozess-Kanals im Cockpit, Styling
+  im Detail -- UI-Entscheidung von <code>cockpit.py</code>, nicht hier festgelegt
+  (in der Umsetzung, Abschnitt 3a: Gradios Standard-Darstellung für
+  <code>metadata</code>-Nachrichten übernommen, nicht weiter angepasst).</li>
+<li>Denkprozess-Anzeige im Telegram-Bot -- Callback-seitig vorbereitet
+  (Abschnitt 3a), in <code>telegram_bot/daemon.py</code> aber nicht verdrahtet.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Zurück zum Seitenanfang
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "toc.integrate", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "In Zwischenablage kopiert", "clipboard.copy": "In Zwischenablage kopieren", "search.result.more.one": "1 weiteres Suchergebnis auf dieser Seite", "search.result.more.other": "# weitere Suchergebnisse auf dieser Seite", "search.result.none": "Keine Suchergebnisse", "search.result.one": "1 Suchergebnis", "search.result.other": "# Suchergebnisse", "search.result.placeholder": "Suchbegriff eingeben", "search.result.term.missing": "Es fehlt", "select.version": "Version ausw\u00e4hlen"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
