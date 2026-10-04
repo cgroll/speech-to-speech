@@ -15,8 +15,11 @@ GNOME hotkey) evdev lets this same process listen for the button.
 
 import dataclasses
 import logging
+import shutil
+import tempfile
 import threading
 import time
+from pathlib import Path
 
 import numpy as np
 
@@ -72,6 +75,24 @@ class _TtsQueueItem:
     played: bool = False
     first_chunk_s: float | None = None
     speak_duration_s: float | None = None
+
+
+_image_cache_dir: Path | None = None
+_image_cache_lock = threading.Lock()
+
+
+def _copy_to_image_cache(path: str) -> str:
+    """Copies `path` into a lazily created temp dir Gradio is allowed to
+    serve from (see App._append_image()) and returns the copy's path."""
+    global _image_cache_dir
+    with _image_cache_lock:
+        if _image_cache_dir is None:
+            _image_cache_dir = Path(tempfile.mkdtemp(prefix="speech-to-speech-images-"))
+        src = Path(path)
+        fd, dest = tempfile.mkstemp(prefix=f"{src.stem}-", suffix=src.suffix, dir=_image_cache_dir)
+    with open(fd, "wb") as out, open(src, "rb") as inp:
+        shutil.copyfileobj(inp, out)
+    return dest
 
 
 class App:
@@ -583,8 +604,17 @@ class App:
         chat bubble, in one call to this method rather than two separate
         _append_history() calls. Runs on the Claude SDK's own background
         event-loop thread, not any thread already holding _history_lock, so
-        this needs its own locking same as _append_history() above."""
-        content: list[dict[str, str] | str] = [{"path": path}]
+        this needs its own locking same as _append_history() above.
+
+        The file is copied into a per-process temp dir first: Gradio only
+        serves files from its CWD or the system temp dir (InvalidPathError
+        otherwise), while the agent's workspace can be anywhere -- and a
+        rejected path left in _history would break every later re-render of
+        the chat, not just this one. Copying (rather than widening launch()'s
+        allowed_paths to the whole filesystem) also snapshots the image as it
+        was when shown, so a later overwrite by the agent doesn't change an
+        earlier chat bubble."""
+        content: list[dict[str, str] | str] = [{"path": _copy_to_image_cache(path)}]
         if caption:
             content.append(caption)
         with self._history_lock:
