@@ -169,7 +169,11 @@ def test_text_input_during_thinking_queues_steering_message(harness: Harness) ->
     
     assert wait_until(lambda: app._state == "idle")
     assert llm.sent == ["Frage 1", "Frage 2"]
-    assert [m["role"] for m in app.get_history()] == ["user", "assistant", "user", "assistant"]
+    # Input Separation (submit_text()): a steering message is appended to
+    # the chat history the moment it's submitted, not when its turn is
+    # actually processed -- so both user turns show up before either
+    # response does.
+    assert [m["role"] for m in app.get_history()] == ["user", "user", "assistant", "assistant"]
 
 
 def test_voice_barge_in_during_processing_stops_audio_and_starts_recording(harness: Harness) -> None:

@@ -96,7 +96,18 @@ def test_background_result_during_an_active_turn_does_not_corrupt_it(harness: Ha
 # while not idle".
 
 
-def test_asking_for_status_mid_processing_is_barge_in_and_discards_the_task(harness: Harness) -> None:
+def test_asking_for_status_mid_processing_is_queued_and_both_get_answered(harness: Harness) -> None:
+    # 2026-10-0x update (see docs/specs/background-channel.md section 1,
+    # finding 2): barge-in/steering was reworked so a second text input no
+    # longer cancels the turn in flight -- it's queued like any other
+    # steering message (same mechanism test_core_dialog_loop.py's
+    # test_text_input_during_thinking_queues_steering_message pins). A
+    # status question is indistinguishable from a new question to the code,
+    # so it now rides along in the same queue instead of discarding the
+    # original task -- the "no abort, no real peek either" gap this test
+    # documents just moved from "the task is lost" to "the task finishes
+    # late and nothing marks what it was answering"; see the spec for the
+    # remaining open question (a real peek that doesn't touch the queue).
     app = harness.app
     replies = {
         "mach die lange aufgabe": "Task-Ergebnis (zu spät)",
@@ -110,34 +121,32 @@ def test_asking_for_status_mid_processing_is_barge_in_and_discards_the_task(harn
     assert app._state == "thinking"
 
     # The user just wants to peek, not cancel -- but there's no API for
-    # that, only submit_text()/on_toggle(), which both barge in.
+    # that, only submit_text()/on_toggle(). Today that just queues it.
     app.submit_text("wie weit bist du?")
 
-    # Finding: the original task is cancelled, not paused/queried.
-    assert task.cancel_calls == 1
-    assert app._state == "thinking"  # new turn, not idle -- looks seamless
-    assert app._interrupt is not None
+    # Finding: the original task is no longer cancelled or discarded.
+    assert task.cancel_calls == 0
+    assert app._state == "thinking"  # still the original turn, uninterrupted
+    # Input Separation: both user messages are visible immediately, well
+    # before either answer exists.
+    assert [m["role"] for m in app.get_history()] == ["user", "user"]
 
-    # The original task's eventual reply, once the gate releases, is
-    # discarded as an interrupted turn -- "Task-Ergebnis" never surfaces
-    # anywhere, silently. From the user's perspective they asked a
-    # clarifying question and the original request just vanished.
-    #
-    # The barge-in's own cancel() already released the *first* call's gate
-    # (before the second thread even started, see submit_text()); wait for
-    # the second call to actually be inside send() -- i.e. its own fresh
-    # gate is in place -- before releasing it too, rather than racing it.
-    assert wait_until(lambda: len(task.sent) == 2)
+    task.release()  # original task finishes...
+    assert wait_until(lambda: len(task.sent) == 2)  # ...and the status question starts
     task.release()
     assert wait_until(lambda: app._state == "idle")
+
     roles = [m["role"] for m in app.get_history()]
     contents = [m["content"] for m in app.get_history()]
-    assert "Task-Ergebnis (zu spät)" not in contents
-    assert roles == ["user", "user", "assistant"]
+    assert roles == ["user", "user", "assistant", "assistant"]
     assert contents[0] == "mach die lange aufgabe"
     assert contents[1] == "wie weit bist du?"
-    # The second user message got its own, unrelated answer (from the same
-    # fake backend/task object, since App reuses one backend across turns);
-    # nothing in the history marks that the first request was ever
-    # abandoned, the same "no abort marker today" gap
-    # thinking-channel-and-stop-marker.md already names for plain Stop.
+    # Both replies now surface, in the order the turns ran -- the original
+    # task's result is no longer silently discarded...
+    assert contents[2] == "Task-Ergebnis (zu spät)"
+    assert contents[3] == "Keine Ahnung, bin neu hier"
+    # ...but nothing in the history marks which question a given answer
+    # belongs to, nor that "wie weit bist du?" never actually inspected the
+    # first task's progress -- the same "no turn-membership concept" gap
+    # noted in test_background_result_during_an_active_turn_does_not_corrupt_it
+    # above, and the still-open "real peek" question from the spec.

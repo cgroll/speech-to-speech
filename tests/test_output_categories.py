@@ -1,9 +1,11 @@
 """Tests for the output-categorization feature (response/thinking/other,
 docs/specs/thinking-channel-and-stop-marker.md section 3a): App._append_output(),
-that create_conversation() is actually wired up with it, and the one
-safety-critical guarantee the whole feature depends on -- that TTS never
-sees anything but the final response, no matter what else streamed by on
-the way there.
+that create_conversation() is actually wired up with it, and the
+safety-critical guarantee the feature still depends on -- that TTS never
+sees raw CATEGORY_OTHER (tool call/result) noise. CATEGORY_THINKING is
+*not* silent: since docs/specs/tts-output-queue.md it's deliberately spoken
+too, through the same ordered queue as the final response (see
+test_tts_output_queue.py for that ordering guarantee).
 
 The block-classification logic itself (which block/event type counts as
 which category) lives inside llm.py's async Claude SDK loop and
@@ -35,16 +37,25 @@ def test_append_output_tags_thinking_with_gradio_metadata(harness: Harness) -> N
     assert entry["role"] == "assistant"
     assert entry["content"] == "hmm, let me check that"
     assert entry["metadata"]["title"] == app_module.OUTPUT_CATEGORY_TITLES[CATEGORY_THINKING]
-    assert entry["metadata"]["status"] == "done"
+    # 2026-10-02: deliberately no "status" key -- Gradio only starts a
+    # thought bubble collapsed when status="done" is present, so omitting
+    # it makes thinking output show up already expanded (see _append_output()'s
+    # docstring/inline comment in app.py).
+    assert "status" not in entry["metadata"]
 
 
-def test_append_output_tags_other_with_its_own_title(harness: Harness) -> None:
+def test_append_output_filters_other_from_history_but_logs_it(harness: Harness, caplog) -> None:
+    # 2026-10-02: CATEGORY_OTHER (tool calls/results) is deliberately kept
+    # out of the chat history to avoid cluttering the UI -- it's only
+    # surfaced via logging, for developers watching the terminal (see
+    # docs/channels.md and _append_output()'s docstring in app.py).
     app = harness.app
 
-    app._append_output(CATEGORY_OTHER, "→ bash(ls)")
+    with caplog.at_level("INFO"):
+        app._append_output(CATEGORY_OTHER, "→ bash(ls)")
 
-    entry = app.get_history()[0]
-    assert entry["metadata"]["title"] == app_module.OUTPUT_CATEGORY_TITLES[CATEGORY_OTHER]
+    assert app.get_history() == []
+    assert "→ bash(ls)" in caplog.text
 
 
 def test_append_output_falls_back_to_a_generic_title_for_an_unknown_category(harness: Harness) -> None:
@@ -104,10 +115,17 @@ def test_reset_wires_on_output_to_append_output(harness: Harness, monkeypatch) -
     assert captured_kwargs.get("on_output") == app._append_output
 
 
-# -- The safety-critical guarantee: voice only ever gets the response -------
+# -- The safety-critical guarantee: voice never gets raw tool-call noise ----
+#
+# 2026-10-03 (docs/specs/tts-output-queue.md): thinking chunks are no longer
+# silent -- they're deliberately spoken too, through the same ordered TTS
+# queue as the final response (see test_tts_output_queue.py for the
+# ordering guarantee itself). The guarantee that still holds, and that this
+# test pins, is narrower: CATEGORY_OTHER (raw tool calls/results) must never
+# reach TTS, only CATEGORY_THINKING and the final response may.
 
 
-def test_thinking_output_during_a_turn_never_reaches_tts(harness: Harness) -> None:
+def test_tool_call_output_never_reaches_tts_but_thinking_and_response_do(harness: Harness) -> None:
     app = harness.app
     app._llm = FakeAgentConversation(
         reply="die kurze, gesprochene Antwort",
@@ -121,16 +139,18 @@ def test_thinking_output_during_a_turn_never_reaches_tts(harness: Harness) -> No
     app.submit_text("frage")
 
     assert wait_until(lambda: app._state == "idle")
-    # Both categorized chunks landed in the chat history...
+    # The thinking chunk lands in the chat history; the CATEGORY_OTHER (tool
+    # call) chunk is deliberately filtered out of the UI (logged instead,
+    # see test_append_output_filters_other_from_history_but_logs_it)...
     roles_and_content = [(m["role"], m["content"]) for m in app.get_history()]
     assert roles_and_content == [
         ("user", "frage"),
         ("assistant", "erstmal nachdenken..."),
-        ("assistant", "→ bash(ls)"),
         ("assistant", "die kurze, gesprochene Antwort"),
     ]
-    # ...but only the response -- the last entry above -- ever went to TTS.
-    assert harness.tts.speak_calls == ["die kurze, gesprochene Antwort"]
+    # ...and while the thinking chunk and the response both get spoken (in
+    # order), the tool-call chunk never does.
+    assert harness.tts.speak_calls == ["erstmal nachdenken...", "die kurze, gesprochene Antwort"]
 
 
 def test_thinking_output_still_shown_as_text_even_when_voice_is_muted(harness: Harness) -> None:
