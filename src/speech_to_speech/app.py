@@ -23,7 +23,7 @@ from pathlib import Path
 
 import numpy as np
 
-from speech_to_speech import cockpit, daemon_control, input_button, sessions, stt_client, toggle_socket, tts_client
+from speech_to_speech import cockpit, daemon_control, feedback, input_button, sessions, stt_client, toggle_socket, tts_client
 from speech_to_speech.agent_backend import (
     AGENT_LABELS,
     CATEGORY_OTHER,
@@ -209,6 +209,32 @@ class App:
         self._state = new_state
 
     def on_toggle(self) -> None:
+        # Safety net: both callers of this method -- input_button.listen_
+        # for_toggle()'s evdev read_loop and toggle_socket.serve()'s accept
+        # loop -- treat an exception raised out of their callback as fatal
+        # to that whole trigger source. toggle_socket.serve() only catches
+        # OSError around its own socket I/O, not around on_toggle() itself,
+        # and _run_jabra_listener() only catches the RuntimeError that
+        # input_button raises for *expected* setup failures (no device,
+        # missing permissions) -- neither is prepared for an unexpected bug
+        # or daemon error bubbling up from here, which would otherwise kill
+        # that thread silently (no cue, and for the socket path not even a
+        # log line) and leave that whole input path dead for the rest of
+        # the process's life. _start_recording() and _run_responder_loop()
+        # already handle the STT-daemon failures we expect; this is the
+        # last-resort catch-all for anything else, so a bug here degrades
+        # to "one press was dropped, with a 'Fehler' cue and a log line"
+        # instead of "this trigger source is now permanently dead".
+        try:
+            self._on_toggle_inner()
+        except Exception as exc:
+            logger.error("on_toggle() failed unexpectedly (%s). Resetting to idle.", exc, exc_info=True)
+            feedback.play_cue("error")
+            with self._state_lock:
+                self._set_state("idle")
+                self._audio_suppressed = False
+
+    def _on_toggle_inner(self) -> None:
         # Two threads (evdev listener, socket server) can call this
         # concurrently -- claim the state transition inside a short lock so
         # a simultaneous Jabra + local-key press can't both see "idle" and
@@ -239,6 +265,11 @@ class App:
         if state == "idle":
             self._start_recording()
         elif state == "recording":
+            # Spoken cue right at the toggle that actually ends the
+            # recording -- the symmetric counterpart to the "start" cue in
+            # _start_recording(), so a press that stops recording is just as
+            # unambiguous as one that starts it (see feedback.py).
+            feedback.play_cue("stop")
             # Start the responder loop if not already running.
             # (In the new model, we might already have one running from a
             # previous turn that is now processing a queued message).
@@ -255,7 +286,32 @@ class App:
         # waiting to be spoken, instead of letting it trickle out while the
         # user is already talking about something else.
         self._purge_tts_queue()
-        stt_client.start_recording()
+        # Confirm with the daemon *before* speaking the "Start" cue -- a
+        # cue that fires unconditionally (as it used to) tells the user
+        # recording started even when it didn't, e.g. the daemon answers
+        # "busy: recording" because it thinks a recording is already
+        # running. Speaking "Fehler" and resetting back to idle instead
+        # means a failed press is either loud (you hear "Fehler") or silent
+        # (no cue at all) -- never a false "Start".
+        try:
+            stt_client.start_recording()
+        except Exception as exc:
+            logger.error(
+                "Failed to start recording (%s). Returning to idle -- "
+                "if this keeps happening, the STT daemon is likely stuck; "
+                "try the cockpit's 'STT-Daemon neu starten' button.",
+                exc,
+                exc_info=True,
+            )
+            feedback.play_cue("error")
+            with self._state_lock:
+                self._set_state("idle")
+                self._audio_suppressed = False
+            return
+        # Spoken cue ("Start") so the button press is confirmed even if
+        # you're not looking at the cockpit -- fires in a background thread
+        # (feedback.py) so it can't delay the mic actually starting below.
+        feedback.play_cue("start")
         logger.info("Recording... press the button again to stop.")
 
     def _run_responder_loop(self) -> None:
@@ -271,7 +327,29 @@ class App:
             # Drain the mic first if we just came from recording
             if stt_client.is_recording():
                 stop_t0 = time.monotonic()
-                text = stt_client.stop_recording().strip()
+                # on_toggle() already spoke the "Ende" cue on the press that
+                # got us here -- that only confirms the press was received,
+                # not that the daemon actually stopped/transcribed cleanly.
+                # If this call fails (daemon error, or it drops off the
+                # socket mid-transcribe), say so explicitly instead of
+                # leaving the turn to vanish with the state stuck on
+                # "thinking" forever.
+                try:
+                    text = stt_client.stop_recording().strip()
+                except Exception as exc:
+                    logger.error(
+                        "Failed to stop recording (%s). Discarding this turn "
+                        "and returning to idle -- if this keeps happening, "
+                        "the STT daemon is likely stuck; try the cockpit's "
+                        "'STT-Daemon neu starten' button.",
+                        exc,
+                        exc_info=True,
+                    )
+                    feedback.play_cue("error")
+                    with self._state_lock:
+                        self._set_state("idle")
+                        self._audio_suppressed = False
+                    return
                 stt_s = time.monotonic() - stop_t0
                 if text:
                     logger.info("Transcribed: %s", text)

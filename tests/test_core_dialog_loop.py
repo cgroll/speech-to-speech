@@ -48,6 +48,20 @@ def test_voice_turn_goes_idle_recording_processing_responding_idle(harness: Harn
     assert wait_until(lambda: app._state == "idle")
     assert harness.stt.stop_calls == 1
     assert harness.llm.sent == ["hello"]  # FakeSTT's default transcript
+
+
+def test_toggle_plays_start_and_stop_feedback_cues(harness: Harness) -> None:
+    """The Jabra-button toggle should give audible confirmation of each
+    transition (feedback.py) -- not just the cockpit's visual state label,
+    since the button is often pressed without looking at the screen."""
+    app = harness.app
+
+    app.on_toggle()  # idle -> recording
+    assert harness.feedback.cue_calls == ["start"]
+
+    app.on_toggle()  # recording -> thinking
+    assert wait_until(lambda: app._state == "idle")
+    assert harness.feedback.cue_calls == ["start", "stop"]
     assert harness.tts.speak_calls == ["hi there"]
 
 
@@ -238,3 +252,68 @@ def test_concurrent_idle_toggles_never_double_start_a_recording(harness: Harness
     assert harness.stt.start_calls == 1
     assert wait_until(lambda: app._state == "idle")
     assert harness.stt.stop_calls == 1
+
+
+# -- Block 6: STT daemon error handling -------------------------------------
+#
+# Regression coverage for the "Jabra button unavailable (STT daemon error:
+# busy: recording)" failure mode: a daemon-side error used to (a) speak the
+# "Start" cue unconditionally before even calling the daemon, so a failed
+# press sounded identical to a successful one, and (b) raise out of
+# on_toggle() into whichever trigger thread called it (evdev listener /
+# toggle socket), silently killing that thread for the rest of the
+# process's life. These tests pin the fix: a daemon error is spoken as
+# "error", the state always recovers to idle, and on_toggle() itself never
+# raises.
+
+
+def test_start_recording_failure_speaks_error_not_start_and_recovers_to_idle(harness: Harness) -> None:
+    app = harness.app
+    harness.stt.fail_start = RuntimeError("STT daemon error: busy: recording")
+
+    app.on_toggle()  # idle -> recording, but the daemon call fails
+
+    assert harness.feedback.cue_calls == ["error"]
+    assert app._state == "idle"
+    assert not harness.stt.is_recording()
+
+    # The failure was transient (FakeSTT clears fail_start after raising
+    # once) -- a second press should work normally now.
+    app.on_toggle()
+    assert app._state == "recording"
+    assert harness.feedback.cue_calls == ["error", "start"]
+
+
+def test_stop_recording_failure_speaks_error_and_recovers_to_idle(harness: Harness) -> None:
+    app = harness.app
+
+    app.on_toggle()  # idle -> recording (succeeds)
+    assert harness.feedback.cue_calls == ["start"]
+
+    harness.stt.fail_stop = RuntimeError("STT daemon error: busy: idle")
+    app.on_toggle()  # recording -> thinking, but stop_recording() fails
+
+    # on_toggle() itself speaks "stop" right at the press (confirms the
+    # press was received); the responder loop then discovers the daemon
+    # call failed and speaks "error" on top of it.
+    assert wait_until(lambda: app._state == "idle")
+    assert harness.feedback.cue_calls == ["start", "stop", "error"]
+    assert harness.llm.sent == []  # turn was discarded, never reached the LLM
+    assert not app._responder_loop_running
+
+
+def test_on_toggle_never_raises_even_on_unexpected_error(harness: Harness) -> None:
+    """Guards the on_toggle()/_on_toggle_inner() split: whatever goes wrong
+    inside a toggle, on_toggle() must swallow it -- both input_button's
+    evdev read_loop and toggle_socket.serve()'s accept loop treat an
+    exception escaping this callback as fatal to that entire trigger
+    thread, which previously left the Jabra button (or the local hotkey)
+    dead for the rest of the process's life with little or no indication
+    why."""
+    app = harness.app
+    harness.stt.fail_start = ValueError("something unrelated to the daemon broke")
+
+    app.on_toggle()  # must not raise
+
+    assert harness.feedback.cue_calls == ["error"]
+    assert app._state == "idle"

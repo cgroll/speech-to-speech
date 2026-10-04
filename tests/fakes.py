@@ -92,23 +92,39 @@ class FakeAgentConversation:
 
 
 class FakeSTT:
-    """speech_to_speech.stt_client stand-in."""
+    """speech_to_speech.stt_client stand-in.
+
+    `fail_start`/`fail_stop` simulate the daemon answering {"ok": False,
+    "error": ...} (stt_client.py raises RuntimeError for that case) --
+    e.g. the "busy: recording" error that prompted app.py's
+    _start_recording()/_run_responder_loop() to handle this explicitly
+    instead of letting it kill the calling thread (evdev listener / toggle
+    socket). Raised once, then cleared, matching a transient daemon hiccup
+    rather than a permanently broken daemon."""
 
     def __init__(self, transcript: str = "hello"):
         self.transcript = transcript
         self.start_calls = 0
         self.stop_calls = 0
         self._is_recording = False
+        self.fail_start: Exception | None = None
+        self.fail_stop: Exception | None = None
 
     def ensure_available(self) -> None:
         pass
 
     def start_recording(self) -> None:
         self.start_calls += 1
+        if self.fail_start is not None:
+            exc, self.fail_start = self.fail_start, None
+            raise exc
         self._is_recording = True
 
     def stop_recording(self) -> str:
         self.stop_calls += 1
+        if self.fail_stop is not None:
+            exc, self.fail_stop = self.fail_stop, None
+            raise exc
         self._is_recording = False
         return self.transcript
 
@@ -150,3 +166,15 @@ class FakeTTS:
     def synthesize(self, text: str) -> tuple[np.ndarray, int]:
         self.speak_calls.append(text)
         return np.zeros(1, dtype="float32"), 16000
+
+
+class FakeFeedback:
+    """speech_to_speech.feedback stand-in -- records cue names instead of
+    actually shelling out to espeak-ng/say, so running the test suite
+    doesn't audibly speak "Start"/"Ende" on every on_toggle() call."""
+
+    def __init__(self):
+        self.cue_calls: list[str] = []
+
+    def play_cue(self, name: str) -> None:
+        self.cue_calls.append(name)
