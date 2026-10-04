@@ -4,9 +4,14 @@ press actually landed -- without needing to watch the cockpit (the Gradio
 web UI isn't always in view, e.g. when the button is pressed from across the
 room).
 
-Spoken words ("Start"/"Ende"), not a tone: a short beep is easy to miss, or
-to misjudge as the wrong transition, when you're not looking at the screen.
-A word removes that ambiguity. Uses the OS's own instant local TTS
+Spoken words ("Start Recording"/"Ende"), not a tone: a short beep is easy to
+miss, or to misjudge as the wrong transition, when you're not looking at the
+screen. A word removes that ambiguity. "start"'s word is deliberately two
+words, not just "Start": a single short word left the very beginning of it
+clipped in practice (the user only caught the tail end), most likely the
+output device's wake-from-idle-suspend (see _WAKE_DELAY_S below) eating into
+the first syllable -- the extra length means a clipped start still leaves
+enough audible word left to recognize. Uses the OS's own instant local TTS
 (espeak-ng on Linux, `say` on macOS) rather than this app's own Qwen3-TTS
 daemon -- that model's latency (plus GPU/queue contention with a response
 that might already be in flight, see docs/specs/tts-output-queue.md) would
@@ -19,8 +24,8 @@ was already in a recording state the app didn't expect, or the daemon is
 unreachable. Without this, a button press that fails silently is
 indistinguishable from one that worked: the button still feels responsive
 (or the Jabra listener even shows as "unavailable" in the logs afterwards),
-but app.py never got the state change it was reacting to, so "Start" was
-never spoken in the first place -- that silence (no cue at all) *is* the
+but app.py never got the state change it was reacting to, so "Start
+Recording" was never spoken in the first place -- that silence (no cue at all) *is* the
 error signal to listen for here, and "Fehler" makes it explicit instead of
 just absent.
 
@@ -71,7 +76,7 @@ _WAKE_DELAY_S = 0.2
 # the agent's reply text is ready -- so the user knows no further input is
 # expected and only the TTS synthesis/playback is left to wait for.
 _WORDS = {
-    "start": "Start",
+    "start": "Start Recording",
     "stop": "Ende",
     "error": "Fehler",
     "agent_start": "Verstanden",

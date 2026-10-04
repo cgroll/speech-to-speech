@@ -81,7 +81,11 @@ aufgerufen wird, bevor `send()` den finalen Antwort-String zurückgibt.
 - Sprachausgabe (`_speak()`) bekommt weiterhin ausschließlich `reply`, nie
   Denkprozess-Inhalte -- das ändert sich durch diesen Umbau nicht, wird aber
   durch die Trennung jetzt tatsächlich sauber eingehalten (Fix des
-  Backlog-Bugs "en passant").
+  Backlog-Bugs "en passant"). **Überholt:** Mit der später eingeführten
+  Denkprozess-Sprachausgabe (`docs/specs/tts-output-queue.md`) wird
+  Denkprozess-Text inzwischen bewusst über dieselbe geordnete TTS-Warteschlange
+  gesprochen wie `reply` -- dieser Punkt beschreibt nur den Stand von
+  2026-10-02, nicht mehr den aktuellen Code.
 - Telegram-Bot: bekommt `on_thinking` vorerst nicht verdrahtet (bleibt bei
   nur der finalen Antwort) -- ob/wie Denkprozess dort später sinnvoll ist,
   ist nicht Teil dieser Spec.
@@ -131,7 +135,11 @@ core-dialog-loop.md Abschnitt 7 verwandt, hier aber nicht weiter verfolgt).
   "Gedanken"-Blase, ganz ohne eigenes CSS oder eigenen `role`-Wert (per
   Gradio-Quellcode und isoliertem `Chatbot.postprocess()`-Aufruf
   verifiziert). `_speak()` bekommt unverändert nur `reply`, nie
-  `on_output`-Inhalte -- strukturell gar nicht anders verdrahtet.
+  `on_output`-Inhalte -- strukturell gar nicht anders verdrahtet. **Überholt
+  (siehe Korrektur oben):** `on_output`-Inhalte der Kategorie Denkprozess
+  werden seit `docs/specs/tts-output-queue.md` zusätzlich separat an die TTS-
+  Warteschlange gegeben (`App._append_output()` -> `_enqueue_tts()`) -- nicht
+  über `_speak()`, aber eben doch hörbar, nicht mehr nur Text.
 - Terminal-Logging wie oben geplant **nicht** umgesetzt (nur
   Chatverlauf/Gradio) -- bisher kein Bedarf.
 - Telegram-Bot: weiterhin nicht verdrahtet, wie oben entschieden. Das
