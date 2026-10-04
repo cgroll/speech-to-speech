@@ -1,0 +1,162 @@
+<svg viewBox="0 0 1180 420" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" tabindex="0" data-step="1">
+  <title>Claude Code: normaler Turn-Loop (klickbar)</title>
+  <desc>Fünf wiederkehrende Zustände, Schritt für Schritt per Klick oder Pfeiltaste: Tippen, Senden, Verarbeitung, Antwort, Anzeige abgeschlossen -- dann zurück zu Tippen.</desc>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="arrowhead" />
+    </marker>
+    <marker id="arrow-muted" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="arrowhead-muted" />
+    </marker>
+  </defs>
+
+  <style>
+    .surface    { fill: #fcfcfb; }
+    .border     { stroke: rgba(11,11,11,0.10); }
+    .state-box  { stroke-width: 1.5; transition: fill .35s ease, stroke .35s ease, stroke-width .35s ease; }
+    .state-text { fill: #0b0b0b; font-weight: 600; }
+    .sub-text   { fill: #52514e; font-size: 11.5px; }
+    .edge       { stroke: #52514e; stroke-width: 2; fill: none; }
+    .edge-loop  { stroke: #898781; stroke-width: 1.75; stroke-dasharray: 6 5; fill: none; }
+    .edge-label-muted { fill: #52514e; font-size: 12px; }
+    .arrowhead  { fill: #52514e; }
+    .arrowhead-muted { fill: #898781; }
+    .caption    { fill: #898781; font-size: 12.5px; }
+    .cap-title  { fill: #0b0b0b; font-weight: 700; font-size: 15px; }
+    .cap-sub    { fill: #52514e; font-size: 13px; }
+    .step-indicator { fill: #898781; font-size: 12px; }
+    .btn-bg     { fill: #f2f1ee; stroke: #52514e; stroke-width: 1.5; cursor: pointer; }
+    .btn-bg:hover { fill: #e9e8e4; }
+    .btn-bg-primary { fill: #2a78d6; stroke: #2a78d6; stroke-width: 1.5; cursor: pointer; }
+    .btn-bg-primary:hover { fill: #1f66ba; }
+    .btn-text   { fill: #0b0b0b; font-weight: 600; font-size: 14px; pointer-events: none; }
+    .btn-text-primary { fill: #ffffff; font-weight: 600; font-size: 14px; pointer-events: none; }
+    .clickcatch { fill: transparent; cursor: pointer; }
+
+    @media (prefers-color-scheme: dark) {
+      .surface    { fill: #1a1a19; }
+      .border     { stroke: rgba(255,255,255,0.10); }
+      .state-text { fill: #ffffff; }
+      .sub-text   { fill: #c3c2b7; }
+      .edge       { stroke: #c3c2b7; }
+      .edge-loop  { stroke: #6b6a63; }
+      .edge-label-muted { fill: #c3c2b7; }
+      .arrowhead  { fill: #c3c2b7; }
+      .arrowhead-muted { fill: #6b6a63; }
+      .caption    { fill: #898781; }
+      .cap-title  { fill: #ffffff; }
+      .cap-sub    { fill: #c3c2b7; }
+      .step-indicator { fill: #898781; }
+      .btn-bg     { fill: #2a2a28; stroke: #c3c2b7; }
+      .btn-bg:hover { fill: #333331; }
+      .btn-text   { fill: #ffffff; }
+    }
+  </style>
+
+  <rect class="clickcatch" x="0" y="0" width="1180" height="420" id="bgClick" />
+  <rect x="0" y="0" width="1180" height="420" rx="16" class="surface border" style="pointer-events:none" />
+  <text x="24" y="28" class="caption" style="pointer-events:none">Claude Code -- normaler Turn-Loop, klickbare Fassung (docs/reference-claude-code-turn-taking.md Abschnitt 1)</text>
+
+  <text id="capLine1" x="24" y="54" class="cap-title" style="pointer-events:none">Tippen</text>
+  <text id="capLine2" x="24" y="72" class="cap-sub" style="pointer-events:none">Eingabefeld, Entwurfstext, Autocomplete</text>
+
+  <rect id="box1" x="40" y="100" width="150" height="90" rx="16" class="state-box" style="pointer-events:none" />
+  <text x="115" y="141" text-anchor="middle" class="state-text" font-size="16" style="pointer-events:none">Tippen</text>
+  <text x="115" y="159" text-anchor="middle" class="sub-text" style="pointer-events:none">Entwurf, Autocomplete</text>
+
+  <rect id="box2" x="240" y="100" width="150" height="90" rx="16" class="state-box" style="pointer-events:none" />
+  <text x="315" y="141" text-anchor="middle" class="state-text" font-size="16" style="pointer-events:none">Senden</text>
+  <text x="315" y="159" text-anchor="middle" class="sub-text" style="pointer-events:none">Enter</text>
+
+  <rect id="box3" x="420" y="100" width="250" height="90" rx="16" class="state-box" style="pointer-events:none" />
+  <text x="545" y="136" text-anchor="middle" class="state-text" font-size="16" style="pointer-events:none">Verarbeitung</text>
+  <text x="545" y="154" text-anchor="middle" class="sub-text" style="pointer-events:none">Tool-Nutzung / Denken</text>
+  <text x="545" y="170" text-anchor="middle" class="sub-text" style="pointer-events:none">(esc to interrupt)</text>
+
+  <rect id="box4" x="700" y="100" width="190" height="90" rx="16" class="state-box" style="pointer-events:none" />
+  <text x="795" y="141" text-anchor="middle" class="state-text" font-size="16" style="pointer-events:none">Antwort</text>
+  <text x="795" y="159" text-anchor="middle" class="sub-text" style="pointer-events:none">streamt live, kein Instant-Block</text>
+
+  <rect id="box5" x="930" y="100" width="220" height="90" rx="16" class="state-box" style="pointer-events:none" />
+  <text x="1040" y="141" text-anchor="middle" class="state-text" font-size="16" style="pointer-events:none">Anzeige abgeschlossen</text>
+  <text x="1040" y="159" text-anchor="middle" class="sub-text" style="pointer-events:none">Eingabefeld wieder frei</text>
+
+  <line x1="190" y1="145" x2="234" y2="145" class="edge" marker-end="url(#arrow)" style="pointer-events:none" />
+  <line x1="390" y1="145" x2="414" y2="145" class="edge" marker-end="url(#arrow)" style="pointer-events:none" />
+  <line x1="670" y1="145" x2="694" y2="145" class="edge" marker-end="url(#arrow)" style="pointer-events:none" />
+  <line x1="890" y1="145" x2="924" y2="145" class="edge" marker-end="url(#arrow)" style="pointer-events:none" />
+
+  <path d="M1040,190 C1040,270 115,270 115,190" class="edge-loop" marker-end="url(#arrow-muted)" style="pointer-events:none" />
+  <rect x="440" y="256" width="280" height="22" class="surface" style="pointer-events:none" />
+  <text x="580" y="272" text-anchor="middle" class="edge-label-muted" style="pointer-events:none">nächster Zyklus, sobald Antwort fertig ist</text>
+
+  <g id="prevBtn">
+    <rect x="950" y="360" width="40" height="32" rx="8" class="btn-bg" />
+    <text x="970" y="381" text-anchor="middle" class="btn-text">&#9664;</text>
+  </g>
+  <text id="stepIndicator" x="1000" y="381" text-anchor="middle" class="step-indicator" style="pointer-events:none">1 / 5</text>
+  <g id="nextBtn">
+    <rect x="1040" y="360" width="100" height="32" rx="8" class="btn-bg-primary" />
+    <text x="1090" y="381" text-anchor="middle" class="btn-text-primary">Weiter &#9654;</text>
+  </g>
+
+  <text x="24" y="382" class="caption" style="pointer-events:none">Klick auf die Fläche oder auf "Weiter", Pfeiltasten rechts/links funktionieren nach einem Klick in die Grafik.</text>
+
+  <script><![CDATA[
+    (function () {
+      var dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      var colors = dark ? {
+        neutral: { fill: '#2a2a28', stroke: '#c3c2b7', width: 1.5 },
+        active:  { fill: '#3a2317', stroke: '#ef7a63', width: 2.5 }
+      } : {
+        neutral: { fill: '#f2f1ee', stroke: '#52514e', width: 1.5 },
+        active:  { fill: '#fdece3', stroke: '#d6563f', width: 2.5 }
+      };
+
+      function paint(el, c) {
+        el.style.fill = c.fill;
+        el.style.stroke = c.stroke;
+        el.style.strokeWidth = c.width;
+      }
+
+      var steps = [
+        { active: 'box1', cap1: 'Tippen', cap2: 'Eingabefeld, Entwurfstext, Autocomplete' },
+        { active: 'box2', cap1: 'Senden', cap2: 'Enter übermittelt den Entwurf, der Turn beginnt' },
+        { active: 'box3', cap1: 'Verarbeitung', cap2: 'Tool-Nutzung / Denken -- esc to interrupt' },
+        { active: 'box4', cap1: 'Antwort', cap2: 'streamt live, kein Instant-Block' },
+        { active: 'box5', cap1: 'Anzeige abgeschlossen', cap2: 'Eingabefeld wird wieder frei -- nächster Zyklus beginnt bei Tippen' }
+      ];
+
+      var boxes = { box1: document.getElementById('box1'), box2: document.getElementById('box2'),
+        box3: document.getElementById('box3'), box4: document.getElementById('box4'), box5: document.getElementById('box5') };
+      var capLine1 = document.getElementById('capLine1');
+      var capLine2 = document.getElementById('capLine2');
+      var stepIndicator = document.getElementById('stepIndicator');
+      var step = 1;
+
+      function render() {
+        var s = steps[step - 1];
+        Object.keys(boxes).forEach(function (key) {
+          paint(boxes[key], key === s.active ? colors.active : colors.neutral);
+        });
+        capLine1.textContent = s.cap1;
+        capLine2.textContent = s.cap2;
+        stepIndicator.textContent = step + ' / ' + steps.length;
+      }
+
+      function next() { step = (step >= steps.length) ? 1 : step + 1; render(); }
+      function prev() { step = (step <= 1) ? steps.length : step - 1; render(); }
+
+      document.getElementById('nextBtn').addEventListener('click', next);
+      document.getElementById('prevBtn').addEventListener('click', prev);
+      document.getElementById('bgClick').addEventListener('click', next);
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'ArrowRight' || e.key === ' ') { next(); e.preventDefault(); }
+        if (e.key === 'ArrowLeft') { prev(); e.preventDefault(); }
+      });
+
+      render();
+    })();
+  ]]></script>
+</svg>

@@ -1,0 +1,251 @@
+<svg viewBox="0 0 1180 660" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">
+  <title>Claude Code: Nachricht während der Verarbeitung nachschicken (animiert)</title>
+  <desc>Zwei Szenarien im Wechsel, je eine Turn-Runde lang (20s Gesamtzyklus): Szenario A -- Nutzer schickt eine Nachricht nach, während Claude noch Tools ausführt. Die Verarbeitung-Box springt dabei sichtbar auf einen zweiten Anlauf zurück, statt einfach unverändert weiterzulaufen, weil die neue Nachricht erst noch mitverarbeitet werden muss. Zustellung noch im selben Turn. Szenario B -- Nutzer schickt nach, während die Antwort schon geschrieben wird, Zustellung automatisch als nächster Turn, ohne Neustart einer Box.</desc>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="arrowhead" />
+    </marker>
+    <marker id="arrow-muted" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="arrowhead-muted" />
+    </marker>
+    <marker id="arrow-a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="arrowhead-a" />
+    </marker>
+    <marker id="arrow-b" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="arrowhead-b" />
+    </marker>
+  </defs>
+
+  <style>
+    .surface    { fill: #fcfcfb; }
+    .border     { stroke: rgba(11,11,11,0.10); }
+    .state-box  { fill: #f2f1ee; stroke: #52514e; stroke-width: 1.5; }
+    .state-text { fill: #0b0b0b; font-weight: 600; }
+    .sub-text   { fill: #52514e; font-size: 11.5px; }
+    .edge       { stroke: #52514e; stroke-width: 2; fill: none; }
+    .edge-loop  { stroke: #898781; stroke-width: 1.75; stroke-dasharray: 6 5; fill: none; }
+    .edge-label { fill: #0b0b0b; font-size: 13px; }
+    .edge-label-muted { fill: #52514e; font-size: 12px; }
+    .arrowhead  { fill: #52514e; }
+    .arrowhead-muted { fill: #898781; }
+    .arrowhead-a { fill: #eb6834; }
+    .arrowhead-b { fill: #2a78d6; }
+    .caption    { fill: #898781; font-size: 12.5px; }
+    .legend-text{ fill: #52514e; font-size: 12px; }
+    .bubble-text{ fill: #0b0b0b; font-weight: 600; font-size: 13px; }
+    .bubble-sub { fill: #52514e; font-size: 11px; }
+    .flash-text-a { fill: #9a3f18; font-weight: 700; font-size: 12.5px; }
+    .flash-text-b { fill: #184f95; font-weight: 700; font-size: 12.5px; }
+    .restart-icon { fill: #eb6834; font-weight: 700; }
+    .restart-label { fill: #9a3f18; font-weight: 600; font-size: 11.5px; }
+
+    @keyframes glow {
+      0%   { fill: #f2f1ee; stroke: #52514e; stroke-width: 1.5; }
+      15%  { fill: #fdece3; stroke: #d6563f; stroke-width: 2.5; }
+      35%  { fill: #f2f1ee; stroke: #52514e; stroke-width: 1.5; }
+      100% { fill: #f2f1ee; stroke: #52514e; stroke-width: 1.5; }
+    }
+    .box1 { animation: glow 10s ease-in-out infinite; animation-delay: 0s; }
+    .box2 { animation: glow 10s ease-in-out infinite; animation-delay: 2s; }
+    .box4 { animation: glow 10s ease-in-out infinite; animation-delay: 6s; }
+    .box5 { animation: glow 10s ease-in-out infinite; animation-delay: 8s; }
+
+    /* Verarbeitung (box3): lap 1 (Szenario A) runs its normal pulse, then -- right
+       when the queued message is delivered -- visibly drops and pulses a second
+       time instead of just fading out, standing for "a new input arrived, so
+       processing loops back and runs again" rather than silently continuing.
+       Lap 2 (Szenario B) gets the plain single pulse, same shape as every other box. */
+    @keyframes verarbeitung-restart {
+      0%,19%   { fill: #f2f1ee; stroke: #52514e; stroke-width: 1.5; }
+      20%      { fill: #f2f1ee; stroke: #52514e; stroke-width: 1.5; }
+      25%      { fill: #fdece3; stroke: #d6563f; stroke-width: 2.5; }
+      29%      { fill: #f2f1ee; stroke: #52514e; stroke-width: 1.5; }
+      34%      { fill: #fdece3; stroke: #eb6834; stroke-width: 3; }
+      37.5%    { fill: #f2f1ee; stroke: #52514e; stroke-width: 1.5; }
+      69.9%    { fill: #f2f1ee; stroke: #52514e; stroke-width: 1.5; }
+      70%      { fill: #f2f1ee; stroke: #52514e; stroke-width: 1.5; }
+      77.5%    { fill: #fdece3; stroke: #d6563f; stroke-width: 2.5; }
+      87.5%    { fill: #f2f1ee; stroke: #52514e; stroke-width: 1.5; }
+      100%     { fill: #f2f1ee; stroke: #52514e; stroke-width: 1.5; }
+    }
+    .box3-restart { animation: verarbeitung-restart 20s linear infinite; }
+
+    @keyframes restart-cue { 0%,27% { opacity: 0; } 28%,36% { opacity: 1; } 37%,100% { opacity: 0; } }
+    .restart-cue { animation: restart-cue 20s linear infinite; }
+
+    /* scenario captions: A during lap 1 (0-10s), B during lap 2 (10-20s) of a 20s cycle */
+    @keyframes capA { 0%,48% { opacity: 1; } 51%,100% { opacity: 0; } }
+    @keyframes capB { 0%,49% { opacity: 0; } 52%,99% { opacity: 1; } 100% { opacity: 0; } }
+    .cap-a { animation: capA 20s linear infinite; }
+    .cap-b { animation: capB 20s linear infinite; }
+
+    /* scenario A bubble: appears mid tool-phase of lap 1, delivered into "Verarbeitung" */
+    @keyframes msgA-opacity {
+      0%,21% { opacity: 0; } 22% { opacity: 1; } 36% { opacity: 1; } 38%,100% { opacity: 0; }
+    }
+    @keyframes msgA-color {
+      0%,21%  { fill: #f2f1ee; stroke: #898781; }
+      22%,25% { fill: #fdf3d6; stroke: #c99a1f; }
+      26%,31% { fill: #ececea; stroke: #898781; }
+      33%,35% { fill: #fdece3; stroke: #eb6834; }
+      37%,100%{ fill: #f2f1ee; stroke: #898781; }
+    }
+    @keyframes msgA-flash { 0%,32% { opacity: 0; } 33%,35% { opacity: 1; } 36%,100% { opacity: 0; } }
+    .msg-a { animation: msgA-opacity 20s linear infinite; }
+    .msg-a-rect { animation: msgA-color 20s linear infinite; }
+    .msg-a-flash { animation: msgA-flash 20s linear infinite; }
+
+    /* scenario B bubble: appears mid response of lap 2, delivered as next turn at loop point */
+    @keyframes msgB-opacity {
+      0%,76% { opacity: 0; } 77% { opacity: 1; } 96% { opacity: 1; } 99.5%,100% { opacity: 0; }
+    }
+    @keyframes msgB-color {
+      0%,76%  { fill: #f2f1ee; stroke: #898781; }
+      77%,80% { fill: #fdf3d6; stroke: #c99a1f; }
+      81%,95% { fill: #ececea; stroke: #898781; }
+      97%,99% { fill: #e7f0fb; stroke: #2a78d6; }
+      99.5%,100% { fill: #f2f1ee; stroke: #898781; }
+    }
+    @keyframes msgB-flash { 0%,96% { opacity: 0; } 97%,99% { opacity: 1; } 99.6%,100% { opacity: 0; } }
+    .msg-b { animation: msgB-opacity 20s linear infinite; }
+    .msg-b-rect { animation: msgB-color 20s linear infinite; }
+    .msg-b-flash { animation: msgB-flash 20s linear infinite; }
+
+    @media (prefers-color-scheme: dark) {
+      .surface    { fill: #1a1a19; }
+      .border     { stroke: rgba(255,255,255,0.10); }
+      .state-box  { fill: #2a2a28; stroke: #c3c2b7; }
+      .state-text { fill: #ffffff; }
+      .sub-text   { fill: #c3c2b7; }
+      .edge       { stroke: #c3c2b7; }
+      .edge-loop  { stroke: #6b6a63; }
+      .edge-label { fill: #ffffff; }
+      .edge-label-muted { fill: #c3c2b7; }
+      .arrowhead  { fill: #c3c2b7; }
+      .arrowhead-muted { fill: #6b6a63; }
+      .arrowhead-a { fill: #ef7a63; }
+      .arrowhead-b { fill: #3987e5; }
+      .caption    { fill: #898781; }
+      .legend-text{ fill: #c3c2b7; }
+      .bubble-text{ fill: #ffffff; }
+      .bubble-sub { fill: #c3c2b7; }
+      .flash-text-a { fill: #f0a884; }
+      .flash-text-b { fill: #86b6ef; }
+      .restart-icon { fill: #ef7a63; }
+      .restart-label { fill: #f0a884; }
+
+      @keyframes glow {
+        0%   { fill: #2a2a28; stroke: #c3c2b7; stroke-width: 1.5; }
+        15%  { fill: #3a2317; stroke: #ef7a63; stroke-width: 2.5; }
+        35%  { fill: #2a2a28; stroke: #c3c2b7; stroke-width: 1.5; }
+        100% { fill: #2a2a28; stroke: #c3c2b7; stroke-width: 1.5; }
+      }
+      @keyframes verarbeitung-restart {
+        0%,19%   { fill: #2a2a28; stroke: #c3c2b7; stroke-width: 1.5; }
+        20%      { fill: #2a2a28; stroke: #c3c2b7; stroke-width: 1.5; }
+        25%      { fill: #3a2317; stroke: #ef7a63; stroke-width: 2.5; }
+        29%      { fill: #2a2a28; stroke: #c3c2b7; stroke-width: 1.5; }
+        34%      { fill: #3a2317; stroke: #d95926; stroke-width: 3; }
+        37.5%    { fill: #2a2a28; stroke: #c3c2b7; stroke-width: 1.5; }
+        69.9%    { fill: #2a2a28; stroke: #c3c2b7; stroke-width: 1.5; }
+        70%      { fill: #2a2a28; stroke: #c3c2b7; stroke-width: 1.5; }
+        77.5%    { fill: #3a2317; stroke: #ef7a63; stroke-width: 2.5; }
+        87.5%    { fill: #2a2a28; stroke: #c3c2b7; stroke-width: 1.5; }
+        100%     { fill: #2a2a28; stroke: #c3c2b7; stroke-width: 1.5; }
+      }
+      @keyframes msgA-color {
+        0%,21%  { fill: #2a2a28; stroke: #6b6a63; }
+        22%,25% { fill: #4a3f17; stroke: #d9ad2f; }
+        26%,31% { fill: #333331; stroke: #6b6a63; }
+        33%,35% { fill: #3a2317; stroke: #d95926; }
+        37%,100%{ fill: #2a2a28; stroke: #6b6a63; }
+      }
+      @keyframes msgB-color {
+        0%,76%  { fill: #2a2a28; stroke: #6b6a63; }
+        77%,80% { fill: #4a3f17; stroke: #d9ad2f; }
+        81%,95% { fill: #333331; stroke: #6b6a63; }
+        97%,99% { fill: #142a42; stroke: #3987e5; }
+        99.5%,100% { fill: #2a2a28; stroke: #6b6a63; }
+      }
+    }
+  </style>
+
+  <rect x="0" y="0" width="1180" height="660" rx="16" class="surface border" />
+  <text x="24" y="28" class="caption">Claude Code -- Nachricht nachschicken, während der Agent an der Reihe ist (docs/reference-claude-code-turn-taking.md Abschnitt 2)</text>
+
+  <text x="24" y="52" class="edge-label cap-a" font-size="14">Szenario A -- Enter während der Tool-Phase: Zustellung noch im selben Turn</text>
+  <text x="24" y="52" class="edge-label cap-b" font-size="14">Szenario B -- Enter während der Antwort: Zustellung automatisch als nächster Turn</text>
+
+  <!-- restart cue: fades in only in Szenario A, right when the queued message is
+       delivered, above the Verarbeitung box -->
+  <g class="restart-cue">
+    <text x="545" y="150" text-anchor="middle" class="restart-icon" font-size="30">↺</text>
+    <text x="545" y="168" text-anchor="middle" class="restart-label">neue Nachricht -- Verarbeitung läuft erneut an</text>
+  </g>
+
+  <!-- state boxes -->
+  <rect x="40" y="180" width="150" height="90" rx="16" class="state-box box1" />
+  <text x="115" y="221" text-anchor="middle" class="state-text" font-size="16">Tippen</text>
+  <text x="115" y="239" text-anchor="middle" class="sub-text">Entwurf, Autocomplete</text>
+
+  <rect x="240" y="180" width="150" height="90" rx="16" class="state-box box2" />
+  <text x="315" y="221" text-anchor="middle" class="state-text" font-size="16">Senden</text>
+  <text x="315" y="239" text-anchor="middle" class="sub-text">Enter</text>
+
+  <rect x="420" y="180" width="250" height="90" rx="16" class="state-box box3-restart" />
+  <text x="545" y="216" text-anchor="middle" class="state-text" font-size="16">Verarbeitung</text>
+  <text x="545" y="234" text-anchor="middle" class="sub-text">Tool-Nutzung / Denken</text>
+  <text x="545" y="250" text-anchor="middle" class="sub-text">(esc to interrupt)</text>
+
+  <rect x="700" y="180" width="190" height="90" rx="16" class="state-box box4" />
+  <text x="795" y="221" text-anchor="middle" class="state-text" font-size="16">Antwort</text>
+  <text x="795" y="239" text-anchor="middle" class="sub-text">streamt live</text>
+
+  <rect x="930" y="180" width="220" height="90" rx="16" class="state-box box5" />
+  <text x="1040" y="221" text-anchor="middle" class="state-text" font-size="16">Anzeige abgeschlossen</text>
+  <text x="1040" y="239" text-anchor="middle" class="sub-text">Eingabefeld wieder frei</text>
+
+  <!-- static forward arrows -->
+  <line x1="190" y1="225" x2="234" y2="225" class="edge" marker-end="url(#arrow)" />
+  <line x1="390" y1="225" x2="414" y2="225" class="edge" marker-end="url(#arrow)" />
+  <line x1="670" y1="225" x2="694" y2="225" class="edge" marker-end="url(#arrow)" />
+  <line x1="890" y1="225" x2="924" y2="225" class="edge" marker-end="url(#arrow)" />
+
+  <!-- loop-back -->
+  <path d="M1040,270 C1040,350 115,350 115,270" class="edge-loop" marker-end="url(#arrow-muted)" />
+  <rect x="440" y="336" width="280" height="22" class="surface" />
+  <text x="580" y="352" text-anchor="middle" class="edge-label-muted">nächster Zyklus, sobald Antwort fertig ist</text>
+
+  <!-- Szenario A: weitere Nachricht, eingereiht während Verarbeitung, Zustellung im selben Turn -->
+  <g class="msg-a">
+    <path d="M545,366 L545,270" class="edge" stroke="#eb6834" marker-end="url(#arrow-a)" />
+    <rect x="420" y="366" width="250" height="78" rx="14" class="msg-a-rect" stroke-width="2" />
+    <text x="545" y="392" text-anchor="middle" class="bubble-text">Nutzer: weitere Nachricht</text>
+    <text x="545" y="410" text-anchor="middle" class="bubble-sub">Enter gedrückt, während Tools laufen</text>
+    <text x="545" y="428" text-anchor="middle" class="bubble-sub">wartet grau in der Warteschlange ...</text>
+    <text x="545" y="460" text-anchor="middle" class="flash-text-a msg-a-flash">zugestellt -- noch im selben Turn</text>
+  </g>
+
+  <!-- Szenario B: weitere Nachricht, eingereiht während Antwort, Zustellung als nächster Turn -->
+  <g class="msg-b">
+    <path d="M890,366 C890,470 115,470 115,270" class="edge" stroke="#2a78d6" fill="none" marker-end="url(#arrow-b)" />
+    <rect x="765" y="366" width="250" height="78" rx="14" class="msg-b-rect" stroke-width="2" />
+    <text x="890" y="392" text-anchor="middle" class="bubble-text">Nutzer: weitere Nachricht</text>
+    <text x="890" y="410" text-anchor="middle" class="bubble-sub">Enter gedrückt, während Antwort streamt</text>
+    <text x="890" y="428" text-anchor="middle" class="bubble-sub">wartet grau in der Warteschlange ...</text>
+    <text x="500" y="500" text-anchor="middle" class="flash-text-b msg-b-flash">zugestellt -- startet automatisch als neuer Turn, kein erneutes Enter nötig</text>
+  </g>
+
+  <!-- legend -->
+  <rect x="60" y="560" width="20" height="14" rx="4" fill="#fdece3" stroke="#eb6834" stroke-width="1.5" />
+  <text x="88" y="571" class="legend-text">Szenario A: Zustellung im selben Turn (Tool-Phase)</text>
+  <rect x="420" y="560" width="20" height="14" rx="4" fill="#e7f0fb" stroke="#2a78d6" stroke-width="1.5" />
+  <text x="448" y="571" class="legend-text">Szenario B: Zustellung als nächster Turn (Antwort-Phase)</text>
+  <rect x="820" y="560" width="20" height="14" rx="4" fill="#ececea" stroke="#898781" stroke-width="1.5" />
+  <text x="848" y="571" class="legend-text">dazwischen: grau, in Warteschlange</text>
+
+  <text x="24" y="600" class="caption">Ein Turn = ein 10s-Durchlauf der Box-Aufhellung. Die beiden Szenarien wechseln sich alle 10s ab (20s-Gesamtzyklus) -- reine CSS-Animation, kein GIF/Video nötig.</text>
+  <text x="24" y="620" class="caption">In Szenario A springt Verarbeitung sichtbar auf einen zweiten Anlauf zurück, statt unverändert weiterzulaufen -- die neue Nachricht muss ja erst mitverarbeitet werden.</text>
+  <text x="24" y="638" class="caption">Esc (jederzeit) und Ctrl+Enter ("send now") greifen hier nicht ein -- siehe Fall C im statischen Diagramm und Abschnitt 2 des Dokuments.</text>
+</svg>

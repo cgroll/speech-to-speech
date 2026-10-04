@@ -1,0 +1,1116 @@
+
+<!doctype html>
+<html lang="de" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Dokumentation des Sprachassistenten-Projekts">
+      
+      
+      
+      
+        <link rel="prev" href="../specs/thinking-channel-and-stop-marker/">
+      
+      
+        <link rel="next" href="../architecture-proposal/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Referenz: Turn-Taking in Claude Code - Speech-to-Speech</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#referenz-turn-taking-in-claude-code" class="md-skip">
+          Zum Inhalt
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Kopfzeile">
+    <a href=".." title="Speech-to-Speech" class="md-header__button md-logo" aria-label="Speech-to-Speech" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Speech-to-Speech
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Referenz: Turn-Taking in Claude Code
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Suche" placeholder="Suche" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Suche">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Zurücksetzen" aria-label="Zurücksetzen" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Suche wird initialisiert
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/cgroll/speech-to-speech" title="Zum Repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    cgroll/speech-to-speech
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+  
+
+<nav class="md-nav md-nav--primary md-nav--integrated" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Speech-to-Speech" class="md-nav__button md-logo" aria-label="Speech-to-Speech" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Speech-to-Speech
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/cgroll/speech-to-speech" title="Zum Repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    cgroll/speech-to-speech
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../specification/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Feature-Übersicht
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Spezifikationen
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Spezifikationen
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../specs/core-dialog-loop/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kern-Dialogschleife
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../specs/thinking-channel-and-stop-marker/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Denkprozess-Kanal & Stop-Markierung
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Referenz: Turn-Taking in Claude Code
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Referenz: Turn-Taking in Claude Code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Inhaltsverzeichnis">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Inhaltsverzeichnis
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-der-normale-ablauf" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Der normale Ablauf
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. Der normale Ablauf">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#korrektur-einer-annahme-antwort-streamt-ist-nicht-atomar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Korrektur einer Annahme: Antwort streamt, ist nicht atomar
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-was-passiert-wenn-wahrend-der-verarbeitung-eine-neue-nachricht-kommt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Was passiert, wenn während der Verarbeitung eine neue Nachricht kommt?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-tastenkurzel-sortiert-nach-relevanz-fur-dieses-thema" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Tastenkürzel, sortiert nach Relevanz für dieses Thema
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-bezug-zur-eigenen-offenen-lucke" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Bezug zur eigenen offenen Lücke
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-hintergrund-subagenten-completion-notification-statt-push" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Hintergrund-Subagenten: Completion-Notification statt Push
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-diagrammeanimation-stand-und-vorschlag" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Diagramme/Animation: Stand und Vorschlag
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture-proposal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architektur-Vorschlag
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../telegram-bot-proposal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Telegram-Bot-Vorschlag
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backlog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backlog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../macos-setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    macOS-Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="referenz-turn-taking-in-claude-code">Referenz: Turn-Taking in Claude Code<a class="headerlink" href="#referenz-turn-taking-in-claude-code" title="Permanent link">&para;</a></h1>
+<p>Status: Recherche abgeschlossen (2026-10-02), auf Basis der offiziellen
+Dokumentation. Dient als externe Referenz für die eigene Zustandsmodell-
+Diskussion in <code>docs/specs/core-dialog-loop.md</code> (siehe dort Abschnitt 7 zur
+noch offenen Frage nach Hintergrund-Ergebnissen und Status-Nachfragen
+mitten im Turn) -- kein Teil der <code>speech-to-speech</code>-Spezifikation selbst,
+sondern Beobachtungsmaterial von einem fremden System.</p>
+<p>Quelle: <a href="https://code.claude.com/docs/en/interactive-mode">code.claude.com/docs/en/interactive-mode</a>,
+abgerufen 2026-10-02.</p>
+<h2 id="1-der-normale-ablauf">1. Der normale Ablauf<a class="headerlink" href="#1-der-normale-ablauf" title="Permanent link">&para;</a></h2>
+<p>Ein Turn in Claude Code (interaktiver Terminal-Modus) durchläuft fünf
+wiederkehrende Zustände:</p>
+<ol>
+<li><strong>Tippen</strong> -- Eingabefeld, Entwurfstext, Autocomplete für <code>/</code>-Befehle,
+   <code>@</code>-Dateipfade, Emoji-Shortcodes.</li>
+<li><strong>Senden</strong> -- <code>Enter</code> übermittelt den Entwurf; der Turn beginnt.</li>
+<li><strong>Verarbeitung</strong> -- Claude nutzt Tools (sichtbar als Tool-Aufruf-Blöcke
+   mit Ergebnis) und/oder zeigt einen Denkprozess (sofern Extended Thinking
+   aktiv ist). Fußzeile zeigt <code>esc to interrupt</code>.</li>
+<li><strong>Antwort</strong> -- die Modell-Antwort erscheint.</li>
+<li><strong>Anzeige abgeschlossen</strong> -- Eingabefeld wird wieder frei, optional mit
+   einem gegrauten Vorschlag für den nächsten Prompt.</li>
+</ol>
+<p>Danach beginnt der Zyklus erneut bei 1.</p>
+<p><img alt="Claude Code: normaler Turn-Loop, animiert" src="../specs/diagrams/claude-code-turn-loop.svg" /></p>
+<p>Klickbare Fassung, ein Zustand pro Klick statt Timer:</p>
+<object type="image/svg+xml" data="../specs/diagrams/claude-code-turn-loop-clickable.svg" style="width:100%; max-width:1180px; height:420px;">
+</object>
+
+<h3 id="korrektur-einer-annahme-antwort-streamt-ist-nicht-atomar">Korrektur einer Annahme: Antwort streamt, ist nicht atomar<a class="headerlink" href="#korrektur-einer-annahme-antwort-streamt-ist-nicht-atomar" title="Permanent link">&para;</a></h3>
+<p>Anders als zunächst vermutet (und anders als im eigenen <code>speech-to-speech</code>-
+Modell bewusst entschieden, siehe <code>docs/specs/thinking-channel-and-stop-
+marker.md</code> Abschnitt 6, "Nicht-Ziele": <em>"Echtes Streaming des
+Antwort-Kanals selbst -- bleibt atomar"</em>) zeigt Claude Code die Antwort
+<strong>streamend</strong>, nicht instantan nach Fertigstellung:</p>
+<ul>
+<li><code>Esc</code> "stop[s] the current response or tool call <strong>mid-turn</strong>" --
+  das setzt voraus, dass die Antwort zum Zeitpunkt des Tastendrucks bereits
+  teilweise sichtbar ist, während der Rest noch generiert wird.</li>
+<li>Das Changelog verzeichnet u.a. "Fixed queued commands flickering <strong>during
+  streaming responses</strong>" und "Claude occasionally posting the same reply
+  twice when a new message <strong>interrupted it mid-reply</strong>" -- beides setzt
+  voraus, dass "Antwort schreiben" ein Zustand mit beobachtbarer Dauer ist,
+  nicht ein einzelner atomarer Sprung von "nichts" zu "fertiger Text".</li>
+</ul>
+<p>Die eigene Entscheidung für einen atomaren Antwort-Kanal (ganz bewusst,
+u.a. weil Sprachausgabe ohnehin den ganzen Satz braucht) bleibt davon
+unberührt -- es ist schlicht ein anderes System mit einer anderen
+Antwortmodalität (Text im Terminal vs. TTS).</p>
+<h2 id="2-was-passiert-wenn-wahrend-der-verarbeitung-eine-neue-nachricht-kommt">2. Was passiert, wenn während der Verarbeitung eine neue Nachricht kommt?<a class="headerlink" href="#2-was-passiert-wenn-wahrend-der-verarbeitung-eine-neue-nachricht-kommt" title="Permanent link">&para;</a></h2>
+<p>Das ist der eigentlich interessante Teil für unsere offene Frage aus
+<code>core-dialog-loop.md</code> Abschnitt 7. Claude Code löst das nicht über Barge-in
+(Abbruch), sondern über eine <strong>Warteschlange</strong>, deren Zustellzeitpunkt vom
+aktuellen Unter-Zustand abhängt:</p>
+<ul>
+<li>Tippt man eine neue Nachricht und drückt <code>Enter</code>, während Claude
+  arbeitet, wird sie <strong>nicht gesendet, sondern eingereiht</strong> ("queued").
+  Eingereihte Einträge erscheinen grau im Gesprächsverlauf, bis Claude mit
+  der Bearbeitung beginnt.</li>
+<li><strong>Zustellung hängt vom Unter-Zustand ab:</strong></li>
+<li>Wird die Nachricht eingereiht, <strong>während Claude gerade Tools
+    ausführt</strong> (<code>Verarbeitung</code>-Zustand im engeren Sinn): Claude bekommt sie
+    <strong>noch im selben Turn</strong>, sobald die laufenden Tool-Aufrufe fertig sind
+    -- sie rutscht also effektiv mit in den "Claude macht was"-Block hinein
+    und kann das Ergebnis dieses Turns noch beeinflussen.</li>
+<li>Wird die Nachricht eingereiht, <strong>während Claude die Antwort schreibt</strong>
+    (<code>Antwort</code>-Zustand), oder ist der Turn bereits zu Ende, wenn sie
+    eingereiht wird: sie wird <strong>automatisch als nächster Turn</strong> losgeschickt,
+    sobald der laufende Turn fertig ist -- ganz ohne erneuten Tastendruck.
+    Das heißt: sie erscheint direkt im Anschluss an "Anzeige abgeschlossen"
+    als neuer "Senden"-Schritt, nicht mittendrin.</li>
+<li>Befehle (<code>/...</code>) und Shell-Kommandos (<code>!...</code>) werden immer erst nach
+    Turn-Ende abgearbeitet, auch wenn sie während der Tool-Phase eingereiht
+    wurden -- anders als normale Nachrichten.</li>
+<li><strong><code>Esc</code></strong> bricht den laufenden Turn sofort ab (Tool-Aufruf oder
+  Antwort-Schreiben); eingereihte Nachrichten werden danach direkt
+  losgeschickt -- das ist das eigentliche Barge-in-Äquivalent.</li>
+<li><strong><code>Ctrl+Enter</code></strong> (bzw. <code>Ctrl+X Ctrl+S</code>, "send now", ab Claude Code
+  2.1.275): schickt Warteschlange plus aktuellen Entwurf sofort, ohne auf
+  Turn-Ende zu warten. Was mit dem laufenden Turn passiert, hängt davon ab,
+  <em>was</em> Claude gerade tut:</li>
+<li>Läuft etwas Hintergrund-fähiges (Shell-Befehl, Subagent): das läuft im
+    Hintergrund weiter, Claude liest die neuen Nachrichten <strong>im selben
+    Turn</strong>.</li>
+<li>Schreibt Claude nur die Antwort, oder läuft etwas nicht
+    Hintergrund-fähiges: der Turn wird abgebrochen, die neuen Nachrichten
+    gehen als nächster Turn raus.</li>
+<li><strong><code>Up</code>-Pfeil</strong> aus der ersten Zeile des leeren Eingabefelds holt
+  eingereihte Nachrichten zum Bearbeiten zurück ins Eingabefeld.</li>
+</ul>
+<p>Kurz: die vom Nutzer vermutete Alternative "mitten in 'Claude macht was'
+rein" vs. "als nächste Nachricht nach 'Claude antwortet'" sind <strong>beide
+korrekt</strong> -- welche zutrifft, hängt einzig vom Zeitpunkt des Absendens
+relativ zur Tool- vs. Antwort-Phase ab, nicht von einer bewussten
+Tastenwahl.</p>
+<p><img alt="Claude Code: wohin eine zweite Nachricht geht" src="../specs/diagrams/claude-code-message-queueing.svg" /></p>
+<p>Animierte Fassung derselben zwei Fälle, als durchlaufende Turn-Runde:</p>
+<p><img alt="Claude Code: weitere Nachricht während der Verarbeitung, animiert" src="../specs/diagrams/claude-code-message-queueing-animated.svg" /></p>
+<p>Klickbare Fassung, 15 Schritte statt 20s-Timer:</p>
+<object type="image/svg+xml" data="../specs/diagrams/claude-code-message-queueing-animated-clickable.svg" style="width:100%; max-width:1180px; height:680px;">
+</object>
+
+<h2 id="3-tastenkurzel-sortiert-nach-relevanz-fur-dieses-thema">3. Tastenkürzel, sortiert nach Relevanz für dieses Thema<a class="headerlink" href="#3-tastenkurzel-sortiert-nach-relevanz-fur-dieses-thema" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Taste</th>
+<th style="text-align: left;">Wirkung</th>
+<th style="text-align: left;">Kontext</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>Enter</code></td>
+<td style="text-align: left;">Senden (idle) / Einreihen (während Claude arbeitet)</td>
+<td style="text-align: left;">immer</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Esc</code></td>
+<td style="text-align: left;">Turn sofort abbrechen, danach Warteschlange senden</td>
+<td style="text-align: left;">während Verarbeitung/Antwort</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Ctrl+Enter</code> / <code>Ctrl+X Ctrl+S</code></td>
+<td style="text-align: left;">Warteschlange + Entwurf sofort senden ("send now")</td>
+<td style="text-align: left;">ab v2.1.275</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Up</code> (erste Zeile, leeres Feld)</td>
+<td style="text-align: left;">Warteschlange zum Bearbeiten zurückholen</td>
+<td style="text-align: left;">während etwas eingereiht ist</td>
+</tr>
+</tbody>
+</table>
+<p>Daneben gibt es mehrere Tasten, die <strong>nichts mit der Warteschlange zu tun
+haben</strong>, sondern nur einen Zeilenumbruch <em>innerhalb</em> des Entwurfs einfügen,
+ohne zu senden -- relevant, weil in der ursprünglichen Frage <code>Alt+Enter</code>
+vermutet wurde:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Taste</th>
+<th style="text-align: left;">Bedingung</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>\</code> + <code>Enter</code></td>
+<td style="text-align: left;">funktioniert in jedem Terminal</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Shift+Enter</code></td>
+<td style="text-align: left;">nativ in iTerm2, WezTerm, Ghostty, Kitty, Warp, Terminal.app, Windows Terminal</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Option+Enter</code> (<code>Alt+Enter</code>)</td>
+<td style="text-align: left;">nur nach Konfiguration von Option-als-Meta auf macOS</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Ctrl+J</code></td>
+<td style="text-align: left;">funktioniert in jedem Terminal ohne Konfiguration</td>
+</tr>
+</tbody>
+</table>
+<p><code>Alt+Enter</code> ist also kein zweiter Sende-Modus, sondern nur eine von vier
+gleichwertigen Methoden für einen Zeilenumbruch beim Tippen.</p>
+<h2 id="4-bezug-zur-eigenen-offenen-lucke">4. Bezug zur eigenen offenen Lücke<a class="headerlink" href="#4-bezug-zur-eigenen-offenen-lucke" title="Permanent link">&para;</a></h2>
+<p><code>core-dialog-loop.md</code> Abschnitt 7 markiert als "bewusst ausgeklammert":
+Hintergrund-Agent-Ergebnisse, die unabhängig von einem laufenden <code>send()</code>
+eintreffen, und Status-Nachfragen mitten im Turn, ohne den laufenden Turn
+abzubrechen (siehe auch <code>tests/test_background_and_status_gaps.py</code>).</p>
+<p>Claude Codes Warteschlangen-Modell liefert dafür ein fertiges, in Produktion
+erprobtes Muster:</p>
+<ul>
+<li>Ein eingereihter Eintrag wird <strong>nicht</strong> automatisch als Abbruch
+  behandelt -- der laufende Turn läuft regulär weiter, die neue Nachricht
+  wartet auf einen klar definierten Zustellzeitpunkt.</li>
+<li>Zustellung "im selben Turn" vs. "als neuer Turn" ist nicht Zufall,
+  sondern an einen Zustandsübergang gekoppelt (Tool-Phase endet / Turn
+  endet) -- übertragbar auf die eigene Idee eines dritten, Turn-
+  unabhängigen Hintergrund-Kanals.</li>
+<li><code>Esc</code> und <code>Ctrl+Enter</code> zeigen zwei saubere Eskalationsstufen: "zum
+  nächstmöglichen Zeitpunkt" (einreihen) vs. "jetzt sofort, auch wenn das
+  den laufenden Turn kostet" (send now) -- ein Vorbild für eine mögliche
+  dritte Option neben "Barge-in" und "regulär warten" bei der eigenen
+  Status-Nachfrage-Frage.</li>
+</ul>
+<p>Noch nicht übernommen, nur als Beobachtung festgehalten -- die Entscheidung
+für die eigene Erweiterung steht weiterhin aus.</p>
+<h2 id="5-hintergrund-subagenten-completion-notification-statt-push">5. Hintergrund-Subagenten: Completion-Notification statt Push<a class="headerlink" href="#5-hintergrund-subagenten-completion-notification-statt-push" title="Permanent link">&para;</a></h2>
+<p>Zweiter Teil der eigenen offenen Lücke aus Abschnitt 7 von
+<code>core-dialog-loop.md</code>: wie kommt das Ergebnis eines Hintergrund-Agents in
+den Gesprächsverlauf, wenn es unabhängig von jedem laufenden <code>send()</code>
+eintrifft? Claude Code hat dafür einen dokumentierten Mechanismus, der sich
+vom Warteschlangen-Modell aus Abschnitt 2 ableitet, aber an einer
+entscheidenden Stelle davon abweicht.</p>
+<p>Quelle: <a href="https://code.claude.com/docs/en/sub-agents">code.claude.com/docs/en/sub-agents</a>,
+abgerufen 2026-10-02.</p>
+<blockquote>
+<p>"A background subagent's results reach Claude as a completion
+notification in a later turn. Claude waits for that notification before
+reporting the subagent's results, and if you ask about progress first,
+it reports that the subagent is still running."</p>
+</blockquote>
+<p>Das Ergebnis wird also, genau wie eine nachgeschickte Nutzer-Nachricht,
+als Eintrag "eingereiht" und dem Modell beim nächsten natürlichen
+Übergang vorgelegt -- gleiche Grundmechanik wie in Abschnitt 2, nur ist der
+Auslöser diesmal nicht <code>Enter</code>, sondern das Prozessende selbst.</p>
+<p><strong>Der entscheidende Unterschied zur Nachrichten-Warteschlange: kein
+Push, wenn die Sitzung im Leerlauf ist.</strong> Läuft gerade kein Turn (Nutzer
+tippt nichts, Claude wartet im Zustand "Tippen"), generiert Claude Code
+<em>nicht</em> von sich aus eine neue Antwort, nur weil die Notification
+eingetroffen ist. Sie liegt bereit und wartet -- entweder, bis der nächste
+reguläre Turn sie mitnimmt, oder bis der Nutzer von sich aus nachfragt.
+Fragt er zu früh (Notification noch nicht da), bekommt er ein ehrliches
+"läuft noch" statt eines verfrühten (Nicht-)Ergebnisses.</p>
+<p>Sichtbar ist davon im Terminal nur eine Fußzeilen-Randnotiz, kein
+Interrupt im Gesprächsverlauf selbst:</p>
+<blockquote>
+<p>"When a subagent finishes successfully, Claude Code removes its row
+immediately and [...] shows <code>/tasks to see subagents</code> in the footer for
+30 seconds."</p>
+</blockquote>
+<p>Mehrere gleichzeitig fertige Hintergrund-Prozesse werden außerdem zu
+<em>einem</em> Modell-Aufruf gebündelt statt einzeln beantwortet (Changelog:
+"Fixed headless and SDK sessions making a separate model call for every
+background task that finished; completions already queued are now
+answered by one call").</p>
+<p><strong>Push statt Pull: bewusste Abweichung für die eigene Spec.</strong> Auf
+Rückfrage ist die Haltung fürs eigene System klar: ein fertiger
+Hintergrund-Agent soll <em>von sich aus</em> eine Antwort auslösen, nicht auf den
+nächsten Nutzer-Turn warten. Das ist ein bewusster Bruch mit Claude Codes
+Pull-Modell, nicht eine Umsetzung davon -- festgehalten hier als
+Entscheidung, noch nicht in <code>core-dialog-loop.md</code> nachgezogen. Die
+Warteschlangen-Mechanik selbst (Eintrag wartet auf einen sauberen
+Übergabepunkt statt den laufenden Turn zu stören) bleibt trotzdem
+übernehmbar; nur der Leerlauf-Fall braucht eine eigene Lösung, die aktiv
+einen neuen Turn anstößt statt nur bereitzuliegen.</p>
+<p><img alt="Claude Code: Hintergrund-Agent, Completion-Notification vs. Push" src="../specs/diagrams/claude-code-background-notification.svg" /></p>
+<p><strong>Experiment: klickbare Fassung statt Timer.</strong> Dieselbe Geschichte, aber
+Schritt für Schritt per Klick oder Pfeiltaste statt automatisch nach
+einem festen 20s-Takt -- acht Schritte, zwei pro Zustandswechsel je Runde.
+Eingebettet über <code>&lt;object&gt;</code>, nicht über das Markdown-Bildsyntax: ein als
+<code>&lt;img&gt;</code> eingebettetes SVG führt kein <code>&lt;script&gt;</code> aus, <code>&lt;object&gt;</code> dagegen
+schon.</p>
+<object type="image/svg+xml" data="../specs/diagrams/claude-code-background-notification-clickable.svg" style="width:100%; max-width:1180px; height:500px;">
+</object>
+
+<h2 id="6-diagrammeanimation-stand-und-vorschlag">6. Diagramme/Animation: Stand und Vorschlag<a class="headerlink" href="#6-diagrammeanimation-stand-und-vorschlag" title="Permanent link">&para;</a></h2>
+<p>Umgesetzt:</p>
+<ul>
+<li><code>specs/diagrams/claude-code-turn-loop.svg</code> -- animierter Loop der fünf
+  Normalzustände (Tippen -&gt; Senden -&gt; Verarbeitung -&gt; Antwort -&gt; Anzeige
+  abgeschlossen -&gt; zurück zu Tippen), als eigenständiges SVG mit reiner
+  CSS-<code>@keyframes</code>-Animation: die Boxen hellen sich der Reihe nach kurz auf,
+  10s-Zyklus. Ursprünglich lief zusätzlich ein per SMIL animierter Punkt
+  mit, der die Boxen entlang eines Pfads "abfuhr" -- entfernt, weil er ohne
+  expliziten <code>keyTimes</code>/<code>keyPoints</code>-Abgleich erst gar nicht synchron zur
+  Box-Aufhellung lief und sich danach als unnötiger zweiter Indikator
+  herausstellte; die Box-Aufhellung allein trägt den Loop. Läuft nativ im
+  Browser ohne GIF/Video-Export, folgt denselben CSS-Variablen/Farbwerten
+  wie die bestehenden Diagramme (Light/Dark via <code>prefers-color-scheme</code>).</li>
+<li><code>specs/diagrams/claude-code-turn-loop-clickable.svg</code> -- dieselben fünf
+  Zustände als klickbare Schrittfolge statt Timer-Loop, fünf Schritte,
+  ein Zustand pro Klick oder Pfeiltaste. Einfachste der vier klickbaren
+  Fassungen -- gut geeignet, um das wiederverwendete Muster
+  (<code>data-step</code>, Schritt-Array im <code>&lt;script&gt;</code>, "Weiter"/"Zurück"-Buttons,
+  <code>&lt;object&gt;</code>-Einbettung) am kleinsten Beispiel nachzuvollziehen, bevor man
+  die komplexeren Fassungen liest.</li>
+<li><code>specs/diagrams/claude-code-message-queueing.svg</code> -- statisches
+  Verzweigungs-Diagramm für Abschnitt 2 (die drei Zustellfälle:
+  Tool-Phase/selber Turn, Antwort-Phase/nächster Turn automatisch,
+  Esc-Eskalation).</li>
+<li><code>specs/diagrams/claude-code-message-queueing-animated.svg</code> -- animierte
+  Fassung der beiden zeitabhängigen Fälle (A/B, ohne die Esc-Eskalation,
+  siehe Fall C im statischen Diagramm): ein 10s-Durchlauf der Box-Aufhellung
+  steht für einen Turn, über einen 20s-Gesamtzyklus wechseln sich zwei
+  durchgespielte Runden ab. Runde 1: Nutzer schickt während der Tool-Phase
+  nach -- die Verarbeitung-Box macht dabei sichtbar einen zweiten Anlauf
+  (heller Puls, fällt kurz auf neutral zurück, pulst dann noch einmal,
+  begleitet von einem kleinen "↺"-Symbol und der Beschriftung "neue
+  Nachricht -- Verarbeitung läuft erneut an"), statt einfach unverändert
+  weiterzulaufen -- genau dieses Weiterlaufen-als-wäre-nichts-passiert wäre
+  irreführend, weil die neue Nachricht ja erst noch mitverarbeitet werden
+  muss. Parallel dazu die Nachrichten-Sprechblase: gelbe Sende-Farbe -&gt; graue
+  Warteschlange -&gt; orange Zustellung, zeitlich auf den zweiten
+  Verarbeitung-Puls gelegt. Runde 2 (während der Antwort) bekommt diese
+  Behandlung bewusst nicht -- dort pulst jede Box nur einmal, denn die
+  Zustellung passiert ja nicht mitten im Turn, sondern erst als eigener
+  nächster Turn. Reine CSS-<code>@keyframes</code>, alle Prozentangaben direkt auf den
+  20s-Gesamtzyklus gelegt statt auf eine gemeinsame <code>animation-delay</code>, weil
+  sich Runde 1 und Runde 2 für die Verarbeitung-Box jetzt unterscheiden
+  müssen.</li>
+<li><code>specs/diagrams/claude-code-message-queueing-animated-clickable.svg</code> --
+  dieselbe Geschichte als 15 klickbare Schritte (acht für Szenario A, sieben
+  für Szenario B), mit demselben Schritt-Array-Muster wie die anderen
+  klickbaren Fassungen. Der Verarbeitung-Neustart in Szenario A wird jetzt
+  über ein explizites <code>box3: 'neutral'</code>-Zwischenschritt-Objekt modelliert
+  (Schritt 5: Box fällt auf neutral zurück, Nachricht wartet grau) statt
+  über Prozent-Keyframes -- dadurch ist der Dip vor dem zweiten Puls ein
+  eigener, benannter Schritt statt eines Zeitfensters, das man nur beim
+  genauen Hinsehen bemerkt.</li>
+<li><code>specs/diagrams/claude-code-background-notification.svg</code> -- zwei Spuren
+  übereinander für Abschnitt 5: oben die Hauptsitzung (vereinfacht auf
+  Leerlauf/Turn-aktiv statt aller fünf Zustände, da hier nur relevant ist,
+  <em>ob</em> gerade etwas läuft), unten ein Hintergrund-Agent (gestartet -&gt; läuft
+  -&gt; fertig, Notification wartet grau). Wieder zwei Runden im 20s-Zyklus:
+  Runde 1 -- Agent wird fertig, während die Hauptsitzung gerade einen Turn
+  aktiv hat: Notification wird kurz danach blau als zugestellt markiert,
+  dieselbe Merge-Logik wie Abschnitt 2. Runde 2 -- Agent wird fertig,
+  während die Hauptsitzung im Leerlauf ist: Notification bleibt grau,
+  solange nichts läuft, und wird erst zugestellt, sobald die Hauptsitzung
+  von sich aus wieder aktiv wird -- aber dann auch sofort, nicht erst eine
+  Runde später. Begleitet von der Beschriftung "wartet, kein Push -- sobald
+  ein Turn beginnt, egal wodurch, wird sie gleich mitgenommen". Zeigt also
+  den Pull-Charakter aus Abschnitt 5 direkt im Bild: der Push fehlt nur für
+  den Anstoß eines neuen Turns, nicht für die Übernahme in einen bereits
+  begonnenen. <strong>Korrigiert (2026-10-02):</strong> die erste Fassung ließ die Notification
+  in Runde 2 grau, <em>obwohl</em> bereits ein neuer Turn aktiv war -- impliziert
+  fälschlich eine zusätzliche Wartezeit nach Turn-Beginn, die es laut
+  Dokumentation nicht gibt ("reach Claude as a completion notification in
+  a later turn" meint den nächsten Turn, nicht einen übernächsten). Im
+  Review aufgefallen, beim Nachvollziehen der klickbaren Fassung.</li>
+<li><code>specs/diagrams/claude-code-background-notification-clickable.svg</code> --
+  dieselbe Geschichte als klickbare Schrittfolge statt Timer-Loop: ein
+  <code>data-step</code>-Attribut am <code>&lt;svg&gt;</code>-Root, ein eingebettetes <code>&lt;script&gt;</code> mit
+  einem Array aus acht Schritt-Objekten (welche Box wie eingefärbt ist,
+  welcher Beschriftungstext gilt), "Weiter"/"Zurück"-Buttons plus
+  Pfeiltasten, CSS-<code>transition</code> auf <code>fill</code>/<code>stroke</code>/<code>opacity</code> für einen
+  weichen Übergang zwischen den Schritten. Eingebettet über <code>&lt;object&gt;</code>
+  statt Markdown-Bildsyntax, da ein per <code>&lt;img&gt;</code> geladenes SVG kein
+  <code>&lt;script&gt;</code> ausführt. Löst nebenbei das Dark-Mode-Problem anders als die
+  übrigen Diagramme: <code>prefers-color-scheme</code> wird einmalig per
+  <code>matchMedia()</code> in JavaScript abgefragt statt über eine
+  <code>@media</code>-Regel, weil die Farben hier über <code>element.style.*</code> statt über
+  CSS-Klassen gesetzt werden. Schritt 6 und 7 halten jetzt bewusst
+  denselben Zustand (Notification wartet, Hauptsitzung im Leerlauf), um die
+  unbestimmte Wartezeit erfahrbar zu machen -- erst Schritt 8 startet einen
+  Turn und stellt die Notification im selben Schritt zu, statt wie in der
+  ersten (fehlerhaften) Fassung noch einen Schritt länger grau zu lassen.</li>
+</ul>
+<p>Begründung für SVG+CSS statt GIF: die Doku läuft als mkdocs-material-Site
+über GitHub Pages -- echtes HTML/CSS/SVG wird vollständig gerendert, ein
+GIF wäre hier nur ein Downgrade (größere Datei, keine Skalierung, kein
+Dark-Mode). Das von <code>image-video-creator-v2</code>
+(<code>projects/voice-pipeline-turn-taking/deck.html</code>, Folien 32-40) bekannte
+Prinzip -- Schritte werden einzeln "aufgedeckt" (<code>data-step</code>-Attribute,
+CSS-Klasse <code>reveal</code>) -- ist hier als Vorlage für die Teilschritt-Optik
+übernommen, aber ohne den dortigen Playwright/ffmpeg/TTS-Videoaufnahme-
+Unterbau: dieser ist für eine Doku-Seite unangemessen schwergewichtig.</p>
+<p>Offen / nächster Schritt, falls gewünscht:</p>
+<ul>
+<li>Falls eine portable GIF-Datei zusätzlich gebraucht wird (z.B. für
+  Telegram oder ein GitHub-README, das SVG+CSS nicht zuverlässig rendert):
+  leichtgewichtiger Playwright-Screenshot-Loop über das bestehende SVG,
+  ohne den vollen <code>video-creator</code>-Unterbau -- einfaches Python-Skript,
+  Screenshots zu festen Zeitpunkten, zusammengesetzt mit <code>ffmpeg</code>/<code>gifski</code>.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Zurück zum Seitenanfang
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "toc.integrate", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "In Zwischenablage kopiert", "clipboard.copy": "In Zwischenablage kopieren", "search.result.more.one": "1 weiteres Suchergebnis auf dieser Seite", "search.result.more.other": "# weitere Suchergebnisse auf dieser Seite", "search.result.none": "Keine Suchergebnisse", "search.result.one": "1 Suchergebnis", "search.result.other": "# Suchergebnisse", "search.result.placeholder": "Suchbegriff eingeben", "search.result.term.missing": "Es fehlt", "select.version": "Version ausw\u00e4hlen"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,61 @@
+<svg viewBox="0 0 800 400" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">
+  <title>Kern-Text-Dialogschleife</title>
+  
+  <style>
+    .surface   { fill: #fcfcfb; }
+    .border    { stroke: rgba(11,11,11,0.10); }
+    .state-box { fill: #f2f1ee; stroke: #52514e; stroke-width: 1.5; }
+    .state-text{ fill: #0b0b0b; font-weight: 600; }
+    .edge      { stroke: #52514e; stroke-width: 2; fill: none; }
+    .edge-label{ fill: #0b0b0b; font-size: 13.5px; }
+    .queue-box { fill: #e7f0fb; stroke: #2a78d6; stroke-width: 1.5; stroke-dasharray: 4 2; }
+    .queue-text{ fill: #184f95; font-size: 12px; font-weight: 600; }
+
+    @media (prefers-color-scheme: dark) {
+      .surface   { fill: #1a1a19; }
+      .border    { stroke: rgba(255,255,255,0.10); }
+      .state-box { fill: #2a2a28; stroke: #c3c2b7; }
+      .state-text{ fill: #ffffff; }
+      .edge      { stroke: #c3c2b7; }
+      .edge-label{ fill: #ffffff; }
+      .queue-box { fill: #142a42; stroke: #3987e5; }
+      .queue-text{ fill: #86b6ef; }
+    }
+  </style>
+
+  <rect x="0" y="0" width="800" height="400" rx="16" class="surface border" />
+
+  <!-- User Input Queue -->
+  <rect x="50" y="50" width="150" height="60" rx="8" class="queue-box" />
+  <text x="125" y="85" text-anchor="middle" class="queue-text">User-Input-Queue</text>
+  <text x="125" y="100" text-anchor="middle" class="queue-text" font-size="10">[_input_queue]</text>
+
+  <!-- States -->
+  <rect x="50" y="250" width="120" height="60" rx="12" class="state-box" />
+  <text x="110" y="285" text-anchor="middle" class="state-text">Idle</text>
+
+  <rect x="340" y="250" width="120" height="60" rx="12" class="state-box" />
+  <text x="400" y="285" text-anchor="middle" class="state-text">Thinking</text>
+
+  <rect x="630" y="250" width="120" height="60" rx="12" class="state-box" />
+  <text x="690" y="285" text-anchor="middle" class="state-text">Responding</text>
+
+  <!-- Transitions -->
+  <path d="M 125,110 L 125,242" class="edge" stroke-dasharray="4 4" marker-end="url(#arrow)" />
+  <text x="135" y="180" class="edge-label">Nächster Text</text>
+
+  <line x1="170" y1="280" x2="332" y2="280" class="edge" marker-end="url(#arrow)" />
+  <text x="255" y="270" text-anchor="middle" class="edge-label">Eingabe</text>
+
+  <line x1="460" y1="280" x2="622" y2="280" class="edge" marker-end="url(#arrow)" />
+  <text x="545" y="270" text-anchor="middle" class="edge-label">Antwort bereit</text>
+
+  <path d="M 690,310 C 690,370 110,370 110,318" class="edge" marker-end="url(#arrow)" />
+  <text x="400" y="365" text-anchor="middle" class="edge-label">Fertig (instantan)</text>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#52514e" />
+    </marker>
+  </defs>
+</svg>

@@ -1,0 +1,1220 @@
+
+<!doctype html>
+<html lang="de" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Dokumentation des Sprachassistenten-Projekts">
+      
+      
+      
+      
+        <link rel="prev" href="../reference-claude-code-turn-taking/">
+      
+      
+        <link rel="next" href="../telegram-bot-proposal/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Architektur-Vorschlag - Speech-to-Speech</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#architektur-vorschlag-stttts-als-geteilte-daemons" class="md-skip">
+          Zum Inhalt
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Kopfzeile">
+    <a href=".." title="Speech-to-Speech" class="md-header__button md-logo" aria-label="Speech-to-Speech" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Speech-to-Speech
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Architektur-Vorschlag
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Suche" placeholder="Suche" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Suche">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Zurücksetzen" aria-label="Zurücksetzen" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Suche wird initialisiert
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/cgroll/speech-to-speech" title="Zum Repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    cgroll/speech-to-speech
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+  
+
+<nav class="md-nav md-nav--primary md-nav--integrated" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Speech-to-Speech" class="md-nav__button md-logo" aria-label="Speech-to-Speech" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Speech-to-Speech
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/cgroll/speech-to-speech" title="Zum Repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    cgroll/speech-to-speech
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../specification/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Feature-Übersicht
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Spezifikationen
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Spezifikationen
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../specs/core-dialog-loop/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kern-Dialogschleife
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../specs/thinking-channel-and-stop-marker/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Denkprozess-Kanal & Stop-Markierung
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference-claude-code-turn-taking/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Referenz: Turn-Taking in Claude Code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architektur-Vorschlag
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architektur-Vorschlag
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Inhaltsverzeichnis">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Inhaltsverzeichnis
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#ist-zustand" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ist-Zustand
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#vorschlag" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Vorschlag
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#erwarteter-nutzen" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Erwarteter Nutzen
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#offene-fragen-zu-klarende-trade-offs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Offene Fragen / zu klärende Trade-offs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nachste-schritte-fur-die-spatere-session" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Nächste Schritte (für die spätere Session)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#zusatz-feature-unterbrechbare-sprachausgabe-barge-in" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Zusatz-Feature: Unterbrechbare Sprachausgabe (Barge-in)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Zusatz-Feature: Unterbrechbare Sprachausgabe (Barge-in)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#problem" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Problem
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#vorschlag_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Vorschlag
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bezug-zur-daemon-architektur" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bezug zur Daemon-Architektur
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#zusatz-feature-web-cockpit-als-drittes-steuer-interface" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Zusatz-Feature: Web-Cockpit als drittes Steuer-Interface
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Zusatz-Feature: Web-Cockpit als drittes Steuer-Interface">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#motivation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Motivation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#technischer-ansatz" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Technischer Ansatz
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#offene-frage-mobiler-zugriff-handy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Offene Frage: mobiler Zugriff (Handy)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#priorisierte-reihenfolge-uber-alle-drei-vorschlage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Priorisierte Reihenfolge über alle drei Vorschläge
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nachste-schritte-erganzung-fur-die-spatere-session" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Nächste Schritte (Ergänzung, für die spätere Session)
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../telegram-bot-proposal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Telegram-Bot-Vorschlag
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backlog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backlog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../macos-setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    macOS-Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="architektur-vorschlag-stttts-als-geteilte-daemons">Architektur-Vorschlag: STT/TTS als geteilte Daemons<a class="headerlink" href="#architektur-vorschlag-stttts-als-geteilte-daemons" title="Permanent link">&para;</a></h1>
+<p>Status: Diskussionsstand, noch nicht umgesetzt. Festgehalten am 2026-08-12,
+um es in einer späteren Session anzugehen. Ausgangspunkt war die Frage, ob
+sich STT und TTS als eigenständige Hintergrunddienste betreiben lassen,
+ähnlich zu <code>parakeet-dictate</code>, statt fest in <code>speech-to-speech</code> eingebaut zu
+sein.</p>
+<h2 id="ist-zustand">Ist-Zustand<a class="headerlink" href="#ist-zustand" title="Permanent link">&para;</a></h2>
+<p><code>speech-to-speech</code> und <code>parakeet-dictate</code> sind zwei getrennte Projekte, die
+beide unabhängig voneinander ein eigenes Parakeet-STT-Modell laden:</p>
+<ul>
+<li><code>speech-to-speech/src/speech_to_speech/audio_io.py</code> ist laut eigenem
+  Docstring ein Fork von <code>parakeet-dictate/src/parakeet_dictate/audio.py</code>
+  (Mikrofonaufnahme + VAD-Segmentierung, <code>webrtcvad</code>, Pause-Erkennung).</li>
+<li>Beide laden <code>nemo-parakeet-tdt-0.6b-v3</code> über <code>onnx_asr</code> separat.</li>
+<li><code>parakeet-dictate</code> hat bereits das Zielmuster vorgebaut: ein Daemon
+  (<code>daemon.py</code>) hält das Modell warm und beantwortet Kommandos über einen
+  Unix-Socket (JSON: <code>{"cmd": "toggle_record"}</code> -&gt; <code>{"ok": true, "state":
+  ...}</code>), gesteuert über einen systemd-User-Service mit <code>enable</code>/<code>disable</code>/
+  <code>status</code>/<code>toggle</code> als CLI (<code>cli.py</code>). Der Hotkey ruft nur den dünnen
+  CLI-Client auf, nie den Daemon direkt.</li>
+<li><code>speech-to-speech</code> dagegen ist heute monolithisch: ein einziger Prozess
+  hält STT- und TTS-Modell selbst, verarbeitet Jabra-Knopf (evdev) und
+  lokalen Hotkey (eigener Unix-Socket <code>toggle_socket.py</code>) direkt, und
+  orchestriert Aufnahme -&gt; Transkription -&gt; Claude Agent SDK -&gt; TTS -&gt;
+  Wiedergabe komplett inline (<code>app.py</code>).</li>
+<li>Konsequenz: Laufen beide Projekte gleichzeitig, ist das STT-Modell doppelt
+  im Speicher, und jede Codeänderung an <code>app.py</code>/<code>llm.py</code> in
+  <code>speech-to-speech</code> erzwingt einen kompletten Neustart inklusive Laden
+  beider (Multi-GB-)Modelle.</li>
+<li>Als Referenz von außen: <code>voice-agent-speech-to-speech-hf</code> (lokaler Checkout
+  des HuggingFace-Projekts) bestätigt die Grundidee -- VAD/STT/LLM/TTS als
+  austauschbare Pipeline-Stufen hinter einem Service --, dort aber als ein
+  gemeinsamer Server mit OpenAI-Realtime-WebSocket-API, nicht als zwei
+  getrennt ansprechbare Daemons.</li>
+</ul>
+<h2 id="vorschlag">Vorschlag<a class="headerlink" href="#vorschlag" title="Permanent link">&para;</a></h2>
+<p>Zwei neue, von den bestehenden Projekten unabhängige Daemons nach dem
+etablierten <code>parakeet-dictate</code>-Muster (Unix-Socket, JSON-Kommandos,
+systemd-User-Service, <code>enable</code>/<code>disable</code>/<code>status</code>):</p>
+<p><strong>stt-daemon</strong>
+- Besitzt Mikrofon, VAD-Segmentierung und das Parakeet-Modell exklusiv.
+- Schlankes Protokoll: <code>start_recording</code> / <code>stop_recording</code> -&gt;
+  Transkript-Text. Der Daemon entscheidet nicht, was mit dem Text passiert
+  (kein Tippen, kein LLM-Aufruf eingebaut) -- das bleibt Sache des jeweiligen
+  Clients.
+- <code>parakeet-dictate</code> wird zum dünnen Client: ruft <code>stt-daemon</code>, tippt das
+  Ergebnis per <code>ydotool</code> (inkl. Layout-Fixup <code>keymap.py</code>, Sound-Feedback
+  <code>feedback.py</code>) -- verliert seine eigene Modell-/Recorder-Logik.
+- <code>speech-to-speech</code> wird ebenfalls Client: <code>stt.py</code>/die
+  Recorder-Verantwortung in <code>audio_io.py</code> entfallen, <code>app.py</code> ruft den
+  Daemon für Aufnahme+Transkription.</p>
+<p><strong>tts-daemon</strong>
+- Besitzt das Qwen3-TTS-Modell.
+- Nimmt Text entgegen und spielt ihn selbst über die lokalen Lautsprecher ab
+  (serverseitige Wiedergabe statt Audio-Rohdaten über den Socket zurück --
+  auf einer Einzelmaschine deutlich einfacher als Streaming-Bytes durch
+  einen Unix-Socket zu pipen).
+- <code>speech-to-speech</code> wird Client: <code>tts.py</code>/die Playback-Verantwortung in
+  <code>audio_io.py</code> entfallen, <code>app.py</code> schickt die Claude-Antwort nur noch an
+  den Daemon.
+- Aktuell nur ein Konsument (<code>speech-to-speech</code>), aber offen für spätere
+  Tools (z.B. "lies mir das vor").</p>
+<p><strong>Was bei den bestehenden Projekten bleibt</strong>, weil es Client-/UX-spezifisch
+ist, nicht Modell-Serving:
+- Hotkey-/Knopf-Handling (Jabra-evdev, GNOME-Hotkey-Socket).
+- Sound-Cues / <code>notify-send</code>-Feedback.
+- Tastatur-Layout-Fixup, <code>ydotool</code>-Aufruf.
+- Claude-Agent-Orchestrierung, Konversationshistorie.</p>
+<h2 id="erwarteter-nutzen">Erwarteter Nutzen<a class="headerlink" href="#erwarteter-nutzen" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Kein doppelt geladenes STT-Modell mehr, wenn beide Tools laufen.</li>
+<li>Schnelle Iteration an <code>app.py</code>/<code>llm.py</code>: Neustart des dünnen Clients lädt
+  keine Multi-GB-Modelle mehr neu, nur der Daemon tut das (und läuft
+  durchgehend).</li>
+<li>Klarere Trennung: Modell-Serving (Daemons) vs. Verhalten (Clients) --
+  Diktier-Verhalten und Konversations-Verhalten bleiben bewusst getrennte,
+  einfache Programme, nur die teure Infrastruktur wird geteilt.</li>
+</ul>
+<h2 id="offene-fragen-zu-klarende-trade-offs">Offene Fragen / zu klärende Trade-offs<a class="headerlink" href="#offene-fragen-zu-klarende-trade-offs" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Repo-Zuschnitt:</strong> Neues eigenständiges Repo für beide Daemons (z.B.
+  <code>voice-daemons</code> mit zwei Unterprojekten), oder wandert die Daemon-Logik in
+  eines der bestehenden Projekte (<code>parakeet-dictate</code> besitzt heute schon die
+  sauberste Daemon/CLI-Struktur) und die anderen werden Clients davon?</li>
+<li><strong>Mic-Exklusivität:</strong> Der <code>stt-daemon</code> besäße das Mikrofon exklusiv --
+  Diktieren und Sprachgespräch könnten dann nicht mehr gleichzeitig laufen.
+  Realistisch unproblematisch (eine Person, ein Mund), aber explizit zu
+  bestätigen.</li>
+<li><strong>Reihenfolge:</strong> Erst <code>stt-daemon</code> (löst die tatsächliche Code-Duplizierung
+  zwischen den zwei bestehenden Projekten) oder gleich beide zusammen?</li>
+<li><strong>Protokoll-Details:</strong> Exaktes JSON-Schema für Start/Stop/Status,
+  Fehlerfälle (Daemon nicht erreichbar, Modell noch am Laden,
+  Recording-Race zwischen zwei Clients), Timeout-Verhalten -- analog zu
+  <code>parakeet-dictate/src/parakeet_dictate/daemon.py</code> und <code>cli.py</code> als
+  Vorlage.</li>
+<li><strong>systemd-Service-Namensgebung</strong> und ob <code>enable</code>/<code>disable</code> weiterhin
+  bewusst nicht auto-startend bleiben (wie bei <code>parakeet-dictate</code> heute).</li>
+</ul>
+<h2 id="nachste-schritte-fur-die-spatere-session">Nächste Schritte (für die spätere Session)<a class="headerlink" href="#nachste-schritte-fur-die-spatere-session" title="Permanent link">&para;</a></h2>
+<ol>
+<li>~~Entscheidung Repo-Zuschnitt und Reihenfolge (siehe offene Fragen).~~
+   Erledigt am 2026-08-12, abweichend von der ursprünglich geplanten
+   Reihenfolge unten (vorgezogen, weil konkret gebraucht): Repo-Zuschnitt
+   ist <strong>kein neues <code>voice-daemons</code>-Repo</strong>, sondern das komplette
+   <code>parakeet-dictate</code>-Projekt wandert nach <code>speech-to-speech</code> (als
+   <code>src/speech_to_speech/dictate/</code>) -- Wunsch war, künftig nur noch ein
+   Repo zu pflegen und <code>parakeet-dictate</code> irgendwann löschen zu können.</li>
+<li>~~<code>stt-daemon</code> aus <code>parakeet-dictate/src/parakeet_dictate/daemon.py</code> +
+   <code>audio.py</code> extrahieren~~ -- stattdessen 1:1 nach
+   <code>speech_to_speech/dictate/daemon.py</code> + <code>audio.py</code> verschoben (Namespace
+   angepasst, Modellname jetzt aus <code>config.STT_MODEL_NAME</code> statt eigener
+   Konstante). Protokoll unverändert (<code>toggle_record</code> tippt weiterhin selbst
+   via <code>ydotool</code> -- die geplante Reduktion auf reines
+   Transkript-Ergebnis ohne <code>type_text</code> im Daemon ist <strong>noch offen</strong>, siehe
+   Punkt 4.</li>
+<li>~~<code>parakeet-dictate</code> auf Client umbauen~~ -- CLI (<code>dictate/cli.py</code>), Daemon,
+   <code>typing_backend.py</code>, <code>keymap.py</code>, <code>feedback.py</code>, systemd-Unit und
+   <code>setup_ydotool.sh</code> sind jetzt Teil von <code>speech-to-speech</code>
+   (<code>project.scripts</code>: <code>parakeet-dictate</code>, <code>parakeet-dictate-daemon</code>). Das
+   alte <code>parakeet-dictate</code>-Repo läuft unverändert weiter (eigener
+   systemd-Service, eigener GNOME-Hotkey auf <code>&lt;Super&gt;d</code>) und wird erst nach
+   Verifikation der neuen Variante manuell abgeschaltet/gelöscht.</li>
+<li>~~<code>speech-to-speech</code>: <code>stt.py</code>/Recorder-Teil von <code>audio_io.py</code> durch einen
+   <code>dictate</code>-Daemon-Client ersetzen~~ Erledigt am 2026-08-12. Protokoll-
+   Reduktion wie in Punkt 2 als offen vermerkt: statt den Daemon komplett auf
+   reine Text-Rückgabe umzustellen (hätte <code>toggle_record</code>/<code>ydotool</code> für den
+   Diktier-Hotkey gebrochen), bekam er ein zweites Kommandopaar,
+   <code>start_recording</code>/<code>stop_recording</code> -- dieselbe Aufnahme-/
+   Transkriptions-Mechanik wie <code>toggle_record</code>, aber ohne <code>type_text</code>, weil
+   <code>speech-to-speech</code> den Text an Claude weiterreicht statt ihn zu tippen.
+   Neuer dünner Client <code>speech_to_speech/stt_client.py</code>; <code>app.py</code> hält kein
+   eigenes Parakeet-Modell und keinen eigenen <code>Recorder</code> mehr, <code>audio_io.py</code>
+   ist jetzt reines Wiedergabe-Modul, <code>stt.py</code> entfernt. Die doppelte
+   Speicherlast ist damit behoben -- Voraussetzung bleibt, dass der Daemon
+   vorher läuft (<code>parakeet-dictate enable</code>); <code>App.load()</code> bricht mit klarer
+   Fehlermeldung ab, wenn er nicht erreichbar ist, statt ihn selbst zu
+   starten (bewusst kein Auto-Start, wie beim Diktier-Pfad). Mic-Exklusivität
+   (offene Frage oben) ist damit real: Diktieren und Sprach-Dialog können
+   nicht mehr gleichzeitig laufen, weil beide denselben Daemon-Zustand
+   beanspruchen.</li>
+<li>~~<code>tts-daemon</code> analog aus <code>tts.py</code> + Playback-Teil von <code>audio_io.py</code>
+   extrahieren.~~ Erledigt am 2026-08-12. Namensgebung analog
+   <code>parakeet-dictate</code>: CLI/systemd-Service/Socket heißen <code>qwen-tts</code>
+   (Modellname statt Funktionsname). Neues Paket
+   <code>speech_to_speech/tts_daemon/</code> (Struktur wie <code>dictate/</code>): <code>tts.py</code>
+   (Modell-Klasse, 1:1 aus dem alten Top-Level-<code>tts.py</code>), <code>playback.py</code>
+   (<code>play_audio_streaming</code>, 1:1 aus <code>audio_io.py</code> -- die dort schon
+   unbenutzte blockierende <code>play_audio</code>/<code>_time_stretch</code>-Variante wurde beim
+   Verschieben als toter Code gestrichen), <code>protocol.py</code> (Kopie von
+   <code>dictate/protocol.py</code> mit eigenem Socket-Namen), <code>daemon.py</code>, <code>cli.py</code>
+   (nur <code>enable</code>/<code>disable</code>/<code>status</code>, kein <code>toggle</code> -- es gibt keinen
+   Hotkey-Nutzer dieses Daemons).</li>
+</ol>
+<p>Eine strukturelle Abweichung vom STT-Daemon war nötig: <code>speak</code> läuft
+   serverseitig ab (blockiert für die gesamte Sprechdauer, siehe Schritt 6
+   unten), und ein Barge-in muss ein laufendes <code>speak</code> per <code>stop</code> von einer
+   <em>zweiten</em>, gleichzeitig offenen Verbindung abbrechen können -- der
+   STT-Daemon bearbeitet dagegen eine Verbindung nach der anderen
+   synchron, weil alle seine Kommandos schnell zurückkehren. Der
+   TTS-Daemon startet deshalb pro Verbindung einen eigenen Thread. Die
+   Abbruchlogik selbst ist unverändert die schon vorhandene
+   <code>stop_event</code>-Unterstützung in <code>play_audio_streaming</code> -- wie im Abschnitt
+   "Bezug zur Daemon-Architektur" unten vorausgesehen, ließ sie sich nahezu
+   unverändert übernehmen, nur hält jetzt der Daemon das Event statt
+   <code>app.py</code>. Die "Zeit bis erste Sprachausgabe" (<code>first_chunk_s</code>) muss
+   dafür nicht live während der Wiedergabe zurückgemeldet werden -- der
+   Cockpit-Stat wird ohnehin erst nach dem Turn gelesen, daher reicht ein
+   normales Request/Response mit dem Wert in der finalen <code>speak</code>-Antwort,
+   kein Streaming-Protokoll.</p>
+<p><strong>Nachtrag (noch am 2026-08-12, beim Live-Test entdeckt):</strong> <code>stop_event</code>
+   wird in <code>play_audio_streaming</code> nur <em>zwischen</em> Chunks geprüft, nie während
+   eines laufenden Chunk-Aufrufs -- normalerweise unter einer Sekunde, aber
+   ein Testsatz brachte den Daemon einmal für über vier Minuten in
+   <code>state=speaking</code>, ohne dass <code>stop()</code> griff (das Problem gab es
+   identisch schon im alten Ein-Prozess-Code, wurde dort aber nie sichtbar,
+   weil <code>app.py</code>s eigener State sofort weiterschaltete). Im Daemon ist das
+   folgenreicher: eine hängende Generierung blockiert den <em>gemeinsamen</em>
+   Prozess für alle künftigen Anfragen (<code>busy: speaking</code>), nicht nur eine
+   App-Instanz. Da ein blockierender GPU-Aufruf aus einem anderen Thread
+   heraus nicht abbrechbar ist, bekam <code>_speak()</code> einen Watchdog: läuft die
+   Wiedergabe länger als <code>_SPEAK_WATCHDOG_S</code> (90s, siehe <code>daemon.py</code>),
+   beendet sich der Daemon-Prozess selbst (<code>os._exit</code>), und
+   <code>systemd/qwen-tts.service</code>s <code>Restart=on-failure</code> startet ihn neu (~10s
+   Modell-Ladezeit statt unbegrenztem Hängen). <code>tts_daemon/protocol.py</code>s
+   <code>send_command</code> behandelt eine mitten in der Antwort abgebrochene
+   Verbindung seither wie "Daemon nicht erreichbar" statt eine unbehandelte
+   Exception zu werfen. Die Watchdog-Logik selbst ist isoliert getestet
+   (Fake-Generator, gepatchtes kurzes Timeout); der ursprüngliche
+   4-Minuten-Hänger ließ sich mit demselben Testsatz auf einem frisch
+   neugestarteten Daemon nicht reproduzieren -- die genaue Ursache auf
+   TTS-Bibliotheksebene bleibt offen, der Watchdog begrenzt aber in jedem
+   Fall den Schaden, falls es wieder passiert.</p>
+<p>Bekannte, bewusst nicht behobene Lücke: <code>app.py</code> fängt in <code>_respond()</code>
+   keine Exceptions von <code>stt_client</code>/<code>tts_client</code>-Aufrufen ab -- stirbt der
+   Daemon-Aufruf mitten im Turn (z.B. durch den Watchdog-Neustart), bleibt
+   auch <code>app.py</code>s eigener State auf <code>speaking</code>/<code>thinking</code> hängen, bis die
+   App neu gestartet wird. Betrifft symmetrisch auch den STT-Pfad und
+   existierte in der Form schon vorher; nicht Teil dieser Härtung.
+6. ~~<code>speech-to-speech</code>: <code>tts.py</code>/Playback-Teil durch <code>tts-daemon</code>-Client
+   ersetzen; <code>app.py</code> wird zum reinen Orchestrator.~~ Erledigt am
+   2026-08-12. Neuer dünner Client <code>speech_to_speech/tts_client.py</code>
+   (<code>ensure_available()</code>/<code>speak()</code>/<code>stop()</code>), analog <code>stt_client.py</code>. <code>App</code>
+   hält kein <code>TextToSpeech</code>-Objekt mehr; <code>load()</code> prüft beide Daemons vorab
+   (<code>stt_client.ensure_available()</code> und <code>tts_client.ensure_available()</code>),
+   bricht mit klarer Fehlermeldung ab statt später beim ersten Knopfdruck
+   zu hängen. Barge-in während <code>speaking</code> (drei Stellen: <code>on_toggle</code>,
+   <code>submit_text</code>, <code>reset()</code>) ruft jetzt zusätzlich <code>tts_client.stop()</code> --
+   vorher reichte dafür das lokal geteilte <code>threading.Event</code>, das ging mit
+   dem Umzug der Wiedergabe in einen eigenen Prozess nicht mehr.
+   <code>audio_io.py</code> und das Top-Level-<code>tts.py</code> sind komplett entfernt, ihr
+   Inhalt lebt nur noch im <code>tts_daemon</code>-Paket. Damit ist auch die zweite
+   Hälfte der doppelten GPU-Modelllast behoben (analog zur STT-Seite in
+   Schritt 4) -- <code>app.py</code> selbst hält jetzt kein Modell mehr, weder STT
+   noch TTS.</p>
+<h2 id="zusatz-feature-unterbrechbare-sprachausgabe-barge-in">Zusatz-Feature: Unterbrechbare Sprachausgabe (Barge-in)<a class="headerlink" href="#zusatz-feature-unterbrechbare-sprachausgabe-barge-in" title="Permanent link">&para;</a></h2>
+<p>Status: Umgesetzt (Commit "Add barge-in support to interrupt
+thinking/speaking"). Festgehalten am 2026-08-12, im selben Kontext wie der
+Daemon-Vorschlag oben entstanden.</p>
+<h3 id="problem">Problem<a class="headerlink" href="#problem" title="Permanent link">&para;</a></h3>
+<p>Der Toggle-Handler in <code>app.py</code> kennt aktuell nur zwei aktive Zustände
+sinnvoll: <code>idle</code> (Knopfdruck startet Aufnahme) und <code>recording</code> (Knopfdruck
+stoppt und löst LLM+TTS aus). Ein Knopfdruck während <code>thinking</code> oder
+<code>speaking</code> wird komplett ignoriert ("Busy, ignoring toggle"). Der Nutzer
+muss eine unpassende oder zu lange Antwort deshalb immer vollständig
+anhören, bevor er neu sprechen kann.</p>
+<h3 id="vorschlag_1">Vorschlag<a class="headerlink" href="#vorschlag_1" title="Permanent link">&para;</a></h3>
+<p>Konsistentes Prinzip für alle Zustände: ein Knopfdruck gibt dem Nutzer
+jederzeit die Kontrolle zurück, statt nur in <code>idle</code>/<code>recording</code> zu wirken.</p>
+<ul>
+<li><code>speaking</code> -&gt; Knopfdruck bricht die laufende Wiedergabe sofort ab und
+  startet direkt eine neue Aufnahme (kein Umweg über <code>idle</code>).</li>
+<li><code>thinking</code> -&gt; Knopfdruck bricht den laufenden Claude-Query ab (der Claude
+  Agent SDK Client bietet dafür bereits eine eingebaute <code>interrupt()</code>-Methode,
+  siehe <code>ClaudeSDKClient.interrupt()</code> in <code>client.py</code>) und startet ebenfalls
+  direkt eine neue Aufnahme.</li>
+</ul>
+<p>Technisch:</p>
+<ul>
+<li><code>audio_io.play_audio_streaming</code> bekommt ein <code>threading.Event</code> als
+  Abbruch-Signal, das zwischen den einzelnen Audio-Chunks geprüft wird. Wird
+  es gesetzt, wird der Output-Stream geschlossen und ein laufender
+  ffmpeg-Zeitraffer-Prozess terminiert.</li>
+<li>Weil <code>tts.py</code>s <code>synthesize_streaming</code> ein Generator ist, der Chunks erst
+  bei Bedarf von der GPU erzeugt, stoppt allein das Nicht-mehr-Abrufen aus
+  der Konsum-Schleife automatisch auch die weitere Sprachsynthese -- kein
+  separater Cancel-Pfad in <code>tts.py</code> nötig.</li>
+<li><code>llm.py</code> bekommt eine <code>cancel()</code>-Methode, die über den bestehenden
+  Event-Loop-Thread <code>ClaudeSDKClient.interrupt()</code> aufruft.</li>
+<li>Ein kurzer Sound-Hinweis beim Abbruch (Muster wie <code>feedback.py</code> in
+  <code>parakeet-dictate</code>) bestätigt dem Nutzer akustisch, dass der Abbruch
+  angekommen ist.</li>
+</ul>
+<p>Bewusst nicht vorgesehen: automatische Sprachaktivitätserkennung während
+der Wiedergabe (echtes "Reinreden" ohne Knopfdruck). Das würde ein offenes
+Mikrofon parallel zur Lautsprecherausgabe erfordern, und ohne
+Echo-Unterdrückung würde die eigene TTS-Ausgabe als Nutzer-Sprache
+missinterpretiert -- deutlich höherer Aufwand, passt auch nicht zum
+bestehenden Push-to-toggle-Muster.</p>
+<h3 id="bezug-zur-daemon-architektur">Bezug zur Daemon-Architektur<a class="headerlink" href="#bezug-zur-daemon-architektur" title="Permanent link">&para;</a></h3>
+<p>Der <code>tts-daemon</code> aus dem Vorschlag oben braucht von Anfang an ein
+<code>stop</code>/<code>cancel</code>-Kommando im Protokoll, nicht erst nachträglich ergänzt --
+sonst müsste das Protokoll später erneut angefasst werden. Die
+Chunk-Abbruchlogik sollte deshalb so prozessunabhängig gebaut werden, dass
+sie sich später fast unverändert in den Daemon übernehmen lässt.</p>
+<h2 id="zusatz-feature-web-cockpit-als-drittes-steuer-interface">Zusatz-Feature: Web-Cockpit als drittes Steuer-Interface<a class="headerlink" href="#zusatz-feature-web-cockpit-als-drittes-steuer-interface" title="Permanent link">&para;</a></h2>
+<p>Status: Umgesetzt (Chatverlauf, Unterbrechen-Button, Kennzahlen,
+Neue-Session-Reset -- <code>src/speech_to_speech/cockpit.py</code>, läuft lokal auf
+<code>http://127.0.0.1:7860</code>). Festgehalten am 2026-08-12. Offen bleibt nur der
+mobile Zugriff, siehe Abschnitt unten.</p>
+<h3 id="motivation">Motivation<a class="headerlink" href="#motivation" title="Permanent link">&para;</a></h3>
+<p>Zusätzlich zu Jabra-Knopf und lokalem Hotkey eine kleine Weboberfläche als
+drittes Trigger-Interface: schönere Anzeige des Chatverlaufs, ein
+Unterbrechen-Button als Alternative zum physischen Knopf, Anzeige von
+Kennzahlen wie Antwort-/Sprechdauer, und eine "Neue Session"-Funktion.</p>
+<h3 id="technischer-ansatz">Technischer Ansatz<a class="headerlink" href="#technischer-ansatz" title="Permanent link">&para;</a></h3>
+<p>Gradio statt Dash, weil <code>gr.Chatbot</code> fertige Chat-Bubble-Darstellung
+mitbringt und Dash eher auf Analytics-Dashboards mit Graphen zugeschnitten
+ist -- für eine Chat-Optik wäre mit Dash deutlich mehr Handarbeit nötig.</p>
+<p>Die Gradio-App läuft im selben Prozess wie <code>app.py</code>, als weiterer
+Hintergrund-Thread neben Jabra-Listener und Socket-Server (analog zu
+<code>_run_jabra_listener</code>). Der Unterbrechen-Button ruft direkt dieselbe
+<code>on_toggle</code>/Cancel-Logik der <code>App</code>-Instanz auf -- normaler Python-Aufruf,
+kein neues Netzwerkprotokoll. Das bestehende Locking um die
+Zustandsübergänge deckt automatisch auch Klicks aus der Weboberfläche ab.</p>
+<p>Für Live-Anzeige von Zustand und Chatverlauf reicht Gradios eingebaute
+Timer-Komponente (Polling alle paar hundert Millisekunden), echtes
+Websocket-Pushing ist für eine Status-Cockpit-Anzeige nicht nötig -- die
+eigentliche Sprachausgabe läuft ja weiterhin über die lokalen Lautsprecher.</p>
+<p>Zwei Ergänzungen an <code>App</code> werden dafür ohnehin gebraucht (unabhängig vom
+UI-Framework):</p>
+<ul>
+<li>Eine Liste, die den Chatverlauf strukturiert mitschreibt (aktuell nur im
+  Log, nicht im State).</li>
+<li>Eine <code>reset()</code>-Funktion für eine neue Session (Claude-Client neu
+  verbinden, Chatverlauf leeren).</li>
+</ul>
+<p>Die Zeitmessungen für Antwort- und Sprechdauer existieren größtenteils
+schon (<code>time.monotonic()</code> in <code>tts.py</code>/<code>audio_io.py</code>), müssten aber
+zusätzlich in ein kleines Statistik-Objekt geschrieben werden statt nur
+ins Log.</p>
+<h3 id="offene-frage-mobiler-zugriff-handy">Offene Frage: mobiler Zugriff (Handy)<a class="headerlink" href="#offene-frage-mobiler-zugriff-handy" title="Permanent link">&para;</a></h3>
+<p>Naheliegender Folgewunsch: dieselbe Oberfläche auch vom Handy aus nutzen.
+Hier unterscheidet sich die Aufgabe grundlegend vom lokalen Cockpit, weil
+das Handy kein direktes Mikrofon-/Lautsprecher-Passthrough zur laufenden
+App hat -- Audio muss über das Netz geschickt und empfangen werden, und
+zwar gestreamt (Chunk für Chunk), nicht als Datei nach Aufnahmeende, sonst
+geht der bereits erarbeitete Time-to-first-audio-Vorteil der
+Streaming-Wiedergabe verloren.</p>
+<p>Zwei Optionen, noch nicht entschieden:</p>
+<ol>
+<li><strong>Gradio-Cockpit auch im mobilen Browser öffnen.</strong> Gradio unterstützt
+   inzwischen streamendes Audio-Input/-Output (<code>gr.Audio(streaming=True)</code>),
+   das im mobilen Safari/Chrome über die normale Mikrofon-Berechtigung
+   funktioniert. Kein zweiter Code-Stack, schnellster Weg.</li>
+<li><strong>Eigene Flutter-App.</strong> Vorarbeit dazu existiert bereits im
+   Nachbarprojekt <code>~/research/flutter_voice_stream</code> (dort allerdings mit
+   Gemini + Geräte-eigenem STT/TTS, nicht mit dieser Pipeline -- kein
+   direkt wiederverwendbarer Code, aber Erfahrung mit dem Tooling
+   vorhanden). Nativeres Gefühl, Hintergrundbetrieb möglich, aber eine
+   zweite UI, die bei jeder Cockpit-Änderung (Unterbrechen-Button,
+   Chatverlauf, Statistiken) separat nachgezogen werden muss.</li>
+</ol>
+<p>Tendenz: erst Option 1 versuchen, Flutter erst dann angehen, wenn konkrete
+Grenzen des Browser-Wegs (Hintergrundbetrieb, Latenz, Bedienkomfort) im
+echten Gebrauch tatsächlich stören, statt von Anfang an zwei Frontends zu
+pflegen.</p>
+<p><strong>Sicherheitsvoraussetzung, unabhängig von der gewählten Option:</strong> Das
+LLM-Backend läuft mit <code>permission_mode="bypassPermissions"</code> und vollem
+Tool-Zugriff (Bash, Dateisystem, Websuche). Erreichbarkeit übers freie
+Internet ohne Zugriffsschutz ist damit kein rein kosmetisches Risiko --
+jede erreichte Stimme könnte beliebige Shell-Kommandos auslösen. Mobiler
+Zugriff braucht deshalb in jedem Fall entweder ein privates VPN (z.B.
+Tailscale) oder einen Tunnel mit Zugriffsschutz (z.B. Cloudflare Tunnel mit
+Access-Regel) -- ein offener Port mit bloßer URL reicht nicht.</p>
+<h2 id="priorisierte-reihenfolge-uber-alle-drei-vorschlage">Priorisierte Reihenfolge über alle drei Vorschläge<a class="headerlink" href="#priorisierte-reihenfolge-uber-alle-drei-vorschlage" title="Permanent link">&para;</a></h2>
+<p>Festgehalten am 2026-08-12. Reihenfolge: zuerst Barge-in, dann Web-Cockpit,
+Daemon-Aufspaltung zuletzt.</p>
+<ul>
+<li><strong>1. Barge-in.</strong> Kleinster Aufwand (drei Dateien: <code>app.py</code>, <code>audio_io.py</code>,
+  <code>llm.py</code>), sofort spürbarer Nutzen im Alltag, und harte Voraussetzung für
+  Schritt 2 -- der Unterbrechen-Button im Cockpit soll dieselbe
+  Abbruch-Logik aufrufen, die es ohne diesen Schritt noch gar nicht gibt.</li>
+<li><strong>2. Web-Cockpit.</strong> Läuft im selben Prozess, ruft bestehende (und die neu
+  aus Schritt 1 entstandenen) Funktionen direkt auf -- überschaubarer
+  Aufwand, schnell sichtbarer Mehrwert (Chatverlauf, Kennzahlen,
+  Session-Reset).</li>
+<li><strong>3. Daemon-Aufspaltung.</strong> Größter Aufwand, mit noch offenen
+  Grundsatzfragen (Repo-Zuschnitt, Protokoll-Details), und bringt kein
+  neues Nutzer-Feature, sondern behebt vor allem doppeltes Modell-Laden und
+  langsame Iteration bei Codeänderungen -- ein Investment in die eigene
+  Entwicklungsgeschwindigkeit, kein User-Feature. Nebeneffekt der späten
+  Reihenfolge: das Daemon-Protokoll (inkl. <code>stop</code>/<code>cancel</code>-Kommando für
+  Barge-in) wird erst entworfen, wenn die tatsächlichen Anforderungen aus
+  Schritt 1 und 2 bekannt sind, statt es vorab zu erraten. ~~Wird
+  angegangen, sobald doppeltes Modell-Laden oder langsame Iteration im
+  Alltag wirklich stören.~~ Umgesetzt am 2026-08-12 (siehe Schritte 5+6
+  oben) -- <code>app.py</code> hält jetzt kein Modell mehr selbst, weder STT noch TTS.</li>
+</ul>
+<h2 id="nachste-schritte-erganzung-fur-die-spatere-session">Nächste Schritte (Ergänzung, für die spätere Session)<a class="headerlink" href="#nachste-schritte-erganzung-fur-die-spatere-session" title="Permanent link">&para;</a></h2>
+<ol>
+<li>~~Abbruch-Event in <code>audio_io.play_audio_streaming</code> und <code>llm.cancel()</code>
+   umsetzen, Zustandsmaschine in <code>app.py</code> um die Abbruch-Übergänge
+   erweitern.~~ Erledigt.</li>
+<li>~~Chatverlauf-State und <code>reset()</code> in <code>App</code> ergänzen, dann Gradio-Cockpit
+   als dritten Trigger-Thread aufsetzen.~~ Erledigt.</li>
+<li>Entscheidung zu mobilem Zugriff treffen (Browser vs. Flutter), erst
+   danach ggf. VPN/Tunnel-Absicherung einrichten. Weiterhin offen.</li>
+</ol>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Zurück zum Seitenanfang
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "toc.integrate", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "In Zwischenablage kopiert", "clipboard.copy": "In Zwischenablage kopieren", "search.result.more.one": "1 weiteres Suchergebnis auf dieser Seite", "search.result.more.other": "# weitere Suchergebnisse auf dieser Seite", "search.result.none": "Keine Suchergebnisse", "search.result.one": "1 Suchergebnis", "search.result.other": "# Suchergebnisse", "search.result.placeholder": "Suchbegriff eingeben", "search.result.term.missing": "Es fehlt", "select.version": "Version ausw\u00e4hlen"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

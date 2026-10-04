@@ -1,0 +1,206 @@
+<svg viewBox="0 0 1180 500" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">
+  <title>Claude Code: Hintergrund-Agent, Completion-Notification statt Push</title>
+  <desc>Zwei Spuren: oben die Hauptsitzung (Leerlauf/Turn aktiv), unten ein Hintergrund-Agent (läuft/fertig). Runde 1 -- der Agent wird fertig, während die Hauptsitzung gerade einen Turn aktiv hat: die Notification wird kurz danach zugestellt. Runde 2 -- der Agent wird fertig, während die Hauptsitzung im Leerlauf ist: die Notification bleibt grau, bis die Hauptsitzung von sich aus wieder aktiv wird -- erst dann, aber auch sofort dann, wird sie mitgenommen. Kein automatischer Push während des Leerlaufs, aber auch kein Liegenbleiben über den nächsten Turn hinaus.</desc>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="arrowhead" />
+    </marker>
+    <marker id="arrow-muted" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="arrowhead-muted" />
+    </marker>
+    <marker id="arrow-deliver" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="arrowhead-deliver" />
+    </marker>
+  </defs>
+
+  <style>
+    .surface    { fill: #fcfcfb; }
+    .border     { stroke: rgba(11,11,11,0.10); }
+    .state-box  { fill: #f2f1ee; stroke: #52514e; stroke-width: 1.5; }
+    .state-text { fill: #0b0b0b; font-weight: 600; }
+    .sub-text   { fill: #52514e; font-size: 11.5px; }
+    .edge       { stroke: #52514e; stroke-width: 2; fill: none; }
+    .edge-loop  { stroke: #898781; stroke-width: 1.75; stroke-dasharray: 6 5; fill: none; }
+    .edge-label-muted { fill: #52514e; font-size: 12px; }
+    .arrowhead  { fill: #52514e; }
+    .arrowhead-muted { fill: #898781; }
+    .arrowhead-deliver { fill: #2a78d6; }
+    .caption    { fill: #898781; font-size: 12.5px; }
+    .legend-text{ fill: #52514e; font-size: 12px; }
+    .lane-label { fill: #898781; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+    .deliver-label { fill: #184f95; font-weight: 600; font-size: 12.5px; }
+    .pull-label { fill: #52514e; font-weight: 600; font-size: 12.5px; }
+
+    @keyframes capA { 0%,48% { opacity: 1; } 51%,100% { opacity: 0; } }
+    @keyframes capB { 0%,49% { opacity: 0; } 52%,99% { opacity: 1; } 100% { opacity: 0; } }
+    .cap-a { animation: capA 20s linear infinite; }
+    .cap-b { animation: capB 20s linear infinite; }
+
+    /* main session lane: idle vs. turn-active, two laps per 20s cycle */
+    @keyframes main-idle {
+      0%,14%   { fill: #fdece3; stroke: #d6563f; stroke-width: 2.5; }
+      15%,49%  { fill: #f2f1ee; stroke: #52514e; stroke-width: 1.5; }
+      50%,74%  { fill: #fdece3; stroke: #d6563f; stroke-width: 2.5; }
+      75%,100% { fill: #f2f1ee; stroke: #52514e; stroke-width: 1.5; }
+    }
+    @keyframes main-active {
+      0%,14%   { fill: #f2f1ee; stroke: #52514e; stroke-width: 1.5; }
+      15%,49%  { fill: #fdece3; stroke: #d6563f; stroke-width: 2.5; }
+      50%,74%  { fill: #f2f1ee; stroke: #52514e; stroke-width: 1.5; }
+      75%,100% { fill: #fdece3; stroke: #d6563f; stroke-width: 2.5; }
+    }
+    .lane-idle   { animation: main-idle 20s linear infinite; }
+    .lane-active { animation: main-active 20s linear infinite; }
+
+    /* background agent lane */
+    @keyframes bg-running {
+      0%,17%   { fill: #f1ecfb; stroke: #6b46c1; stroke-width: 2.5; }
+      18%,49%  { fill: #f2f1ee; stroke: #52514e; stroke-width: 1.5; }
+      50%,67%  { fill: #f1ecfb; stroke: #6b46c1; stroke-width: 2.5; }
+      68%,100% { fill: #f2f1ee; stroke: #52514e; stroke-width: 1.5; }
+    }
+    .bg-running { animation: bg-running 20s linear infinite; }
+
+    /* the notification box: appears grey ("wartet") in both laps. In lap 1 the
+       main session already has a turn running, so it flips to delivered-blue
+       almost immediately. In lap 2 the main session is idle when the agent
+       finishes, so it stays grey through that idle stretch -- but as soon as
+       the next turn starts (for whatever reason), it gets swept in too, just
+       like in lap 1: it only ever waits out the idle gap, never longer. */
+    @keyframes bg-notification {
+      0%,17%  { opacity: 0; }
+      18%     { opacity: 1; fill: #f2f1ee; stroke: #52514e; stroke-width: 1.5; }
+      21%     { fill: #f2f1ee; stroke: #52514e; stroke-width: 1.5; }
+      23%     { fill: #e7f0fb; stroke: #2a78d6; stroke-width: 2.5; }
+      45%     { fill: #e7f0fb; stroke: #2a78d6; stroke-width: 2.5; opacity: 1; }
+      47%     { opacity: 0; }
+      67%     { opacity: 0; }
+      68%     { opacity: 1; fill: #f2f1ee; stroke: #52514e; stroke-width: 1.5; }
+      74%     { fill: #f2f1ee; stroke: #52514e; stroke-width: 1.5; }
+      78%     { fill: #e7f0fb; stroke: #2a78d6; stroke-width: 2.5; }
+      100%    { fill: #e7f0fb; stroke: #2a78d6; stroke-width: 2.5; opacity: 1; }
+    }
+    .bg-notification { animation: bg-notification 20s linear infinite; }
+
+    @keyframes connector-cue {
+      0%,21%  { opacity: 0; }
+      23%,45% { opacity: 1; }
+      47%,76% { opacity: 0; }
+      78%,97% { opacity: 1; }
+      99%,100% { opacity: 0; }
+    }
+    .connector-cue { animation: connector-cue 20s linear infinite; }
+
+    @keyframes pull-cue { 0%,67% { opacity: 0; } 68%,73% { opacity: 1; } 75%,100% { opacity: 0; } }
+    .pull-cue { animation: pull-cue 20s linear infinite; }
+
+    @media (prefers-color-scheme: dark) {
+      .surface    { fill: #1a1a19; }
+      .border     { stroke: rgba(255,255,255,0.10); }
+      .state-box  { fill: #2a2a28; stroke: #c3c2b7; }
+      .state-text { fill: #ffffff; }
+      .sub-text   { fill: #c3c2b7; }
+      .edge       { stroke: #c3c2b7; }
+      .edge-loop  { stroke: #6b6a63; }
+      .edge-label-muted { fill: #c3c2b7; }
+      .arrowhead  { fill: #c3c2b7; }
+      .arrowhead-muted { fill: #6b6a63; }
+      .arrowhead-deliver { fill: #3987e5; }
+      .caption    { fill: #898781; }
+      .legend-text{ fill: #c3c2b7; }
+      .lane-label { fill: #898781; }
+      .deliver-label { fill: #86b6ef; }
+      .pull-label { fill: #c3c2b7; }
+
+      @keyframes main-idle {
+        0%,14%   { fill: #3a2317; stroke: #ef7a63; stroke-width: 2.5; }
+        15%,49%  { fill: #2a2a28; stroke: #c3c2b7; stroke-width: 1.5; }
+        50%,74%  { fill: #3a2317; stroke: #ef7a63; stroke-width: 2.5; }
+        75%,100% { fill: #2a2a28; stroke: #c3c2b7; stroke-width: 1.5; }
+      }
+      @keyframes main-active {
+        0%,14%   { fill: #2a2a28; stroke: #c3c2b7; stroke-width: 1.5; }
+        15%,49%  { fill: #3a2317; stroke: #ef7a63; stroke-width: 2.5; }
+        50%,74%  { fill: #2a2a28; stroke: #c3c2b7; stroke-width: 1.5; }
+        75%,100% { fill: #3a2317; stroke: #ef7a63; stroke-width: 2.5; }
+      }
+      @keyframes bg-running {
+        0%,17%   { fill: #241c35; stroke: #9b7ee0; stroke-width: 2.5; }
+        18%,49%  { fill: #2a2a28; stroke: #c3c2b7; stroke-width: 1.5; }
+        50%,67%  { fill: #241c35; stroke: #9b7ee0; stroke-width: 2.5; }
+        68%,100% { fill: #2a2a28; stroke: #c3c2b7; stroke-width: 1.5; }
+      }
+      @keyframes bg-notification {
+        0%,17%  { opacity: 0; }
+        18%     { opacity: 1; fill: #2a2a28; stroke: #c3c2b7; stroke-width: 1.5; }
+        21%     { fill: #2a2a28; stroke: #c3c2b7; stroke-width: 1.5; }
+        23%     { fill: #142a42; stroke: #3987e5; stroke-width: 2.5; }
+        45%     { fill: #142a42; stroke: #3987e5; stroke-width: 2.5; opacity: 1; }
+        47%     { opacity: 0; }
+        67%     { opacity: 0; }
+        68%     { opacity: 1; fill: #2a2a28; stroke: #c3c2b7; stroke-width: 1.5; }
+        74%     { fill: #2a2a28; stroke: #c3c2b7; stroke-width: 1.5; }
+        78%     { fill: #142a42; stroke: #3987e5; stroke-width: 2.5; }
+        100%    { fill: #142a42; stroke: #3987e5; stroke-width: 2.5; opacity: 1; }
+      }
+    }
+  </style>
+
+  <rect x="0" y="0" width="1180" height="500" rx="16" class="surface border" />
+  <text x="24" y="28" class="caption">Claude Code -- Hintergrund-Agent: Completion-Notification statt Push (docs/reference-claude-code-turn-taking.md Abschnitt 5)</text>
+
+  <text x="24" y="52" class="edge-label-muted cap-a" font-size="14">Runde 1 -- Agent wird fertig, während die Hauptsitzung einen Turn aktiv hat: Zustellung kurz danach</text>
+  <text x="24" y="52" class="edge-label-muted cap-b" font-size="14">Runde 2 -- Agent wird fertig, während die Hauptsitzung im Leerlauf ist: Notification wartet, bis ein Turn beginnt</text>
+
+  <text x="24" y="86" class="lane-label">Hauptsitzung</text>
+  <rect x="60" y="92" width="260" height="70" rx="14" class="state-box lane-idle" />
+  <text x="190" y="122" text-anchor="middle" class="state-text" font-size="15">Leerlauf</text>
+  <text x="190" y="140" text-anchor="middle" class="sub-text">Tippen, nichts läuft</text>
+
+  <line x1="320" y1="127" x2="414" y2="127" class="edge" marker-end="url(#arrow)" />
+
+  <rect x="420" y="92" width="320" height="70" rx="14" class="state-box lane-active" />
+  <text x="580" y="122" text-anchor="middle" class="state-text" font-size="15">Turn aktiv</text>
+  <text x="580" y="140" text-anchor="middle" class="sub-text">Verarbeitung / Antwort läuft</text>
+
+  <path d="M740,162 C740,200 190,200 190,162" class="edge-loop" marker-end="url(#arrow-muted)" />
+
+  <text x="24" y="246" class="lane-label">Hintergrund-Agent</text>
+  <rect x="60" y="252" width="320" height="70" rx="14" class="state-box bg-running" />
+  <text x="220" y="282" text-anchor="middle" class="state-text" font-size="15">Agent läuft</text>
+  <text x="220" y="300" text-anchor="middle" class="sub-text">z.B. Subagent oder Hintergrund-Befehl</text>
+
+  <line x1="380" y1="287" x2="474" y2="287" class="edge" marker-end="url(#arrow)" />
+
+  <rect x="480" y="252" width="320" height="70" rx="14" class="state-box bg-notification" />
+  <text x="640" y="282" text-anchor="middle" class="state-text" font-size="15">Completion-Notification</text>
+  <text x="640" y="300" text-anchor="middle" class="sub-text">wartet, bis sie abgeholt wird</text>
+
+  <!-- lap 1: delivery connector into the active turn above -->
+  <g class="connector-cue">
+    <path d="M640,252 C640,210 600,190 580,162" class="edge" stroke="#2a78d6" fill="none" marker-end="url(#arrow-deliver)" />
+    <rect x="660" y="190" width="280" height="40" rx="8" class="surface" />
+    <text x="800" y="206" text-anchor="middle" class="deliver-label">zugestellt --</text>
+    <text x="800" y="222" text-anchor="middle" class="deliver-label">fließt in den laufenden Turn</text>
+  </g>
+
+  <!-- lap 2: pending only through the idle gap -->
+  <g class="pull-cue">
+    <text x="640" y="350" text-anchor="middle" class="pull-label">wartet, kein Push --</text>
+    <text x="640" y="368" text-anchor="middle" class="pull-label">sobald ein Turn beginnt, egal wodurch, wird sie gleich mitgenommen</text>
+  </g>
+
+  <!-- legend -->
+  <rect x="60" y="410" width="20" height="14" rx="4" fill="#f1ecfb" stroke="#6b46c1" stroke-width="1.5" />
+  <text x="88" y="421" class="legend-text">Agent läuft</text>
+  <rect x="220" y="410" width="20" height="14" rx="4" fill="#f2f1ee" stroke="#52514e" stroke-width="1.5" />
+  <text x="248" y="421" class="legend-text">Notification wartet</text>
+  <rect x="420" y="410" width="20" height="14" rx="4" fill="#e7f0fb" stroke="#2a78d6" stroke-width="1.5" />
+  <text x="448" y="421" class="legend-text">zugestellt</text>
+  <rect x="560" y="410" width="20" height="14" rx="4" fill="#fdece3" stroke="#d6563f" stroke-width="1.5" />
+  <text x="588" y="421" class="legend-text">Hauptsitzung gerade "dran"</text>
+
+  <text x="24" y="460" class="caption">Beide Spuren laufen unabhängig, je 10s pro Runde (20s-Gesamtzyklus) -- reine CSS-Animation, kein GIF/Video nötig.</text>
+  <text x="24" y="478" class="caption">Eigene Entscheidung fürs eigene System (siehe Abschnitt 5): bewusst nicht wie hier -- ein fertiger Hintergrund-Agent soll aktiv pushen statt zu warten.</text>
+</svg>
