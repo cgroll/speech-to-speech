@@ -270,10 +270,14 @@ class App:
             # _start_recording(), so a press that stops recording is just as
             # unambiguous as one that starts it (see feedback.py).
             feedback.play_cue("stop")
-            # Start the responder loop if not already running.
-            # (In the new model, we might already have one running from a
-            # previous turn that is now processing a queued message).
-            threading.Thread(target=self._run_responder_loop, daemon=True).start()
+            # Drain the just-stopped recording and ensure a responder loop
+            # is running -- in a background thread since STT transcription
+            # takes a moment and must never block the calling trigger
+            # thread (evdev listener / toggle socket). See
+            # _finish_recording_and_ensure_loop()'s docstring for why the
+            # draining step itself must run unconditionally here, never
+            # gated by whether a previous turn's loop is still busy.
+            threading.Thread(target=self._finish_recording_and_ensure_loop, daemon=True).start()
         else:
             logger.info("Barge-in: suppressing audio, starting new recording.")
             tts_client.stop()
@@ -314,54 +318,99 @@ class App:
         feedback.play_cue("start")
         logger.info("Recording... press the button again to stop.")
 
-    def _run_responder_loop(self) -> None:
-        """Central loop that drains the input queue. Started whenever a
-        recording is stopped or text is submitted while idle."""
+    def _finish_recording_and_ensure_loop(self) -> None:
+        """Spawned (in its own thread) by the toggle handler's "stop
+        recording" branch. Drains the recording into the input queue
+        first, unconditionally, then makes sure a responder loop is
+        running to pick the new item up (one might already be -- see
+        _ensure_responder_loop())."""
+        self._drain_recording_into_queue()
+        self._ensure_responder_loop()
+
+    def _drain_recording_into_queue(self) -> None:
+        """Stops the just-finished recording and, if anything was said,
+        appends it to history and queues it for the responder loop.
+
+        Deliberately called *before*, and independently of,
+        _ensure_responder_loop() -- not folded into the loop's own
+        start-up, and not gated by whether a responder loop for an earlier
+        turn is still busy. STT runs on its own daemon, unrelated to
+        however long that earlier turn's LLM call takes, so draining it
+        must never wait on that. It used to: the old code only drained the
+        mic right at the top of _run_responder_loop(), before that
+        function's own "already running" guard. If a full voice barge-in
+        (start recording, speak, stop recording) completed while an
+        earlier turn's send() was still in flight, the stop-recording
+        toggle's spawned thread hit that guard and returned immediately --
+        *before* ever calling stt_client.stop_recording() -- silently
+        losing the recording: never transcribed, never shown in history,
+        never queued, and the STT daemon left stuck thinking it was still
+        recording."""
+        if not stt_client.is_recording():
+            return
+        stop_t0 = time.monotonic()
+        # on_toggle() already spoke the "Ende" cue on the press that got us
+        # here -- that only confirms the press was received, not that the
+        # daemon actually stopped/transcribed cleanly. If this call fails
+        # (daemon error, or it drops off the socket mid-transcribe), say so
+        # explicitly instead of leaving the turn to vanish silently.
+        try:
+            text = stt_client.stop_recording().strip()
+        except Exception as exc:
+            logger.error(
+                "Failed to stop recording (%s). Discarding this turn -- "
+                "if this keeps happening, the STT daemon is likely stuck; "
+                "try the cockpit's 'STT-Daemon neu starten' button.",
+                exc,
+                exc_info=True,
+            )
+            feedback.play_cue("error")
+            # Don't force the state to "idle" here: an earlier turn may
+            # still legitimately be thinking/speaking (this recording was
+            # a barge-in on top of it) -- the responder loop's own
+            # "queues empty" check is what decides whether idle is
+            # actually reached. Only clear the suppression flag this
+            # recording set, so it doesn't mute a reply that has nothing
+            # to do with this failed attempt.
+            with self._state_lock:
+                self._audio_suppressed = False
+            return
+        stt_s = time.monotonic() - stop_t0
+        if text:
+            logger.info("Transcribed: %s", text)
+            # Append to history immediately (Input Separation)
+            self._append_history("user", text)
+            with self._history_lock:
+                self._stats["last_stt_s"] = stt_s
+            with self._state_lock:
+                self._input_queue.append(text)
+        else:
+            logger.info("No speech detected.")
+
+    def _ensure_responder_loop(self) -> None:
+        """Starts _run_responder_loop() in a new thread unless one is
+        already active. The check-and-claim happens atomically under
+        _state_lock, so concurrent callers (the toggle handler via
+        _finish_recording_and_ensure_loop(), submit_text(),
+        deliver_background_result()) can never start two dispatcher loops
+        at once -- whichever one is already running will pick up anything
+        the others queued, on its next pass through the while loop
+        below."""
         with self._state_lock:
             if self._responder_loop_running:
                 return
             self._responder_loop_running = True
-        
+        threading.Thread(target=self._run_responder_loop, daemon=True).start()
+
+    def _run_responder_loop(self) -> None:
+        """Central loop that drains the input/background queues one item
+        at a time. _responder_loop_running is already claimed by
+        _ensure_responder_loop() before this thread starts -- draining a
+        just-stopped recording into _input_queue happens separately and
+        earlier, in _drain_recording_into_queue(), so this loop never
+        touches the STT daemon itself."""
         logger.info("Responder loop started.")
         try:
-            # Drain the mic first if we just came from recording
-            if stt_client.is_recording():
-                stop_t0 = time.monotonic()
-                # on_toggle() already spoke the "Ende" cue on the press that
-                # got us here -- that only confirms the press was received,
-                # not that the daemon actually stopped/transcribed cleanly.
-                # If this call fails (daemon error, or it drops off the
-                # socket mid-transcribe), say so explicitly instead of
-                # leaving the turn to vanish with the state stuck on
-                # "thinking" forever.
-                try:
-                    text = stt_client.stop_recording().strip()
-                except Exception as exc:
-                    logger.error(
-                        "Failed to stop recording (%s). Discarding this turn "
-                        "and returning to idle -- if this keeps happening, "
-                        "the STT daemon is likely stuck; try the cockpit's "
-                        "'STT-Daemon neu starten' button.",
-                        exc,
-                        exc_info=True,
-                    )
-                    feedback.play_cue("error")
-                    with self._state_lock:
-                        self._set_state("idle")
-                        self._audio_suppressed = False
-                    return
-                stt_s = time.monotonic() - stop_t0
-                if text:
-                    logger.info("Transcribed: %s", text)
-                    # Append to history immediately (Input Separation)
-                    self._append_history("user", text)
-                    with self._history_lock:
-                        self._stats["last_stt_s"] = stt_s
-                    with self._state_lock:
-                        self._input_queue.append(text)
-                else:
-                    logger.info("No speech detected.")
-
             while True:
                 next_input: str | None = None
                 next_background: tuple[str, str] | None = None
@@ -447,7 +496,7 @@ class App:
                 pass
         
         if start_loop:
-            threading.Thread(target=self._run_responder_loop, daemon=True).start()
+            self._ensure_responder_loop()
 
     def deliver_background_result(self, source: str, text: str) -> None:
         """Sanctioned entry point (docs/specs/background-channel.md section
@@ -471,7 +520,7 @@ class App:
             if self._state == "idle":
                 start_loop = True
         if start_loop:
-            threading.Thread(target=self._run_responder_loop, daemon=True).start()
+            self._ensure_responder_loop()
 
     def _deliver_background_entry(self, source: str, text: str) -> None:
         """Speaks/shows one entry popped off _background_queue by the
@@ -494,10 +543,20 @@ class App:
         self._speak(text)
 
     def _respond(self, text: str) -> None:
-        # User input is now appended to history in submit_text() / 
+        # User input is now appended to history in submit_text() /
         # _run_responder_loop() immediately when it arrives, so we don't
         # do it here anymore.
         assert self._llm is not None
+        # "Verstanden" cue: confirms the transcribed/typed input actually
+        # reached the agent, right as that happens -- distinct from the
+        # "Start"/"Ende" recording cues (feedback.py), since this fires
+        # for typed input too and marks a different handoff ("your input
+        # is now the agent's problem", not "the mic is on/off"). Fires
+        # unconditionally: by the time _respond() runs, _run_responder_loop()
+        # has already cleared _audio_suppressed for this turn, so there's
+        # no suppressed case to skip here (the reply itself still checks
+        # below, since a barge-in can land while the agent call is in flight).
+        feedback.play_cue("agent_start")
         t0 = time.monotonic()
         try:
             reply = self._llm.send(text)
@@ -505,7 +564,7 @@ class App:
             logger.warning("LLM turn timed out -- resetting to idle.")
             self._recover_from_llm_timeout()
             return
-        
+
         reply_ready = time.monotonic()
         response_s = reply_ready - t0
 
@@ -520,7 +579,14 @@ class App:
                 logger.info("Audio suppressed or recording -- skipping playback of reply.")
                 return
             self._set_state("speaking")
-        
+
+        # "Fertig" cue: the agent's reply text is final -- fires here,
+        # before _speak() enqueues it for TTS synthesis, so the user knows
+        # no more thinking is happening and only synthesis/playback is left
+        # to wait for. Only reached when we're actually about to speak (see
+        # the suppression check above), so it's never a false promise of
+        # audio that then doesn't come.
+        feedback.play_cue("agent_done")
         self._speak(reply)
 
     def _speak(self, reply: str) -> None:

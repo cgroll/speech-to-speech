@@ -46,15 +46,36 @@ import logging
 import subprocess
 import sys
 import threading
+import time
 
 logger = logging.getLogger(__name__)
 
+# Brief head start before the *first* playback attempt (not before the
+# retry -- that one already follows right after a failure, which is itself
+# enough of a gap), giving a suspended output device -- e.g. a wireless
+# headset's USB dock that idle-suspends to save the headset's own battery,
+# see _speak() below -- a moment to wake before we actually need it. This
+# doesn't delay the recording itself (already running by the time play_cue()
+# is called, see app.py's _start_recording()), only how soon the cue sound
+# starts, so it's pure UX: fewer races into the retry path, no change to
+# when input is captured.
+_WAKE_DELAY_S = 0.2
+
 # German words, matching the rest of the app's user-facing strings (cockpit
 # labels in app.py's STATE_LABELS are German too).
+#
+# "agent_start"/"agent_done" are deliberately different words from
+# "start"/"stop" (which already mean "recording started/stopped") so the
+# two pairs can't be confused: "Verstanden" fires once the transcribed/typed
+# input has actually reached the agent (app.py's _respond()), "Fertig" once
+# the agent's reply text is ready -- so the user knows no further input is
+# expected and only the TTS synthesis/playback is left to wait for.
 _WORDS = {
     "start": "Start",
     "stop": "Ende",
     "error": "Fehler",
+    "agent_start": "Verstanden",
+    "agent_done": "Fertig",
 }
 
 # Fallback tone, used only if the spoken word fails outright (see _speak).
@@ -62,11 +83,15 @@ _SOUND_IDS_LINUX = {
     "start": "message-new-instant",
     "stop": "complete",
     "error": "dialog-warning",
+    "agent_start": "dialog-information",
+    "agent_done": "bell",
 }
 _SOUNDS_MACOS = {
     "start": "/System/Library/Sounds/Tink.aiff",
     "stop": "/System/Library/Sounds/Glass.aiff",
     "error": "/System/Library/Sounds/Basso.aiff",
+    "agent_start": "/System/Library/Sounds/Pop.aiff",
+    "agent_done": "/System/Library/Sounds/Ping.aiff",
 }
 
 
@@ -97,13 +122,27 @@ def _speak(word: str, name: str) -> None:
     if sys.platform == "darwin":
         # macOS ships no German voice by default; "Anna" does and reads
         # these two short words intelligibly enough.
-        spoken = _run(["say", "-v", "Anna", word])
+        cmd = ["say", "-v", "Anna", word]
     else:
-        spoken = _run(["espeak-ng", "-v", "de", word])
+        cmd = ["espeak-ng", "-v", "de", word]
+
+    time.sleep(_WAKE_DELAY_S)
+    spoken = _run(cmd)
+    if not spoken:
+        # The output device (e.g. a wireless headset's USB dock) auto-
+        # suspends after a few seconds of silence to save the headset's
+        # own battery -- deliberately not disabled, since this machine
+        # stays plugged in but the headset doesn't. Opening a new stream
+        # normally wakes it, but the very first attempt right after an
+        # idle period can lose that race and fail while the device is
+        # still waking up. One immediate retry lands on an already-awake
+        # device and clears this without touching the power-saving policy.
+        logger.warning("Spoken cue '%s' failed, retrying once (device may be waking from idle-suspend).", word)
+        spoken = _run(cmd)
     if spoken:
         return
 
-    logger.warning("Spoken cue '%s' failed, falling back to a tone.", word)
+    logger.warning("Spoken cue '%s' failed twice, falling back to a tone.", word)
     if sys.platform == "darwin":
         sound_path = _SOUNDS_MACOS.get(name)
         toned = bool(sound_path) and _run(["afplay", sound_path])

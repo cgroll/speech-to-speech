@@ -61,7 +61,10 @@ def test_toggle_plays_start_and_stop_feedback_cues(harness: Harness) -> None:
 
     app.on_toggle()  # recording -> thinking
     assert wait_until(lambda: app._state == "idle")
-    assert harness.feedback.cue_calls == ["start", "stop"]
+    # "stop" (the toggle press itself) is followed by "agent_start" (the
+    # transcript reaching the agent) and "agent_done" (its reply is ready,
+    # right before TTS synthesis starts) -- see _respond() in app.py.
+    assert harness.feedback.cue_calls == ["start", "stop", "agent_start", "agent_done"]
     assert harness.tts.speak_calls == ["hi there"]
 
 
@@ -195,6 +198,54 @@ def test_voice_barge_in_during_processing_stops_audio_and_starts_recording(harne
     llm.release()
     assert wait_until(lambda: app._state == "idle")
     assert harness.tts.speak_calls == ["x"] # First one was suppressed, second was "x"
+
+
+def test_voice_barge_in_fully_completed_while_earlier_turn_still_running_is_not_lost(harness: Harness) -> None:
+    # Regression for a bug found 2026-10-04: a *full* voice barge-in
+    # (press to start recording, speak, press to stop recording) that
+    # completes entirely before the earlier turn's send() call returns
+    # used to vanish without a trace. The stop-recording toggle always
+    # spawned a thread to drain the mic, but that thread used to bail out
+    # immediately if a responder loop for the earlier turn was still
+    # running -- *before* ever calling stt_client.stop_recording() -- so
+    # the correction was never transcribed, never shown in history, and
+    # never queued; the STT daemon was also left stuck thinking it was
+    # still recording. Fixed by draining the mic unconditionally
+    # (App._drain_recording_into_queue()), decoupled from whether a
+    # dispatcher loop is already busy (App._ensure_responder_loop()).
+    app = harness.app
+    llm = FakeAgentConversation(reply="x", gate=True)
+    app._llm = llm
+    harness.stt.transcript = "frage 1"
+
+    app.submit_text("frage 1")
+    assert wait_until(lambda: llm.started.is_set())
+    assert app._state == "thinking"
+
+    # Full barge-in, start to stop, entirely while "frage 1" is still
+    # blocked inside llm.send() (the gate hasn't been released yet).
+    harness.stt.transcript = "korrektur"
+    app.on_toggle()  # barge-in: thinking -> recording
+    assert app._state == "recording"
+    app.on_toggle()  # recording -> thinking
+
+    # The correction must be drained and queued right away -- it must not
+    # wait for "frage 1" to finish first.
+    assert wait_until(lambda: harness.stt.stop_calls == 1)
+    assert wait_until(lambda: "korrektur" in app._input_queue or llm.sent == ["frage 1", "korrektur"])
+
+    # Now let "frage 1" finish.
+    llm.release()
+    assert wait_until(lambda: llm.sent == ["frage 1", "korrektur"])
+    llm.release()
+    assert wait_until(lambda: app._state == "idle")
+
+    # "korrektur" shows up right after it's transcribed -- *before* "frage
+    # 1"'s own reply, since that's still blocked on the gate at this point
+    # (same "append as soon as known, order falls out on its own" behavior
+    # as a normal queued steering message).
+    contents = [m["content"] for m in app.get_history()]
+    assert contents == ["frage 1", "korrektur", "x", "x"]
 
 
 def test_voice_barge_in_during_responding_stops_audio_and_restarts_recording(harness: Harness) -> None:
