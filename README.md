@@ -326,6 +326,15 @@ systemctl --user daemon-reload
 systemctl --user enable --now telegram-bot.service
 ```
 
+> **Node-/NVM-Update:** Die Unit setzt den `PATH` auf ein fest verdrahtetes
+> NVM-Verzeichnis (`~/.nvm/versions/node/v22.23.1/bin`), damit der
+> systemd-Service das `pi`-Binary findet. Nach einem Node-Versionswechsel
+> scheitert jeder Pi-Turn mit `FileNotFoundError: ... 'pi'`. Dann die Version
+> in `systemd/telegram-bot.service` anpassen (aktuelle: `ls ~/.nvm/versions/node/`),
+> neu nach `~/.config/systemd/user/` kopieren, `daemon-reload` und Service
+> neu starten. Alternativ `SPEECH_TO_SPEECH_PI_BIN` auf einen absoluten Pfad
+> setzen (siehe `config.py`).
+
 ### Nutzung
 
 Läuft nach dem Setup dauerhaft im Hintergrund. Für manuelle Kontrolle:

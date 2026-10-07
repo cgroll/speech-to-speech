@@ -6,6 +6,17 @@ Wants=network-online.target
 [Service]
 Type=simple
 Environment=PYTHONUNBUFFERED=1
+# The Pi Coding Agent ('pi' binary) is often installed via NVM. Since systemd
+# user services don't inherit the full shell environment, we need to ensure
+# the binary is found. You can either add its directory to the PATH or set
+# SPEECH_TO_SPEECH_PI_BIN directly.
+# NOTE: the Node version below is hardcoded. After an NVM Node update the
+# old directory disappears and every Pi turn fails with
+#   FileNotFoundError: [Errno 2] No such file or directory: 'pi'
+# Fix: check `ls ~/.nvm/versions/node/`, update the version here, re-copy
+# this file to ~/.config/systemd/user/, then
+# `systemctl --user daemon-reload && systemctl --user restart telegram-bot`.
+Environment=PATH=%h/.nvm/versions/node/v22.23.1/bin:/usr/local/bin:/usr/bin:/bin
 WorkingDirectory=%h/research/speech-to-speech
 # Calls the venv's installed binary directly rather than `uv run` -- uv is
 # snap-packaged on this machine, and snap re-parents the process into its

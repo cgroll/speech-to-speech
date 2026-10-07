@@ -91,6 +91,11 @@ GEMINI_MODEL = "gemini-2.5-flash"
 GEMINI_PROJECT = os.environ.get("GEMINI_PROJECT", "pi-agent-gemini")
 GEMINI_LOCATION = os.environ.get("GEMINI_LOCATION", "us-central1")
 
+# The Pi Coding Agent binary. If it's not in the PATH (e.g. when running via
+# systemd without a full login environment), this can be set to an absolute
+# path via the SPEECH_TO_SPEECH_PI_BIN environment variable.
+PI_BIN = os.environ.get("SPEECH_TO_SPEECH_PI_BIN", "pi")
+
 GEMINI_SYSTEM_INSTRUCTION = (
     "Du bist ein hilfreicher Sprachassistent in einem Sprach-zu-Sprach-Dialog. "
     "Antworte auf Deutsch, in kurzen, natürlich gesprochenen Sätzen. "

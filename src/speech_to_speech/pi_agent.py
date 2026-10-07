@@ -43,11 +43,10 @@ from speech_to_speech.agent_backend import (
     system_prompt_for,
     workspace_instruction,
 )
-from speech_to_speech.config import DEFAULT_WORKSPACE
+from speech_to_speech.config import DEFAULT_WORKSPACE, PI_BIN
 
 logger = logging.getLogger(__name__)
 
-PI_BIN = "pi"
 
 # How long a single turn (subprocess call) may run before we give up on it.
 # Generous on purpose -- tool-heavy turns (web search, multi-file edits) can
