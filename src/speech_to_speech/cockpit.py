@@ -368,8 +368,24 @@ def build(app) -> gr.Blocks:
             _refresh_sessions, inputs=[workspace_box, agent_picker], outputs=session_picker
         )
 
+        # gr.Chatbot's frontend (autoscroll=True) snaps to the bottom on
+        # every value update while the view is within ~100px of it. Re-sending
+        # an unchanged history every 0.3s therefore yanked a mouse-wheel
+        # scroll straight back down (only a big scrollbar drag escaped the
+        # zone). So the poll skips the chatbot output unless the history
+        # actually changed since the last value sent to this browser tab.
+        # _history is append-only (App never mutates entries in place), so
+        # a plain == against the last-sent list is enough.
+        last_history = gr.State(None)
+
+        def _poll(last):
+            state, history, stats = _snapshot(app)
+            if history == last:
+                return state, gr.skip(), stats, last
+            return state, history, stats, history
+
         timer = gr.Timer(COCKPIT_POLL_SECONDS)
-        timer.tick(lambda: _snapshot(app), outputs=outputs)
+        timer.tick(_poll, inputs=last_history, outputs=outputs + [last_history])
         demo.load(lambda: _snapshot(app), outputs=outputs)
         # Refreshes the session list per browser connection (not on the fast
         # state-poll timer -- listing sessions means a filesystem scan,
