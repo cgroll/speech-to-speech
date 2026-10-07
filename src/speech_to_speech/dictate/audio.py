@@ -59,14 +59,43 @@ class Recorder:
         self._has_speech = False
         self._speech_ms = 0.0
         self._silence_ms = 0.0
-        self._stream = sd.InputStream(
+        self._stream = self._open_stream()
+        self._stream.start()
+
+    def _open_stream(self) -> sd.InputStream:
+        try:
+            return self._new_stream()
+        except sd.PortAudioError:
+            # PortAudio snapshots the device list once, at Pa_Initialize()
+            # time, which for this long-lived daemon process means once at
+            # daemon startup (it's never restarted on idle -- see
+            # daemon.py's docstring). If the Jabra headset drops and
+            # re-pairs later (or macOS otherwise reshuffles CoreAudio
+            # devices), that snapshot goes stale and opening a stream fails
+            # with an opaque "Internal PortAudio error" [-9986] even though
+            # the device works fine -- a freshly started process sees it
+            # without issue. This is also why the cockpit's "STT-Daemon neu
+            # starten" button "fixes" it: it forces a fresh PortAudio init,
+            # not anything audio-specific. Doing that reinit here instead
+            # (and retrying once) means a stale device list heals itself
+            # without needing a manual restart.
+            logger.warning(
+                "Opening input stream failed, likely a stale PortAudio "
+                "device list (e.g. after a Bluetooth reconnect); "
+                "reinitializing PortAudio and retrying once."
+            )
+            sd._terminate()
+            sd._initialize()
+            return self._new_stream()
+
+    def _new_stream(self) -> sd.InputStream:
+        return sd.InputStream(
             samplerate=SAMPLE_RATE,
             channels=1,
             dtype="float32",
             blocksize=_FRAME_SAMPLES,
             callback=self._on_audio,
         )
-        self._stream.start()
 
     def _on_audio(self, indata: np.ndarray, frames: int, time_info, status) -> None:
         if status:

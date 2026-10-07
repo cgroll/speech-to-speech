@@ -19,6 +19,14 @@ from speech_to_speech.config import JABRA_DEVICE_NAME, TTS_PLAYBACK_SPEED
 logger = logging.getLogger(__name__)
 
 
+def _find_output_device() -> int | None:
+    """One pass over the current (possibly stale) PortAudio device list."""
+    for i, info in enumerate(sd.query_devices()):
+        if JABRA_DEVICE_NAME in info["name"] and info["max_output_channels"] > 0:
+            return i
+    return None
+
+
 def _output_device() -> int | None:
     """Looks up the Jabra by name among output-capable devices, rather than
     relying on sounddevice's default output -- that default tracks macOS'
@@ -28,17 +36,59 @@ def _output_device() -> int | None:
     device (None) if the Jabra isn't connected, same graceful-degradation
     pattern as the Jabra button (see input_button.py).
 
+    PortAudio snapshots its device list once, at Pa_Initialize() time --
+    for this long-lived daemon that means once at startup (see
+    `_open_output_stream`'s comment). If the Jabra wasn't connected yet
+    then, or dropped and re-paired since, that snapshot is stale and this
+    search silently misses it -- no exception, it just quietly returns the
+    default device (the Mac speakers), which is the "TTS plays out of the
+    laptop even though the headset is connected" symptom. So on a miss,
+    force a PortAudio rescan and search once more before giving up.
+
     macOS-only: on Linux the name match hits the raw ALSA device (hw:N,0),
     which doesn't resample and rejects the TTS model's 24 kHz output
     ("Invalid sample rate"). There the PipeWire/pulse default already routes
     to the headset, so stick with it."""
     if sys.platform != "darwin":
         return None
-    for i, info in enumerate(sd.query_devices()):
-        if JABRA_DEVICE_NAME in info["name"] and info["max_output_channels"] > 0:
-            return i
+    device = _find_output_device()
+    if device is not None:
+        return device
+    logger.info(
+        "'%s' not in the current PortAudio device list; reinitializing and retrying once.",
+        JABRA_DEVICE_NAME,
+    )
+    sd._terminate()
+    sd._initialize()
+    device = _find_output_device()
+    if device is not None:
+        return device
     logger.warning("No '%s' output device found, falling back to the system default.", JABRA_DEVICE_NAME)
     return None
+
+
+def _open_output_stream(sample_rate: int, device: int | None) -> sd.OutputStream:
+    """Opens the output stream, retrying once after a PortAudio reinit if
+    the device list has gone stale -- same self-healing as Recorder's
+    `_open_stream()` in dictate/audio.py (see its comment for why this
+    daemon-process-lifetime issue happens and why a reinit fixes it).
+
+    The retry re-resolves `device` via `_output_device()` instead of
+    reusing the index passed in: a reinit can renumber PortAudio's devices,
+    so blindly retrying with the old index risks silently opening a
+    *different* device (e.g. the Mac speakers) rather than raising again."""
+    try:
+        return sd.OutputStream(samplerate=sample_rate, channels=1, dtype="float32", device=device)
+    except sd.PortAudioError:
+        logger.warning(
+            "Opening output stream failed, likely a stale PortAudio device "
+            "list (e.g. after a Bluetooth reconnect); reinitializing "
+            "PortAudio and retrying once."
+        )
+        sd._terminate()
+        sd._initialize()
+        device = _output_device()
+        return sd.OutputStream(samplerate=sample_rate, channels=1, dtype="float32", device=device)
 
 
 def play_audio_streaming(
@@ -93,7 +143,7 @@ def play_audio_streaming(
             yield chunk
 
     if TTS_PLAYBACK_SPEED == 1.0:
-        with sd.OutputStream(samplerate=sample_rate, channels=1, dtype="float32", device=device) as stream:
+        with _open_output_stream(sample_rate, device) as stream:
             first = True
             for chunk in _all():
                 if first and on_first_chunk is not None:
@@ -132,7 +182,7 @@ def play_audio_streaming(
     feeder.start()
 
     stdout_fd = proc.stdout.fileno()
-    with sd.OutputStream(samplerate=sample_rate, channels=1, dtype="float32", device=device) as stream:
+    with _open_output_stream(sample_rate, device) as stream:
         first = True
         while data := os.read(stdout_fd, 4096):
             if first and on_first_chunk is not None:
