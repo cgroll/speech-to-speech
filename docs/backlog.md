@@ -439,6 +439,64 @@ Umgesetzt:
   beliebige Dokumente) wären ein separates, ähnlich gebautes Tool
   (`send_document` o.ä.), nicht Teil dieser Umsetzung.
 
+## Bilder vom Nutzer empfangen (Cockpit, v.a. Clipboard-Screenshots)
+
+Status: Umgesetzt am 2026-10-20 (`cockpit.py`, `app.py`,
+`agent_backend.py`), Cockpit only, Claude-Backend sinnvoll nur.
+
+Umkehrung von "Bilder an den Nutzer senden" oben: der Nutzer soll im
+Cockpit-Chat ein Bild -- vor allem einen gerade gemachten Screenshot direkt
+aus der Zwischenablage -- an den Agenten schicken können, nicht nur Text.
+
+Entscheidung: kein neues SDK-Tool/MCP-Server nötig (anders als beim
+Senden), weil Claude Codes eigenes `Read`-Tool Bilddateien schon direkt
+ansehen kann. Es reicht, den Dateipfad nach dem Kopieren ins Workspace in
+die Textnachricht einzubetten -- symmetrisch einfacher als die
+Sende-Richtung.
+
+Umgesetzt:
+- `cockpit.py`: `text_input` ist jetzt ein `gr.MultimodalTextbox`
+  (`sources=["upload"]`, `file_types=["image"]`, `submit_btn=False` --
+  Senden bleibt über den bestehenden Button/Enter) statt einer einfachen
+  `gr.Textbox`. Einfügen eines Bildes aus der Zwischenablage (Strg+V) wird
+  von Gradio seit 4.25 nativ unterstützt, keine eigene JS/Paste-Logik
+  nötig -- verifiziert gegen die installierte Version (6.17.3).
+- `_submit_text()` liest jetzt `{"text": ..., "files": [...]}` statt eines
+  rohen Strings und ruft `App.submit_multimodal()` statt `submit_text()`,
+  wenn Dateien dabei sind.
+- `app.py`: `App.submit_multimodal(text, image_paths)` kopiert jedes
+  Attachment über `_save_incoming_image()` in einen `.chat-attachments`-
+  Ordner im aktuellen Workspace (Gradios eigener Upload-Temp-Pfad liegt
+  außerhalb des Workspace und ist nicht langlebig), hängt für die
+  Chat-Anzeige dieselbe Datei-Dict-Struktur wie `_append_image()` an die
+  History (eigene Kopie im Gradio-Image-Cache, damit `gr.Chatbot` es
+  inline rendert) und hängt für den Agenten an den Text Marker-Zeilen
+  `[Angehängtes Bild: <Pfad>]` an, bevor der kombinierte Text ganz normal
+  über die gemeinsame `_enqueue_input()` (aus `submit_text()`
+  herausgezogen) in die Responder-Loop geht.
+- `agent_backend.py`: `SYSTEM_PROMPT_BASE` erklärt die
+  `[Angehängtes Bild: ...]`-Marker-Konvention, damit das Modell den Pfad
+  per `Read` ansieht statt ihn als Dateisuche misszuverstehen.
+- Manuell end-to-end verifiziert (`App` direkt mit Fake-LLM, ohne echtes
+  Cockpit/Gradio-Frontend): simuliertes Upload-Tempfile wird korrekt ins
+  Workspace kopiert, Fake-LLM bekommt Text + Marker-Zeile, History-Eintrag
+  enthält das Bild-Dict im `gr.Chatbot`-Format.
+
+### Nächste Schritte
+- Manuell im echten Browser-Cockpit verifizieren: Screenshot machen,
+  Strg+V ins Textfeld, absenden -- insbesondere ob das Paste-Gesture in
+  der tatsächlich gerenderten Gradio-6-Oberfläche so ankommt wie erwartet
+  (das Preprocessing/die Datenform ist nur gegen die Python-Seite
+  verifiziert, nicht gegen echtes Browser-Clipboard-Verhalten).
+- Pi-Backend bekommt die Marker-Zeile mit, kann sie aber mangels
+  Bild-Lesefähigkeit nicht nutzen -- kein Fehler, nur stiller Leerlauf;
+  nicht weiter behandelt (gleiche "akzeptiert, aber wirkungslos"-Haltung
+  wie bei `on_image`/`on_background_result` für Pi in
+  `agent_backend.create_conversation()`).
+- `.chat-attachments`-Ordner im Workspace wächst unbegrenzt (keine
+  Aufräum-/Alterungslogik) -- bisher kein Problem, da Screenshots klein
+  sind, aber bei häufiger Nutzung irgendwann relevant.
+
 ## Claude-Code-Timeout: hängende Turns sauber abfangen statt nur den Timeout erhöhen
 
 Status: Umgesetzt am 2026-09-14 (`llm.py`, `agent_backend.py`, `app.py`).

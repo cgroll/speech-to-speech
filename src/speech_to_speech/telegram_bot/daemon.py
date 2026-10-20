@@ -139,6 +139,9 @@ _MAX_SESSION_BUTTONS = 10
 # unwieldy long before that; session titles (first prompt/summary) can run
 # long.
 _MAX_BUTTON_LABEL = 60
+# Telegram rejects sendMessage bodies over 4096 characters with
+# "BadRequest: Message is too long" -- long agent replies get split.
+_MAX_MESSAGE_LEN = 4096
 
 
 _OUTPUT_MODES = ("text", "audio")
@@ -228,6 +231,29 @@ def _make_on_background_result(chat_id: int, loop: asyncio.AbstractEventLoop) ->
     return _on_background_result
 
 
+def _split_message(text: str, limit: int = _MAX_MESSAGE_LEN) -> list[str]:
+    """Splits text into chunks of at most `limit` characters, preferring to
+    cut at a paragraph break, then a line break, then a space, so a long
+    agent reply arrives as several readable messages instead of failing."""
+    chunks = []
+    while len(text) > limit:
+        window = text[:limit]
+        cut = max(window.rfind("\n\n"), window.rfind("\n"), window.rfind(" "))
+        if cut <= 0:
+            cut = limit
+        chunks.append(text[:cut].rstrip())
+        text = text[cut:].lstrip()
+    if text:
+        chunks.append(text)
+    return chunks
+
+
+async def _send_text(chat_id: int, text: str) -> None:
+    assert _bot is not None
+    for chunk in _split_message(text):
+        await _bot.send_message(chat_id=chat_id, text=chunk)
+
+
 async def _send_background(chat_id: int, source: str, text: str) -> None:
     """Posts a background result as its own message -- a plain text reply
     plus, if this chat has audio replies switched on (/voice), a
@@ -237,7 +263,7 @@ async def _send_background(chat_id: int, source: str, text: str) -> None:
     incoming message."""
     assert _bot is not None
     labeled = f"🔔 {source}: {text}" if source else f"🔔 {text}"
-    await _bot.send_message(chat_id=chat_id, text=labeled)
+    await _send_text(chat_id, labeled)
 
     if _get_session(chat_id).output_mode != "audio":
         return
@@ -265,8 +291,7 @@ def _make_on_output(chat_id: int, loop: asyncio.AbstractEventLoop) -> Callable[[
 
 
 async def _send_thinking(chat_id: int, text: str) -> None:
-    assert _bot is not None
-    await _bot.send_message(chat_id=chat_id, text=f"🤔 {text}")
+    await _send_text(chat_id, f"🤔 {text}")
 
 
 def _get_session(chat_id: int) -> _ChatSession:
@@ -395,7 +420,8 @@ async def _send_reply(update: Update, chat_id: int, text: str) -> None:
     (session.output_mode, toggled via /voice). A synthesis failure only
     drops the extra voice copy, never the text reply that already went
     out -- a transient TTS-daemon hiccup shouldn't lose the answer."""
-    await update.message.reply_text(text)
+    for chunk in _split_message(text):
+        await update.message.reply_text(chunk)
 
     if _get_session(chat_id).output_mode != "audio":
         return

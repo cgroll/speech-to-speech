@@ -45,7 +45,12 @@ For time-based reminders ("remind me in 10 minutes to...", "ping me at 5pm
 about..."), always use the `reminder` skill (schedules a real Telegram
 message via Google Cloud Tasks). Never use a built-in scheduled-task/routine/
 cron feature for this — nothing is watching claude.ai on this device, so a
-routine would silently never reach the user."""
+routine would silently never reach the user.
+
+A user message may end with one or more lines like "[Angehängtes Bild:
+/path/to/file.png]" -- that marks an image the user just shared from the
+chat (e.g. a pasted clipboard screenshot), not a file they're asking you to
+go find. Read/view it directly to see what they mean."""
 
 # Appended when the reply is read aloud via TTS (voice_output=True): the App's
 # spoken dialog and the cockpit's voice round-trip. Must keep answers speakable.

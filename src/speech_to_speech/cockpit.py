@@ -136,12 +136,23 @@ def build(app) -> gr.Blocks:
 
         # Alternative to the mic: type or paste text directly, e.g. when
         # dictating would be slower or more awkward than copy-pasting.
-        # Shares App.on_toggle()'s pipeline via App.submit_text(), just
-        # entering it at "thinking" instead of "recording".
+        # Shares App.on_toggle()'s pipeline via App.submit_text()/
+        # submit_multimodal(), just entering it at "thinking" instead of
+        # "recording". MultimodalTextbox (rather than a plain Textbox) also
+        # accepts an image pasted straight from the clipboard -- e.g. a
+        # screenshot -- Gradio has supported pasting images into this
+        # component since 4.25, no extra wiring needed for the paste
+        # gesture itself, just for what happens to the resulting file (see
+        # App.submit_multimodal()). `sources=["upload"]` keeps the explicit
+        # attach-button available too, for a screenshot already saved to
+        # disk rather than sitting in the clipboard.
         with gr.Row():
-            text_input = gr.Textbox(
-                label="Text eingeben (statt Sprache)",
-                placeholder="Text hier einfügen und Enter drücken zum Senden …",
+            text_input = gr.MultimodalTextbox(
+                label="Text eingeben (statt Sprache) oder Bild/Screenshot anhängen",
+                placeholder="Text eingeben, Bild per Strg+V einfügen, Enter zum Senden …",
+                sources=["upload"],
+                file_types=["image"],
+                submit_btn=False,
                 scale=4,
             )
             send_btn = gr.Button("Senden", scale=1)
@@ -292,9 +303,14 @@ def build(app) -> gr.Blocks:
             app.reset(agent=agent, workspace=workspace)
             return (*_snapshot(app), app.get_agent_name(), app.get_workspace())
 
-        def _submit_text(text: str):
-            app.submit_text(text)
-            return (*_snapshot(app), "")
+        def _submit_text(message: dict):
+            text = (message or {}).get("text", "")
+            files = (message or {}).get("files") or []
+            if files:
+                app.submit_multimodal(text, files)
+            else:
+                app.submit_text(text)
+            return (*_snapshot(app), {"text": "", "files": []})
 
         def _refresh_sessions(workspace: str, agent: str):
             return gr.update(choices=sessions.session_choices(workspace, agent))

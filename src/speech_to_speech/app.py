@@ -19,6 +19,7 @@ import shutil
 import tempfile
 import threading
 import time
+import uuid
 from pathlib import Path
 
 import numpy as np
@@ -470,7 +471,74 @@ class App:
         # Append to history immediately so it shows up in the cockpit even
         # while a previous turn is still active (Input Separation).
         self._append_history("user", text)
+        self._enqueue_input(text)
 
+    def submit_multimodal(self, text: str, image_paths: list[str]) -> None:
+        """Cockpit's gr.MultimodalTextbox path (cockpit.py): like
+        submit_text(), but may carry image attachments -- e.g. a screenshot
+        pasted straight from the clipboard. Gradio hands each attachment
+        back as a path into its own upload temp dir, which is outside the
+        agent's workspace and not guaranteed to stick around, so every image
+        is first copied into a per-session folder inside the *current*
+        workspace via _save_incoming_image() -- the same cwd confinement
+        every other file the agent touches goes through.
+
+        Claude's own Read tool can view image files directly (unlike the
+        outbound direction, no custom show_image-style tool is needed here),
+        so the agent is simply told each image's path via a bracket marker
+        appended to the text -- see agent_backend.SYSTEM_PROMPT_BASE's
+        "[Angehängtes Bild: ...]" instruction. Pi has no equivalent
+        image-viewing ability, same "accepted but likely ignored by that
+        backend" situation as on_image/on_background_result in
+        agent_backend.create_conversation()'s docstring -- not special-cased
+        here since there's nothing to special-case *to*.
+
+        The chat history shows the pasted image inline too, reusing
+        _append_image()'s file-dict/image-cache mechanism (copy into a dir
+        Gradio is already allowed to serve from)."""
+        text = text.strip()
+        if not text and not image_paths:
+            return
+
+        saved_paths = [self._save_incoming_image(p) for p in image_paths]
+
+        history_content: list[dict[str, str] | str] = [
+            {"path": _copy_to_image_cache(p)} for p in saved_paths
+        ]
+        if text:
+            history_content.append(text)
+        with self._history_lock:
+            self._history.append({"role": "user", "content": history_content})
+
+        combined_text = text
+        if saved_paths:
+            markers = "\n".join(f"[Angehängtes Bild: {p}]" for p in saved_paths)
+            combined_text = f"{combined_text}\n\n{markers}" if combined_text else markers
+
+        logger.info("Multimodal input: %s", combined_text)
+        self._enqueue_input(combined_text)
+
+    def _save_incoming_image(self, path: str) -> str:
+        """Copies one cockpit-uploaded attachment into a `.chat-attachments`
+        folder inside the current workspace, so Claude's Read tool finds it
+        under the same cwd confinement as every other file it touches.
+        Named with a short uuid prefix rather than keeping the original
+        filename, since a clipboard paste's original name is meaningless
+        (typically just "image.png") and a second paste shouldn't silently
+        overwrite the first."""
+        src = Path(path)
+        attachments_dir = Path(self._workspace) / ".chat-attachments"
+        attachments_dir.mkdir(exist_ok=True)
+        dest = attachments_dir / f"{uuid.uuid4().hex[:8]}-{src.name}"
+        shutil.copyfile(src, dest)
+        return str(dest)
+
+    def _enqueue_input(self, text: str) -> None:
+        """Shared queueing tail of submit_text()/submit_multimodal(): the
+        caller has already appended its own history entry (a plain string
+        for submit_text(), a file-dict/caption list for submit_multimodal())
+        -- this only queues the plain-text form the agent actually sees and
+        makes sure a responder loop is running to pick it up."""
         start_loop = False
         with self._state_lock:
             self._input_queue.append(text)
@@ -494,7 +562,7 @@ class App:
             else:
                 # Already thinking/speaking; the loop will pick up the new item
                 pass
-        
+
         if start_loop:
             self._ensure_responder_loop()
 
