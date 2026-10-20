@@ -104,6 +104,36 @@ def _list_subdirs(path: str) -> list[str]:
     return names
 
 
+# Replaces gr.Chatbot's own built-in autoscroll (disabled below via
+# autoscroll=False) with a standard chat-app "stick to bottom" behaviour:
+# track whether the user is actually at the bottom of the scrollable message
+# list (.bubble-wrap/.panel-wrap, the chatbot's internal scroll container),
+# and only force-scroll down on new content when they were. Gradio's own
+# logic re-snapped to the bottom whenever the chatbot's value changed and the
+# view was within ~100px of the bottom -- too wide a margin, and re-evaluated
+# on every poll tick regardless of genuine user scrolling, which is what
+# made a normal touchpad scroll-up get yanked straight back down (see the
+# poll-skip comment below). This instead reacts to real scroll events, so
+# scrolling away from the bottom by more than 40px reliably "detaches" the
+# view until the user scrolls back down themselves. Re-run on every poll
+# tick (idempotent via _pinWired) since Gradio may replace the wrapper node
+# across renders, e.g. on session reset/resume.
+_PIN_TO_BOTTOM_JS = """
+() => {
+    const wrap = document.querySelector('.bubble-wrap') || document.querySelector('.panel-wrap');
+    if (!wrap || wrap._pinWired) return;
+    wrap._pinWired = true;
+    wrap._pinned = true;
+    wrap.addEventListener('scroll', () => {
+        wrap._pinned = wrap.scrollHeight - wrap.scrollTop - wrap.clientHeight < 40;
+    });
+    new MutationObserver(() => {
+        if (wrap._pinned) wrap.scrollTop = wrap.scrollHeight;
+    }).observe(wrap, { childList: true, subtree: true });
+}
+"""
+
+
 def build(app) -> gr.Blocks:
     css = """
     .gradio-container { gap: 20px !important; }
@@ -131,7 +161,9 @@ def build(app) -> gr.Blocks:
         # Chatbot always takes {"role", "content"} message dicts
         # now (the old type="messages" kwarg was removed as a no-longer-
         # needed choice) -- matches App.get_history()'s format directly.
-        chatbot = gr.Chatbot(label="Verlauf", height=480)
+        # autoscroll=False turns off Gradio's own (too eager) snap-to-bottom
+        # -- see _PIN_TO_BOTTOM_JS above for the replacement.
+        chatbot = gr.Chatbot(label="Verlauf", height=480, autoscroll=False)
         stats_box = gr.Textbox(label="Kennzahlen", interactive=False)
 
         # Alternative to the mic: type or paste text directly, e.g. when
@@ -384,14 +416,12 @@ def build(app) -> gr.Blocks:
             _refresh_sessions, inputs=[workspace_box, agent_picker], outputs=session_picker
         )
 
-        # gr.Chatbot's frontend (autoscroll=True) snaps to the bottom on
-        # every value update while the view is within ~100px of it. Re-sending
-        # an unchanged history every 0.3s therefore yanked a mouse-wheel
-        # scroll straight back down (only a big scrollbar drag escaped the
-        # zone). So the poll skips the chatbot output unless the history
-        # actually changed since the last value sent to this browser tab.
-        # _history is append-only (App never mutates entries in place), so
-        # a plain == against the last-sent list is enough.
+        # Also avoids needlessly re-sending an unchanged history to the
+        # browser every 0.3s (it used to matter even more before
+        # _PIN_TO_BOTTOM_JS above took over scrolling, since Gradio's own
+        # autoscroll re-evaluated on every value update). _history is
+        # append-only (App never mutates entries in place), so a plain ==
+        # against the last-sent list is enough.
         last_history = gr.State(None)
 
         def _poll(last):
@@ -401,8 +431,12 @@ def build(app) -> gr.Blocks:
             return state, history, stats, history
 
         timer = gr.Timer(COCKPIT_POLL_SECONDS)
-        timer.tick(_poll, inputs=last_history, outputs=outputs + [last_history])
-        demo.load(lambda: _snapshot(app), outputs=outputs)
+        timer.tick(_poll, inputs=last_history, outputs=outputs + [last_history]).then(
+            None, None, None, js=_PIN_TO_BOTTOM_JS
+        )
+        demo.load(lambda: _snapshot(app), outputs=outputs).then(
+            None, None, None, js=_PIN_TO_BOTTOM_JS
+        )
         # Refreshes the session list per browser connection (not on the fast
         # state-poll timer -- listing sessions means a filesystem scan,
         # unlike the in-memory snapshot above) so a tab left open overnight
