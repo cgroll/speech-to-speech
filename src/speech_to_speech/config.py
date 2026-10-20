@@ -38,6 +38,18 @@ JABRA_TOGGLE_KEY_MACOS = 16
 STT_MODEL_NAME_ONNX = "nemo-parakeet-tdt-0.6b-v3"
 STT_MODEL_NAME_NANO = "nvidia/parakeet-tdt-0.6b-v3"
 
+# -- TTS backend switch ---------------------------------------------------
+# "phonon" (default, as of 2026-10): Gradium's Phonon, CPU-only and
+# sub-50M-params, so it runs alongside the GPU-resident LLM/STT without
+# contending for VRAM. "qwen3": the original GPU-resident Qwen3-TTS backend
+# (still fully supported, just no longer the default) -- see tts.py vs.
+# tts_phonon.py, both implementing the same load()/synthesize_streaming()
+# interface so tts_daemon/daemon.py doesn't care which one is loaded.
+# Set via TTS_BACKEND in .env (read at daemon-process start, not live --
+# changing it requires `qwen-tts disable && qwen-tts enable`, same as any
+# other config.py constant read at daemon startup).
+TTS_BACKEND = os.environ.get("TTS_BACKEND", "phonon")
+
 # -- TTS (Qwen3-TTS CustomVoice, GPU) ------------------------------------
 TTS_MODEL_ID = "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice"
 TTS_SPEAKER = "aiden"
@@ -77,6 +89,30 @@ TTS_MAX_NEW_TOKENS = 3900
 # a no-op there. Budget is in chars (a safe proxy for frames): ~3760 chars still
 # generated fine, ~7520 crashed, so 1500 leaves a wide margin.
 TTS_CHUNK_CHAR_BUDGET = 1500
+
+# -- TTS (Phonon, CPU) ----------------------------------------------------
+# The 40m multilingual checkpoint (English/French/German/Spanish/Portuguese
+# in one model, gated -- CC-BY-NC-4.0) rather than the Apache-2.0 31m-en
+# model, since this assistant needs German. Requires HF_TOKEN in .env with
+# access granted at https://huggingface.co/gradium/phonon-40m-multilingual
+# (request access there with the HF account the token belongs to).
+PHONON_MODEL_ID = "hf://gradium/phonon-40m-multilingual"
+
+# `lang` is bound once at model-load time (ptts.TTS(..., lang=...)), not
+# per synthesize_streaming() call -- unlike Qwen3-TTS, which claims to
+# auto-detect language per utterance via TTS_LANGUAGE="german" above
+# regardless of whether the user actually spoke German or English. Phonon
+# has no such per-call auto mode, so this is a real limitation: a session
+# that mixes German and English input will have every reply spoken with
+# whichever single accent PHONON_LANGUAGE is set to. Not yet resolved --
+# see docs/backlog.md. Default "de" matches the existing TTS_LANGUAGE
+# default above.
+PHONON_LANGUAGE = os.environ.get("PHONON_LANGUAGE", "de")
+
+# Voice name from the model's built-in catalog (multilingual model ships
+# ~100+ preset voices). None lets ptts pick its own default. Not yet
+# auditioned/picked deliberately -- see docs/backlog.md.
+PHONON_VOICE = os.environ.get("PHONON_VOICE") or None
 
 # Playback tempo for the synthesized reply (pitch-preserving time-stretch,
 # not raw resampling -- 1.0 = natural speed).

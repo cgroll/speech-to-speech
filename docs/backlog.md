@@ -542,3 +542,84 @@ Zeitpunkt der Änderung nicht aktiv im Einsatz.
   `proc.wait()` *nach* dem stdout-Lese-Loop, nicht während eines hängenden
   `for line in proc.stdout`-Reads selbst -- gleiches aktivitätsbasiertes
   Muster wäre dort nötig, falls Pi wieder aktiv genutzt wird.
+
+## Phonon als neuer Standard-TTS-Backend (statt Qwen3-TTS)
+
+Status: Umgesetzt am 2026-10-20 (`config.py`, `tts_daemon/tts_phonon.py`,
+`tts_daemon/daemon.py`, `tts_daemon/cli.py`, `pyproject.toml`), noch nicht
+im laufenden Daemon aktiviert/neu gestartet.
+
+Anlass: Gradium hat Phonon veröffentlicht, eine Familie sehr kleiner
+(<50M Parameter), CPU-fähiger TTS-Modelle, die laut Hersteller Pocket-TTS
+(Kyutai) klanglich/qualitativ übertreffen. Ziel war, es als zweites,
+gleichberechtigtes Backend neben Qwen3-TTS einzubauen und default zu
+aktivieren, um es eine Weile im echten Betrieb auszuprobieren, ohne Qwen3-TTS
+zu verlieren.
+
+Umgesetzt:
+- `config.py`: `TTS_BACKEND` (Default `"phonon"`, override `TTS_BACKEND=qwen3`
+  via `.env`) plus `PHONON_MODEL_ID`/`PHONON_LANGUAGE`/`PHONON_VOICE`.
+  Gewähltes Modell: `gradium/phonon-40m-multilingual` (gated, CC-BY-NC-4.0,
+  Zugriff über HF-Account anfordern, `HF_TOKEN` in `.env`) statt des freien
+  `phonon-31m-en`, weil dieser Assistent Deutsch können muss -- das 31m-Modell
+  kann nur Englisch.
+- `tts_daemon/tts_phonon.py`: neue `PhononTextToSpeech`-Klasse, identisches
+  `load()`/`synthesize_streaming()`-Interface wie `tts.py`s `TextToSpeech`,
+  nutzt `ptts`s `stream()`-API. Kein Chunking wie bei Qwen (`_split_for_tts`)
+  nötig -- Phonon hat keine bekannte KV-Cache-Deckelung, die lange Antworten
+  mitten im Satz abschneidet.
+- `tts_daemon/daemon.py`: `_make_tts()`-Factory wählt die Backend-Klasse
+  anhand `config.TTS_BACKEND`, `Daemon.__init__` nutzt sie statt fest
+  `TextToSpeech()`. Zusätzlich `load_dotenv()` ergänzt (fehlte bisher
+  komplett in diesem Daemon-Einstiegspunkt -- ohne das sieht der
+  Daemon-Prozess, der über systemd mit `ExecStart=.../qwen-tts-daemon`
+  direkt gestartet wird, weder `TTS_BACKEND` noch `HF_TOKEN` aus `.env`;
+  gleicher Bug-Typ wie der in `telegram_bot/daemon.py` dokumentierte).
+- `tts_daemon/cli.py`: `enable`/`disable`-Meldungen nennen jetzt das aktive
+  Backend und ob GPU- oder RAM-Speicher betroffen ist, statt hartkodiert
+  "Qwen3-TTS"/"GPU" zu sagen.
+- Manuell end-to-end gegen das echte `HF_TOKEN` aus diesem Repos `.env`
+  verifiziert: `daemon.py`s `_make_tts()` lädt das gated multilinguale
+  Modell (Ladezeit ~3-4s, danach gecacht), erzeugt für einen deutschen und
+  einen englischen Satz hörbares, nicht-stilles Audio (erster Chunk nach
+  ~160ms, Generierung ~4x Echtzeit auf CPU), per `paplay` angehört.
+
+### Offene Fragen / nicht gelöst
+- **Keine Sprachumschaltung pro Äußerung.** `ptts.TTS(..., lang=...)` bindet
+  die Sprache einmalig beim Laden, es gibt keinen Per-Call-Parameter wie bei
+  Qwen3-TTS' `language=`. Qwen3-TTS läuft hier mit festem `TTS_LANGUAGE =
+  "german"`, spricht aber offenbar trotzdem brauchbar Englisch, wenn der
+  Nutzer Englisch spricht (vermutlich weil der Parameter primär die
+  Text-Normalisierung steuert, nicht die Sprachfähigkeit des multilingualen
+  Modells selbst) -- ob Phonons multilinguales Modell sich mit fest
+  `lang="de"` genauso verhält (also auch englischen Text akzeptabel vorliest)
+  oder merklich akzentbehaftet/falsch klingt, wurde noch nicht gegen
+  gemischten Input getestet, nur mit jeweils sprachreinem Text. Falls es
+  schlecht klingt: zwei gleichzeitig geladene Phonon-Instanzen (de/en) plus
+  Umschaltung anhand einer vom STT bereits gelieferten Spracherkennung wäre
+  die naheliegende Lösung, aber nicht trivial (doppelter RAM-Bedarf, STT
+  liefert aktuell keinen Sprachcode an die TTS-Seite durch).
+- **Stimme nicht bewusst ausgewählt.** `PHONON_VOICE = None` lässt `ptts`
+  seine eigene Default-Stimme aus dem ~100+ Stimmen umfassenden Katalog des
+  multilingualen Modells wählen. Keine der Stimmen wurde bewusst angehört
+  und ausgewählt (anders als Qwens feste Wahl "aiden") -- lohnt sich, bevor
+  man länger damit lebt.
+- **Daemon noch nicht neu gestartet.** Der Code-Wechsel ist umgesetzt und
+  isoliert smoke-getestet (direkt über `_make_tts()`, nicht über den
+  laufenden Prozess), aber der tatsächlich laufende `qwen-tts.service` lief
+  zum Zeitpunkt dieses Eintrags noch mit dem alten Code/Qwen3-TTS. Ein
+  `qwen-tts disable && qwen-tts enable` (oder Neustart der Unit) ist nötig,
+  damit der neue Default im echten Sprachdialog ankommt.
+- **Keine Langzeiterfahrung.** Weder Latenz/CPU-Last im echten Dauerbetrieb
+  neben STT/LLM auf derselben Maschine noch Klangqualität bei typischen,
+  längeren Assistenten-Antworten wurden über eine längere Nutzungsdauer
+  geprüft -- nur kurze Einzelsätze.
+- Referenz-Implementierung (verworfen als falscher Ort): eine erste,
+  vollständige Integration wurde versehentlich in
+  `~/research/voice-agent-speech-to-speech-hf` gebaut, bevor klar wurde,
+  dass das nur ein externer HuggingFace-Referenz-Checkout ist (siehe
+  `AGENTS.md`, "Verwandte Projekte") und nicht der hier tatsächlich
+  laufende Dienst. Dieser Eintrag ist die korrekte, im echten Projekt
+  umgesetzte Version; ob das Referenz-Repo noch gebraucht wird, ist offen
+  (siehe eigener Punkt unten, falls ergänzt) -- aktuell ungeklärt, ob
+  aufräumen oder behalten.

@@ -1,7 +1,12 @@
 """`qwen-tts` command: enable/disable/status for the shared TTS daemon.
+Command name kept as `qwen-tts` for muscle memory even though the backend
+underneath it is switchable (config.TTS_BACKEND) -- renaming it would touch
+the systemd unit, daemon_launch.py's macOS path, and everyone's habits for
+no functional gain.
 
 enable/disable control the systemd user service (i.e. whether the model is
-resident on the GPU at all); status is a quick liveness/state check. Unlike
+resident at all -- on GPU for the qwen3 backend, in regular RAM for the
+default phonon backend); status is a quick liveness/state check. Unlike
 `parakeet-dictate`'s CLI, there's no user-facing `toggle` here -- the
 voice-chat app (app.py) talks to the daemon's speak/stop commands directly
 via tts_client.py, not through this CLI.
@@ -11,6 +16,14 @@ import argparse
 import subprocess
 import sys
 
+# Must run before the speech_to_speech.config import below -- see
+# daemon.py's identical comment for why (TTS_BACKEND is read from os.environ
+# at config.py's module-import time).
+from dotenv import load_dotenv
+
+load_dotenv()
+
+from speech_to_speech.config import TTS_BACKEND
 from speech_to_speech.tts_daemon.protocol import send_command, socket_path
 
 SERVICE_NAME = "qwen-tts.service"
@@ -20,28 +33,31 @@ DAEMON_ENTRY_POINT = "qwen-tts-daemon"
 
 
 def cmd_enable(_args: argparse.Namespace) -> int:
+    # Phonon (CPU) never touches the GPU/Metal, regardless of platform.
+    where = "into RAM (CPU)" if TTS_BACKEND != "qwen3" else "onto Metal" if sys.platform == "darwin" else "onto the GPU"
     if sys.platform == "darwin":
         from speech_to_speech import daemon_launch
 
         daemon_launch.start(DAEMON_ENTRY_POINT, socket_path())
-        print("Qwen3-TTS daemon launched (model loading onto Metal).")
+        print(f"TTS daemon launched ({TTS_BACKEND}, model loading {where}).")
         return 0
 
     subprocess.run(["systemctl", "--user", "start", SERVICE_NAME], check=True)
-    print("Qwen3-TTS daemon enabled (model loading onto GPU).")
+    print(f"TTS daemon enabled ({TTS_BACKEND}, model loading {where}).")
     return 0
 
 
 def cmd_disable(_args: argparse.Namespace) -> int:
+    freed = "GPU memory" if TTS_BACKEND == "qwen3" else "RAM"
     if sys.platform == "darwin":
         from speech_to_speech import daemon_launch
 
         daemon_launch.stop(DAEMON_ENTRY_POINT, socket_path())
-        print("Qwen3-TTS daemon disabled.")
+        print("TTS daemon disabled.")
         return 0
 
     subprocess.run(["systemctl", "--user", "stop", SERVICE_NAME], check=True)
-    print("Qwen3-TTS daemon disabled (GPU memory freed).")
+    print(f"TTS daemon disabled ({freed} freed).")
     return 0
 
 

@@ -4,10 +4,12 @@ Proof of concept: Sprache rein, Sprache raus. Ein Knopf am Jabra-Headset
 (oder wahlweise eine lokale Tastenkombination) startet/stoppt die Aufnahme
 (push-to-toggle, wie bei `parakeet-dictate`), das Gesagte wird lokal
 transkribiert (Parakeet/CPU), an Gemini geschickt, und die Antwort wird
-lokal per Qwen3-TTS (GPU, Stimme "aiden") vorgelesen.
+lokal vorgelesen -- standardmäßig per Phonon (CPU, mehrsprachiges Modell),
+wahlweise per Qwen3-TTS (GPU, Stimme "aiden") über `TTS_BACKEND=qwen3` in
+`.env`; siehe Abschnitt "TTS-Daemon" unten.
 
-Die App selbst hält kein Modell mehr warm -- STT (Parakeet) und TTS
-(Qwen3-TTS) laufen beide in eigenen Hintergrund-Daemons, die App spricht sie
+Die App selbst hält kein Modell mehr warm -- STT (Parakeet) und TTS laufen
+beide in eigenen Hintergrund-Daemons, die App spricht sie
 nur noch über ihre jeweiligen Unix-Sockets an (`stt_client.py`,
 `tts_client.py`; siehe Abschnitte "Eigenständige Diktier-Funktion" und
 "TTS-Daemon" unten sowie `docs/architecture-proposal.md`). Beide Daemons
@@ -247,12 +249,26 @@ parakeet-dictate disable   # gibt Speicher wieder frei
 ## TTS-Daemon (`qwen-tts`)
 
 Analog zum Diktier-Daemon: ein Hintergrunddienst (`src/speech_to_speech/tts_daemon/`)
-hält das Qwen3-TTS-Modell warm und übernimmt auch die Wiedergabe selbst,
+hält das TTS-Modell warm und übernimmt auch die Wiedergabe selbst,
 direkt über die lokalen Lautsprecher -- der Sprach-Dialog (`app.py`) ist
 über `tts_client.py` nur noch Client, kein Modell-/Playback-Handling mehr im
 App-Prozess (siehe `docs/architecture-proposal.md`, "Daemon-Aufspaltung",
 Schritte 5+6). Im Unterschied zum Diktier-Daemon gibt es hier keinen
-Hotkey-Nutzer -- nur `app.py` spricht ihn an, über `speak`/`stop`.
+Hotkey-Nutzer -- nur `app.py` spricht ihn an, über `speak`/`stop`. Der
+Kommandoname `qwen-tts` ist historisch und blieb trotz des Backend-Wechsels
+unverändert (siehe `tts_daemon/cli.py`).
+
+**Backend-Wahl:** `config.TTS_BACKEND` (Default `"phonon"`, override via
+`TTS_BACKEND=qwen3` in `.env`) entscheidet, welche der beiden Klassen mit
+identischem `load()`/`synthesize_streaming()`-Interface geladen wird --
+`tts_phonon.py` (Phonon/Gradium, CPU, mehrsprachiges Modell
+`gradium/phonon-40m-multilingual`, braucht `HF_TOKEN` mit freigeschaltetem
+Zugriff auf das gated Modell) oder `tts.py` (Qwen3-TTS, GPU, Stimme
+"aiden"). Ein Wechsel wirkt erst nach Neustart des Daemons (`qwen-tts
+disable && qwen-tts enable`), nicht live. Offene Einschränkung: Phonons
+Sprache (`PHONON_LANGUAGE`) ist pro Daemon-Lauf fest, kein automatisches
+Umschalten zwischen Deutsch/Englisch je Äußerung wie bei Qwen3-TTS -- siehe
+`docs/backlog.md`.
 
 Ein `stop()` (Barge-in) kann eine bereits laufende Chunk-Generierung nicht
 sofort unterbrechen, nur zwischen zwei Chunks -- in seltenen Fällen kann

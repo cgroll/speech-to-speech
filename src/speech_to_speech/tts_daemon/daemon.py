@@ -1,7 +1,10 @@
-"""Long-running process: loads the Qwen3-TTS model once, then serves speak/
-stop/status commands over a Unix socket. Started/stopped explicitly via
-`qwen-tts enable`/`disable` (systemd user service) -- never auto-started,
-same control model as the STT daemon (speech_to_speech/dictate/daemon.py).
+"""Long-running process: loads the configured TTS model once (Phonon by
+default, or Qwen3-TTS via TTS_BACKEND=qwen3, see config.py and
+`_make_tts()` below), then serves speak/stop/status commands over a Unix
+socket. Started/stopped explicitly via `qwen-tts enable`/`disable` (systemd
+user service, name unchanged even though the backend underneath it is
+switchable) -- never auto-started, same control model as the STT daemon
+(speech_to_speech/dictate/daemon.py).
 
 Unlike the STT daemon's commands, which all return quickly, `speak` blocks
 for the whole duration of playback (which happens server-side, on this
@@ -45,10 +48,21 @@ from collections.abc import Callable
 
 import numpy as np
 
+# Must run before the speech_to_speech.config import below (directly here,
+# and transitively via tts.py/tts_phonon.py) -- config.py reads TTS_BACKEND/
+# PHONON_*/HF_TOKEN-dependent values from os.environ at *module import*
+# time, so .env has to be loaded first or they come back empty/default (same
+# gotcha already documented in telegram_bot/daemon.py). Unlike the Qwen-only
+# original version of this daemon, which needed no env-sourced config at
+# all, picking a TTS backend now does.
+from dotenv import load_dotenv
+
+load_dotenv()
+
+from speech_to_speech.config import TTS_BACKEND
 from speech_to_speech.dictate.protocol import encode_audio
 from speech_to_speech.tts_daemon import playback
 from speech_to_speech.tts_daemon.protocol import socket_path as _socket_path
-from speech_to_speech.tts_daemon.tts import TextToSpeech
 
 logging.basicConfig(
     level=logging.INFO,
@@ -71,12 +85,28 @@ _SPEAK_MAX_S = 480.0
 _WATCHDOG_POLL_S = 1.0
 
 
+def _make_tts():
+    """Picks the TTS backend class per config.TTS_BACKEND ("phonon", the
+    default, or "qwen3"). Both implement the same load()/
+    synthesize_streaming() interface, so nothing else in this module needs
+    to know which one is loaded. Imported lazily (not at module top) so a
+    machine that only ever runs one backend doesn't need the other
+    backend's dependency (ptts vs. faster-qwen3-tts) importable at all."""
+    if TTS_BACKEND == "qwen3":
+        from speech_to_speech.tts_daemon.tts import TextToSpeech
+
+        return TextToSpeech()
+    from speech_to_speech.tts_daemon.tts_phonon import PhononTextToSpeech
+
+    return PhononTextToSpeech()
+
+
 class Daemon:
     def __init__(self) -> None:
         self._state = "idle"
         self._state_lock = threading.Lock()
         self._stop_event = threading.Event()
-        self._tts = TextToSpeech()
+        self._tts = _make_tts()
 
     def load_model(self) -> None:
         self._tts.load()
