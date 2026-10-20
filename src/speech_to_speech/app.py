@@ -23,6 +23,7 @@ import uuid
 from pathlib import Path
 
 import numpy as np
+from PIL import Image
 
 from speech_to_speech import cockpit, daemon_control, feedback, input_button, sessions, stt_client, toggle_socket, tts_client
 from speech_to_speech.agent_backend import (
@@ -77,6 +78,13 @@ class _TtsQueueItem:
     first_chunk_s: float | None = None
     speak_duration_s: float | None = None
 
+
+# Clamp + recompress target for a cockpit-pasted image before Claude's Read
+# tool ever sees it -- see App._save_incoming_image()'s docstring. 1568 is
+# Anthropic's own documented long-side cap for vision input anyway, so this
+# costs nothing in image quality Claude could actually use.
+_MAX_IMAGE_DIMENSION = 1568
+_JPEG_QUALITY = 85
 
 _image_cache_dir: Path | None = None
 _image_cache_lock = threading.Lock()
@@ -525,12 +533,33 @@ class App:
         Named with a short uuid prefix rather than keeping the original
         filename, since a clipboard paste's original name is meaningless
         (typically just "image.png") and a second paste shouldn't silently
-        overwrite the first."""
+        overwrite the first.
+
+        Also downsizes/recompresses the image before Claude's own Read tool
+        ever sees it (seen 2026-10-20: pasting a large screenshot crashed
+        the whole Claude Code client). Claude Code's CLI returns a Read
+        tool's image result as one base64-encoded line on its stdout
+        stream-json protocol, and claude_agent_sdk enforces a hard
+        `max_buffer_size` per line (bumped in llm.py's ClaudeAgentOptions,
+        but still finite) -- a raw multi-MB screenshot plus the ~33%
+        base64 overhead can still exceed it, which kills
+        `_dispatch_loop()` (see its own recovery logic in llm.py). Clamping
+        the long side to `_MAX_IMAGE_DIMENSION` and re-encoding as JPEG
+        keeps every pasted image comfortably inside budget regardless of
+        what the clipboard handed over."""
         src = Path(path)
         attachments_dir = Path(self._workspace) / ".chat-attachments"
         attachments_dir.mkdir(exist_ok=True)
-        dest = attachments_dir / f"{uuid.uuid4().hex[:8]}-{src.name}"
-        shutil.copyfile(src, dest)
+        try:
+            dest = attachments_dir / f"{uuid.uuid4().hex[:8]}-{src.stem}.jpg"
+            with Image.open(src) as img:
+                img = img.convert("RGB")
+                img.thumbnail((_MAX_IMAGE_DIMENSION, _MAX_IMAGE_DIMENSION), Image.Resampling.LANCZOS)
+                img.save(dest, "JPEG", quality=_JPEG_QUALITY)
+        except Exception:
+            logger.warning("Could not re-encode pasted image %s, copying as-is", src, exc_info=True)
+            dest = attachments_dir / f"{uuid.uuid4().hex[:8]}-{src.name}"
+            shutil.copyfile(src, dest)
         return str(dest)
 
     def _enqueue_input(self, text: str) -> None:

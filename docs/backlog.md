@@ -497,6 +497,44 @@ Umgesetzt:
   Aufräum-/Alterungslogik) -- bisher kein Problem, da Screenshots klein
   sind, aber bei häufiger Nutzung irgendwann relevant.
 
+**Nachtrag 2026-10-20: Crash bei großem gepastetem Screenshot, behoben.**
+Ein echter Clipboard-Paste eines großen Screenshots brachte genau den
+"bisher kein Problem"-Fall aus dem letzten Punkt oben zum Platzen: Claude
+Codes CLI gibt das Ergebnis des eigenen `Read`-Tools für ein Bild als eine
+einzige Base64-kodierte JSON-Zeile über sein stdout-Stream-Protokoll
+zurück, und `claude_agent_sdk` erzwingt dafür pro Zeile ein hartes
+`max_buffer_size`-Limit (Default 1 MB). Ein unkomprimierter Mehr-MB-
+Screenshot plus ~33% Base64-Overhead sprengt das locker, der Parser wirft
+eine Exception, und das brachte `_dispatch_loop()` in `llm.py` dauerhaft
+zum Absturz -- die ganze Session war danach tot, bis eine neue erstellt
+wurde (`Exception: Failed to decode JSON: JSON message exceeded maximum
+buffer size of 1048576 bytes`).
+
+Drei Fixes, zusammen:
+- `app.py`: `_save_incoming_image()` verkleinert/rekomprimiert jedes
+  gepastete Bild jetzt vor der Übergabe an Claude (lange Seite auf
+  `_MAX_IMAGE_DIMENSION` = 1568px gekappt -- Anthropics eigener
+  empfohlener Wert für Vision-Input --, JPEG-Qualität 85). Fällt auf ein
+  reines Kopieren zurück, falls Pillow das Bild nicht öffnen kann.
+  Pillow (`pillow>=11`) ist jetzt explizite Abhängigkeit in
+  `pyproject.toml` statt nur transitiv über Gradio.
+- `llm.py`: `ClaudeAgentOptions.max_buffer_size` auf 10 MB angehoben
+  (Belt-and-suspenders zur Bildkompression -- deckt auch andere große
+  Tool-Ergebnisse ab, nicht nur Bilder).
+- `llm.py`: `_dispatch_loop()` ist nach einem Absturz nicht mehr
+  dauerhaft tot. Ein neuer `_reconnect()`-Pfad baut den Claude-Client neu
+  auf (`resume=` der zuletzt gesehenen `session_id`, laufend in `_route()`
+  mitgeführt) und startet die Dispatch-Loop neu; ein wartender `send()`-
+  Aufruf wird sofort mit `LlmTimeoutError` statt erst nach vollem
+  `_ACTIVITY_TIMEOUT_S` (5 min) fehlschlagen gelassen (neuer
+  `_DispatchLoopCrashed`-Sentinel über `_turn_queue`).
+
+Getestet: komplette Test-Suite grün, plus manueller Smoke-Test der
+Kompression (3000x2000-Zufallsrausch-PNG, 18 MB -> ~0,9 MB JPEG). Noch
+nicht verifiziert: echter End-to-End-Reconnect im laufenden Cockpit nach
+einem tatsächlichen Crash (nur Code-Review/Logik-Prüfung, kein
+provozierter echter Absturz gegen die echte CLI).
+
 ## Claude-Code-Timeout: hängende Turns sauber abfangen statt nur den Timeout erhöhen
 
 Status: Umgesetzt am 2026-09-14 (`llm.py`, `agent_backend.py`, `app.py`).

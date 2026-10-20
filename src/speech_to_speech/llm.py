@@ -125,6 +125,13 @@ _HARD_TIMEOUT_S = 20 * 60
 _BACKGROUND_CONTINUATION_TIMEOUT_S = 15
 
 
+class _DispatchLoopCrashed:
+    """Queued into `_turn_queue` by `_dispatch_loop()`'s except-block when
+    it dies mid-turn, so whichever `_query()`/`_finish_background_capture()`
+    call is waiting on that queue notices and gives up immediately instead
+    of sitting out its own timeout first."""
+
+
 class ClaudeCodeConversation:
     def __init__(
         self,
@@ -174,6 +181,13 @@ class ClaudeCodeConversation:
         # lock is needed despite being written from two call sites.
         self._turn_queue: asyncio.Queue | None = None
         self._dispatch_task: asyncio.Task | None = None
+        # Last session_id seen on any message _route() has handled (set
+        # there, on every message type that carries one -- which is nearly
+        # all of them). Seeded from `resume` so a crash before the first
+        # message ever streams back still has *something* to resume from.
+        # Used by _reconnect() below to rebuild the client on the same
+        # session after _dispatch_loop() dies.
+        self._session_id = resume
         self._loop = asyncio.new_event_loop()
         threading.Thread(target=self._loop.run_forever, daemon=True).start()
         asyncio.run_coroutine_threadsafe(self._start(resume), self._loop).result(timeout=30)
@@ -207,6 +221,19 @@ class ClaudeCodeConversation:
             # backend, not an agent that keeps running), so block both
             # outright rather than relying on the system-prompt hint alone.
             disallowed_tools=["CronCreate", "ScheduleWakeup"],
+            # claude_agent_sdk's own default (subprocess_cli.py's
+            # _DEFAULT_MAX_BUFFER_SIZE) is a hard-coded 1MB per stdout
+            # JSON line -- fine for normal turns, but Claude's own Read
+            # tool returns an image it reads back as one base64-encoded
+            # line, and a screenshot pasted into the cockpit chat (see
+            # app.py's submit_multimodal()) can blow past that on its own
+            # before even counting the ~33% base64 overhead. Hitting the
+            # limit doesn't just fail that one line -- query.py's framer
+            # raises, which kills `_dispatch_loop()` for good (see
+            # _reconnect() below). app.py's _save_incoming_image() now
+            # also downsizes/recompresses pasted images so this is belt
+            # and suspenders, not the only line of defense.
+            max_buffer_size=10 * 1024 * 1024,
         )
         self._mgr = ClaudeSDKClient(options=options)
         self._client = await self._mgr.__aenter__()
@@ -222,7 +249,16 @@ class ClaudeCodeConversation:
         `receive_response()` -- that only ever listened while a send() call
         was waiting on its reply, which is exactly the gap for a
         backgroundable task whose completion arrives after its owning turn
-        already returned (see module docstring)."""
+        already returned (see module docstring).
+
+        A crash here (seen 2026-10-20: a pasted screenshot's Read-tool
+        result exceeding max_buffer_size, see ClaudeAgentOptions above)
+        used to be permanent -- nothing ever recreated `self._client`, so
+        every later send() would just hang until _ACTIVITY_TIMEOUT_S timed
+        it out, forever. Now: fail whatever turn is currently waiting right
+        away (via the `_DispatchLoopCrashed` sentinel, rather than making
+        it sit out the full timeout) and kick off `_reconnect()` so this
+        instance keeps working instead of needing a whole new session."""
         try:
             async for message in self._client.receive_messages():
                 self._route(message)
@@ -230,10 +266,31 @@ class ClaudeCodeConversation:
             raise
         except Exception:
             logger.exception(
-                "Claude Code dispatch loop crashed -- live turns and "
-                "background-task delivery on this client will stop working "
-                "until the client is recreated (e.g. a new session)."
+                "Claude Code dispatch loop crashed -- reconnecting "
+                "(resuming session %s).",
+                self._session_id,
             )
+            if self._turn_queue is not None:
+                self._turn_queue.put_nowait(_DispatchLoopCrashed())
+                self._turn_queue = None
+            self._loop.create_task(self._reconnect())
+
+    async def _reconnect(self) -> None:
+        """Rebuilds `self._client` from scratch after `_dispatch_loop()`
+        died, resuming `self._session_id` (kept current on every message in
+        `_route()`) so conversation history survives the reconnect -- None
+        (no message ever carried a session_id, e.g. a crash on the very
+        first turn) just starts a fresh session instead. Mirrors
+        `_start()`'s own setup; called only from `_dispatch_loop()`'s
+        except-block above, never concurrently with itself."""
+        try:
+            await self._mgr.__aexit__(None, None, None)
+        except Exception:
+            logger.warning("Error closing crashed Claude client before reconnect", exc_info=True)
+        try:
+            await self._start(self._session_id)
+        except Exception:
+            logger.exception("Failed to reconnect Claude Code client after dispatch-loop crash")
 
     def _route(self, message: object) -> None:
         """Dispatches one message from the stream: into the currently
@@ -246,6 +303,12 @@ class ClaudeCodeConversation:
         set/cleared only from `_query()`/`_finish_background_capture()` on
         that same thread, so the two never race despite not sharing a
         lock."""
+        # Kept current off of *any* message that carries one (nearly all of
+        # them do) -- see _reconnect()'s use of it after a crash.
+        session_id = getattr(message, "session_id", None)
+        if session_id:
+            self._session_id = session_id
+
         if isinstance(message, TaskStartedMessage):
             self._active_tasks[message.task_id] = message.description
 
@@ -305,6 +368,12 @@ class ClaudeCodeConversation:
                 except TimeoutError:
                     break
 
+                if isinstance(msg, _DispatchLoopCrashed):
+                    # The client died while we were waiting for a possible
+                    # follow-up turn -- nothing more is coming on this
+                    # queue, so stop and deliver whatever's accumulated
+                    # (or fallback_text) same as a plain timeout.
+                    break
                 if isinstance(msg, AssistantMessage):
                     message_text_parts: list[str] = []
                     for block in msg.content:
@@ -460,6 +529,15 @@ class ClaudeCodeConversation:
                     except Exception:
                         logger.warning("Interrupt after stall failed", exc_info=True)
                     raise LlmTimeoutError(f"No activity for {_ACTIVITY_TIMEOUT_S}s") from exc
+
+                if isinstance(msg, _DispatchLoopCrashed):
+                    # _dispatch_loop() died mid-turn (e.g. a pasted image's
+                    # Read-tool result exceeding max_buffer_size) and is
+                    # already reconnecting in the background (_reconnect())
+                    # -- fail this turn now rather than sitting out the rest
+                    # of _ACTIVITY_TIMEOUT_S for a queue nothing will ever
+                    # feed again.
+                    raise LlmTimeoutError("Claude Code connection dropped mid-turn; reconnecting")
 
                 if isinstance(msg, AssistantMessage):
                     message_text_parts: list[str] = []

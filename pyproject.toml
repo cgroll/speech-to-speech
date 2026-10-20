@@ -39,6 +39,10 @@ dependencies = [
     # switches back to the GPU-resident Qwen3-TTS backend above.
     "ptts>=0.4.0,<0.5.0",
     "gradio>=6.17.3",
+    # Already pulled in transitively by gradio, but used directly now too
+    # (app.py's _save_incoming_image() recompresses pasted chat images), so
+    # pin it explicitly rather than relying on gradio's own pin.
+    "pillow>=11",
     "setuptools<81",
     "sounddevice>=0.5.5",
     "torch>=2.12.1",
