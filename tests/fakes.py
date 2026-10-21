@@ -53,6 +53,7 @@ class FakeAgentConversation:
         raises: Exception | None = None,
         on_output: Callable[[str, str], None] | None = None,
         emits: list[tuple[str, str]] = (),
+        model: str | None = "test/model",
     ):
         self.reply = reply
         self.raises = raises
@@ -64,6 +65,17 @@ class FakeAgentConversation:
         self.close_calls = 0
         self.started = threading.Event()  # set once the *current* call is inside send()
         self._release = threading.Event()
+        self.model = model
+        self.model_calls: list[str | None] = []
+
+    def set_model(self, model: str | None) -> None:
+        """Mirrors PiAgentConversation.set_model (agent_backend.ModelSwitchable).
+        App.set_model()/get_model() only look for this method, so with it the
+        fake stands in for the model-switchable Pi backend; tests that need the
+        Claude one (no such method anywhere on the object) use the
+        ModelUnswitchableBackend stub below instead of this class."""
+        self.model = model
+        self.model_calls.append(model)
 
     def send(self, text: str) -> str:
         self.started.clear()
@@ -86,6 +98,29 @@ class FakeAgentConversation:
 
     def release(self) -> None:
         self._release.set()
+
+    def close(self) -> None:
+        self.close_calls += 1
+
+
+class ModelUnswitchableBackend:
+    """Stands in for the Claude backend where App's model plumbing has to
+    degrade instead of fail: exactly agent_backend.AgentConversation (send /
+    cancel / close) and nothing more, so it deliberately has no set_model --
+    which is what agent_backend.supports_model()/apply_model() key off."""
+
+    def __init__(self, reply: str = "ok"):
+        self.reply = reply
+        self.sent: list[str] = []
+        self.cancel_calls = 0
+        self.close_calls = 0
+
+    def send(self, text: str) -> str:
+        self.sent.append(text)
+        return self.reply
+
+    def cancel(self) -> None:
+        self.cancel_calls += 1
 
     def close(self) -> None:
         self.close_calls += 1

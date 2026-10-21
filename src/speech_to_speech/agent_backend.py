@@ -92,6 +92,44 @@ class AgentConversation(Protocol):
     def close(self) -> None: ...
 
 
+class ModelSwitchable(Protocol):
+    """Optional extra on a backend that can change model mid-session -- today
+    only the Pi one, since switching costs nothing where every turn is a fresh
+    subprocess (pi_agent.py). Checked structurally by apply_model() below
+    rather than made part of AgentConversation, so a backend without the
+    capability (llm.py's Claude SDK client, whose model would mean Claude
+    model ids rather than pi's "provider/id" anyway) doesn't have to stub it
+    out."""
+
+    def set_model(self, model: str | None) -> None: ...
+
+
+def supports_model(conversation: AgentConversation) -> bool:
+    """Whether `conversation` lets its model be chosen/changed at all (see
+    ModelSwitchable). Read-only counterpart to apply_model(), for surfaces that
+    must not advertise a model they aren't using."""
+    return callable(getattr(conversation, "set_model", None))
+
+
+def apply_model(conversation: AgentConversation, model: str | None) -> bool:
+    """Tells `conversation` to use `model` from its next turn on, returning
+    whether the backend actually supports that (False = it was ignored, see
+    ModelSwitchable). Exists so callers (App.set_model(), reached from the
+    cockpit's picker) can switch models without importing/knowing which backend
+    is behind `App._llm`, and can tell the user "this backend ignores that"
+    instead of silently doing nothing."""
+    setter = getattr(conversation, "set_model", None)
+    if not callable(setter):
+        logger.debug(
+            "Backend %s cannot switch models; ignoring model %r.",
+            type(conversation).__name__,
+            model,
+        )
+        return False
+    setter(model)
+    return True
+
+
 # -- Output categories (docs/specs/thinking-channel-and-stop-marker.md) ----
 # Every piece of output a backend produces during one send() call falls into
 # one of three categories. "response" isn't a constant below -- it's never
@@ -151,6 +189,7 @@ def create_conversation(
     on_output: Callable[[str, str], None] | None = None,
     on_background_result: Callable[[str, str], None] | None = None,
     voice_output: bool = False,
+    model: str | None = None,
 ) -> AgentConversation:
     """Instantiates the right backend client for `agent` (one of
     AGENT_LABELS' keys). Imports are lazy so picking one backend doesn't
@@ -191,11 +230,22 @@ def create_conversation(
     (system_prompt_for): True for conversations whose replies are spoken (the
     App's dialog and cockpit), False for text-delivered ones (Telegram). Set
     once here since the surface -- and thus how replies come out -- is fixed
-    for the life of the conversation."""
+    for the life of the conversation.
+
+    `model` is the model the backend should use, in pi's `--model`
+    "provider/id" form (see pi_agent.list_pi_models() for where the choices
+    come from). Pi-only for now: like `on_image`/`on_background_result` above
+    it's accepted but silently ignored for AGENT_CLAUDE rather than raising --
+    Claude's model is a different naming scheme entirely (plain Claude model
+    ids, not provider/id), so forwarding the value there would be wrong rather
+    than merely unused, and the cockpit hides the picker for that backend.
+    None means "not chosen here" -- Pi falls back to config.PI_DEFAULT_MODEL."""
     workspace = workspace or str(DEFAULT_WORKSPACE)
     if agent == AGENT_CLAUDE:
         from speech_to_speech.llm import ClaudeCodeConversation
 
+        # `model` deliberately not passed through -- see this function's
+        # docstring for why (different naming scheme, no Claude support yet).
         return ClaudeCodeConversation(
             resume=resume,
             workspace=workspace,
@@ -210,7 +260,11 @@ def create_conversation(
         # on_background_result is deliberately not passed through -- see
         # this function's docstring for why (no equivalent in Pi today).
         return PiAgentConversation(
-            resume=resume, workspace=workspace, on_output=on_output, voice_output=voice_output
+            resume=resume,
+            workspace=workspace,
+            on_output=on_output,
+            voice_output=voice_output,
+            model=model,
         )
     raise ValueError(f"Unknown agent backend: {agent!r} (known: {sorted(AGENT_LABELS)})")
 

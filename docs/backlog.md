@@ -212,6 +212,51 @@ Skizze für die Umsetzung:
   Workspace-Pfad an beide Backends gleichermaßen durchreichen (`cwd` beim
   Claude SDK, Subprozess-`cwd` bei Pi).
 
+### 4. Modellwahl: E.ON-Modelle vs. Copilot (umgesetzt am 2026-10-08)
+
+Hintergrund: in `~/.pi/agent/` sind zwei Pi-Provider eingerichtet -- das
+E.ON-Gateway (`models.json`, mit eigenen `name`-Feldern) und GitHub Copilot
+(`auth.json`). Je nach Aufgabe will man zwischen denen wechseln, ohne dafür
+pi interaktiv zu öffnen.
+
+Entscheidung (2026-10-08): bewusst ein *anderes* Muster als die Agenten- und
+Workspace-Wahl (Punkte 2/3), nämlich sofort wirksam statt "pro neuer Session".
+- Pi startet pro Turn einen eigenen Subprocess, `--model` wird beim nächsten
+  Turn also einfach neu gelesen; der Gesprächsfaden hängt an der On-Disk-
+  Historie hinter `--session-id` und ist modellneutral. Eine neue Session wäre
+  für einen Modellwechsel also unnötige Verschlechterung (Kontext weg).
+- Ein bereits laufender Turn bleibt beim Modell, mit dem er angefangen hat
+  (dessen Kommandozeile steht schon) -- wirkt "ab dem nächsten Turn".
+- Pi-only: Die Claude-Seite hat eine andere Namenssyntax (keine
+  `provider/modell`-Form), der Wert wird dort bewusst ignoriert statt
+  umgedeutet -- gleiches "angenommen, aber No-op für ein Backend, das es nicht
+  kann"-Muster wie `on_image`/`on_background_result`.
+- Auswahlliste aus `pi --list-models` (mit `--offline`, damit der
+  Cockpit-Aufbau nicht auf einen Netzwerkversuch wartet) statt fest kodierter
+  Liste in `config.py`: sie ist genau so aktuell wie die hinterlegten Logins,
+  ein neues Copilot-Modell taucht von selbst auf.
+
+Umgesetzt: `pi_agent.list_pi_models()` (Value/Label-Paare, gecacht, wirft nie,
+fällt auf die letzte gute Liste zurück), `PiAgentConversation(model=...)` und
+`set_model()`, `agent_backend.supports_model()`/`apply_model()` als optionales
+Können neben `AgentConversation` (`ModelSwitchable`),
+`App.get_model()`/`set_model()` (melden `None`/`False`, wenn das aktive Backend
+kein Modell wählen kann, damit keine Oberfläche ein Modell anzeigt, das nicht
+läuft), Cockpit-Dropdown mit "Model-Liste aktualisieren", `--model`-Start-Flag.
+
+### Nächste Schritte
+- Manuell verifizieren: im laufenden Betrieb von E.ON auf Copilot wechseln und
+  prüfen, dass der Kontext erhalten bleibt. Dafür die Session-JSONL ansehen,
+  welches Modell pro Assistant-Nachricht steht -- die Selbstauskunft der
+  Modelle ist dafür unzuverlässig, die haben veraltete Trainingsstände.
+- Offen: Modellauswahl fürs Claude-Backend (eigene Mapping-Schicht auf
+  Claude-Modell-IDs nötig) und ein Telegram-`/model` analog zu `/workspace`
+  -- der Bot nutzt aktuell nur `config.PI_DEFAULT_MODEL`.
+- Offen: Ein Copilot-Login läuft ab, ein abgemeldetes Modell steht aber im
+  Dropdown und der Turn schlägt erst beim Benutzen fehl (Grund nur im Log,
+  die Oberfläche zeigt eine leere Antwort). Früher scheitern -- z.B. die Liste
+  um den Login-Status ergänzen -- wäre hübscher.
+
 ## Daemon-Neustart aus der App/dem Cockpit heraus
 
 Status: Umgesetzt am 2026-08-14 (`daemon_control.py`,

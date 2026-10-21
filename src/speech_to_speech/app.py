@@ -33,9 +33,11 @@ from speech_to_speech.agent_backend import (
     AgentConversation,
     DEFAULT_AGENT,
     LlmTimeoutError,
+    apply_model,
     create_conversation,
+    supports_model,
 )
-from speech_to_speech.config import DEFAULT_WORKSPACE
+from speech_to_speech.config import DEFAULT_WORKSPACE, PI_DEFAULT_MODEL
 
 # Spoken/shown when a backend gives up on a stuck turn (agent_backend.
 # LlmTimeoutError) -- tells the user plainly rather than leaving them
@@ -105,7 +107,9 @@ def _copy_to_image_cache(path: str) -> str:
 
 
 class App:
-    def __init__(self, default_agent: str = DEFAULT_AGENT) -> None:
+    def __init__(
+        self, default_agent: str = DEFAULT_AGENT, default_model: str | None = None
+    ) -> None:
         self._state = "idle"
         # RLock, not a plain Lock: _purge_tts_queue() is sometimes called
         # from inside a block that already holds this lock (submit_text(),
@@ -134,6 +138,15 @@ class App:
         # _agent_name above. Defaults to DEFAULT_WORKSPACE; changed via
         # reset()'s workspace argument (cockpit's folder picker feeds it).
         self._workspace = str(DEFAULT_WORKSPACE)
+        # Which model the backend should use (pi's "provider/id" form, see
+        # pi_agent.list_pi_models()). Unlike _agent_name/_workspace above this
+        # is *not* session-scoped: PiAgentConversation.set_model() applies it
+        # from the next turn on, mid-session, because Pi has no persistent
+        # connection to interrupt (see agent_backend.ModelSwitchable). Backends
+        # without that capability keep the value unused; get_model() reports
+        # None for those so the cockpit/stats don't advertise a choice that
+        # isn't happening. Defaults to --model, else config.PI_DEFAULT_MODEL.
+        self._model = default_model or PI_DEFAULT_MODEL
         # Replaced with a fresh Event each time a recording is stopped
         # (recording -> thinking); shared by the thinking and speaking
         # phases of that same turn. A barge-in sets it to tell whichever
@@ -207,6 +220,7 @@ class App:
             on_output=self._append_output,
             on_background_result=self.deliver_background_result,
             voice_output=True,
+            model=self._model,
         )
         self._agent_name = self._default_agent
         stt_client.ensure_available()
@@ -927,8 +941,11 @@ class App:
             return f"{value:.1f}s" if value is not None else "–"
 
         agent_label = AGENT_LABELS.get(self._agent_name, self._agent_name)
+        # Only shown where the choice is actually in effect -- see get_model().
+        model_part = f"Modell: {self._model}  |  " if self.get_model() else ""
         return (
             f"Agent: {agent_label}  |  "
+            f"{model_part}"
             f"Workspace: {self._workspace}  |  "
             f"Runden: {stats['turns']}  |  "
             f"STT-Zeit (ab Mikro-Stopp): {_fmt('last_stt_s')}  |  "
@@ -942,6 +959,36 @@ class App:
 
     def get_workspace(self) -> str:
         return self._workspace
+
+    def get_model(self) -> str | None:
+        """The model the active backend uses, or None when that backend takes
+        no model choice at all (the Claude one today, see
+        agent_backend.ModelSwitchable) -- which is why this reports the
+        backend's real capability instead of just returning self._model: the
+        value is kept across backend switches (so going Pi -> Claude -> Pi
+        restores the earlier choice), and reporting it while Claude is active
+        would advertise a model that isn't being used."""
+        if self._llm is None or not supports_model(self._llm):
+            return None
+        return self._model
+
+    def set_model(self, model: str | None) -> bool:
+        """Switches the model, effective from the next turn -- no new session
+        needed (agent_backend.ModelSwitchable / PiAgentConversation.set_model:
+        the conversation's transcript, not a live connection, is what carries
+        over, so another model simply continues it). A turn already in flight
+        finishes on the model it started with.
+
+        Returns whether the active backend accepted the switch; False means the
+        value is remembered but the current backend ignores it, which the
+        cockpit surfaces to the user instead of letting it look like a no-op
+        bug. `model` is expected to be one of pi_agent.list_pi_models()' values
+        (or free text -- pi reports an unknown one by failing that turn, whose
+        stderr PiAgentConversation.send() logs)."""
+        self._model = model or PI_DEFAULT_MODEL
+        applied = apply_model(self._llm, self._model) if self._llm is not None else False
+        logger.info("Model %s (%s).", self._model, "applied" if applied else "remembered only")
+        return applied
 
     def get_voice_muted(self) -> bool:
         return self._voice_muted
@@ -1014,7 +1061,12 @@ class App:
             old_llm.cancel()
         return old_llm
 
-    def reset(self, agent: str | None = None, workspace: str | None = None) -> None:
+    def reset(
+        self,
+        agent: str | None = None,
+        workspace: str | None = None,
+        model: str | None = None,
+    ) -> None:
         """Starts a fresh session (cockpit's "Neue Session" button): aborts
         whatever's in flight, connects a fresh backend client so no
         conversation memory carries over, and clears history + stats.
@@ -1030,9 +1082,15 @@ class App:
         Callers that let a user type/pick an arbitrary path (cockpit,
         Telegram bot) are expected to have already validated it via
         agent_backend.resolve_workspace() before calling in, so this trusts
-        the value as-is."""
+        the value as-is.
+
+        `model` picks the model for the new session the same way (defaults to
+        whichever is active); unlike agent/workspace this one can also change
+        mid-session via set_model(), so a new session just starts from the
+        currently selected model."""
         agent = agent or self._agent_name
         workspace = workspace or self._workspace
+        model = model or self._model
         old_llm = self._abort_current_turn()
         self._llm = create_conversation(
             agent,
@@ -1041,9 +1099,11 @@ class App:
             on_output=self._append_output,
             on_background_result=self.deliver_background_result,
             voice_output=True,
+            model=model,
         )
         self._agent_name = agent
         self._workspace = workspace
+        self._model = model
         if old_llm is not None:
             old_llm.close()
 
@@ -1058,7 +1118,9 @@ class App:
             }
         logger.info("Session reset.")
 
-    def resume_session(self, choice: str | None, workspace: str | None = None) -> None:
+    def resume_session(
+        self, choice: str | None, workspace: str | None = None, model: str | None = None
+    ) -> None:
         """Resumes a past session picked in the cockpit's session list
         (docs/backlog.md, "Frühere Sessions wieder aufnehmen können"/"Mehrere
         Agent-Backends"): same abort/teardown as reset(), but the fresh
@@ -1081,11 +1143,17 @@ class App:
         Workspace isn't tagged per past session anywhere (unlike the
         agent), so we rely on the caller to provide the correct one
         (e.g. the cockpit's workspace box used for filtering the list)
-        rather than trying to recover what the original session used."""
+        rather than trying to recover what the original session used.
+
+        `model` likewise isn't tagged per session: a resumed session continues
+        on the currently selected model, which for a Pi transcript resumed on a
+        different model than it started with is exactly what picking a model in
+        the cockpit means -- pi's transcript is model-agnostic."""
         if not choice or ":" not in choice:
             return
         agent, session_id = choice.split(":", 1)
         workspace = workspace or self._workspace
+        model = model or self._model
 
         old_llm = self._abort_current_turn()
         self._llm = create_conversation(
@@ -1096,9 +1164,11 @@ class App:
             on_output=self._append_output,
             on_background_result=self.deliver_background_result,
             voice_output=True,
+            model=model,
         )
         self._agent_name = agent
         self._workspace = workspace
+        self._model = model
         if old_llm is not None:
             old_llm.close()
 

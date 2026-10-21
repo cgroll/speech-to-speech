@@ -24,7 +24,7 @@ import gradio as gr
 import numpy as np
 from starlette.exceptions import StarletteDeprecationWarning
 
-from speech_to_speech import sessions
+from speech_to_speech import pi_agent, sessions
 from speech_to_speech.agent_backend import AGENT_LABELS, resolve_workspace
 from speech_to_speech.config import COCKPIT_HOST, COCKPIT_PORT, COCKPIT_POLL_SECONDS
 from speech_to_speech.dictate.audio import SAMPLE_RATE as STT_SAMPLE_RATE
@@ -134,6 +134,19 @@ _PIN_TO_BOTTOM_JS = """
 """
 
 
+def _model_choices(app, force_refresh: bool = False) -> list[tuple[str, str]]:
+    """Gradio's (label, value) choices for the model picker, from pi's own list
+    of available models (pi_agent.list_pi_models() -- flipped from its
+    (value, label) order), with the model actually in use appended if it isn't
+    on that list (a --model override, or pi's list call having failed), so the
+    picker always reflects reality instead of silently showing nothing."""
+    choices = [(label, value) for value, label in pi_agent.list_pi_models(force_refresh)]
+    current = app.get_model()
+    if current and current not in {value for _, value in choices}:
+        choices.insert(0, (f"{current} (aktuell)", current))
+    return choices
+
+
 def build(app) -> gr.Blocks:
     css = """
     .gradio-container { gap: 20px !important; }
@@ -231,6 +244,27 @@ def build(app) -> gr.Blocks:
                 scale=3,
             )
             reset_btn = gr.Button("Neue Session starten", variant="primary", scale=1)
+
+        # --- 3b. Modell (nur Pi) ---
+        # Deliberately *not* part of the "Neue Session starten" row above:
+        # switching models costs no new session, because the Pi backend starts
+        # its own subprocess per turn and simply reads --model again next time
+        # while --session-id keeps the conversation intact
+        # (App.set_model/PiAgentConversation.set_model). The choices come from
+        # `pi --list-models` -- the E.ON endpoint and GitHub Copilot both show
+        # up there, whichever credentials are currently cached. Free text is
+        # allowed too (allow_custom_value), since the list is only as current as
+        # those cached credentials; pi then rejects an unknown model on the next
+        # turn, which PiAgentConversation.send() logs.
+        with gr.Row():
+            model_picker = gr.Dropdown(
+                label="Modell (Pi) - wirksam ab dem nächsten Turn, ohne neue Session",
+                choices=_model_choices(app),
+                value=app.get_model(),
+                allow_custom_value=True,
+                scale=3,
+            )
+            refresh_models_btn = gr.Button("Model-Liste aktualisieren", scale=1)
 
         # --- 4. Workspace ---
         # "Dann darunter ein ein-ausklappbares Element mit Workspace, damit man
@@ -347,6 +381,22 @@ def build(app) -> gr.Blocks:
         def _refresh_sessions(workspace: str, agent: str):
             return gr.update(choices=sessions.session_choices(workspace, agent))
 
+        def _set_model(model: str | None):
+            # No output written back to the picker on purpose: the 0.3s poll
+            # doesn't touch it either (see _snapshot), so whatever the user
+            # picked/type stays visible even when the active backend ignores it
+            # -- which is exactly the case the warning below has to explain.
+            if app.set_model(model):
+                gr.Info(f"Modell: {app.get_model()} - ab dem nächsten Turn.")
+            else:
+                gr.Warning(
+                    "Modell gemerkt, aber das aktuelle Backend (Claude Code) "
+                    "bietet keine Modellauswahl - wirksam erst ab einer Pi-Session."
+                )
+
+        def _refresh_models():
+            return gr.update(choices=_model_choices(app, force_refresh=True))
+
         def _restart_stt():
             try:
                 app.restart_stt_daemon()
@@ -393,6 +443,11 @@ def build(app) -> gr.Blocks:
         reset_btn.click(_reset, inputs=[agent_picker, workspace_box], outputs=session_start_outputs)
         text_input.submit(_submit_text, inputs=text_input, outputs=text_outputs)
         send_btn.click(_submit_text, inputs=text_input, outputs=text_outputs)
+        model_picker.change(_set_model, inputs=model_picker)
+        # Re-reads pi's list on demand (new Copilot login, new custom provider in
+        # ~/.pi/agent/models.json) instead of on the fast poll -- the listing
+        # shells out to pi, unlike everything else refreshed here.
+        refresh_models_btn.click(_refresh_models, outputs=model_picker)
         refresh_sessions_btn.click(
             _refresh_sessions, inputs=[workspace_box, agent_picker], outputs=session_picker
         )

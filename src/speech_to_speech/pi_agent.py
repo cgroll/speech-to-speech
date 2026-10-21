@@ -10,7 +10,11 @@ on the first call -- see sessions.py for the reader side of that same file.
 This re-establishes a fresh subprocess each turn rather than keeping a
 client connection open like ClaudeCodeConversation does, but presents the
 same send()/cancel()/close() surface (agent_backend.AgentConversation) so
-`App` doesn't need to care which backend it's talking to.
+`App` doesn't need to care which backend it's talking to. One place that
+surface is deliberately wider here: `model`/`set_model()` switch the model
+mid-session, which costs nothing extra precisely because of that per-turn
+subprocess (see PiAgentConversation.set_model); the Claude backend has no
+equivalent and ignores the choice (see create_conversation).
 
 `pi --print --mode json` streams newline-delimited JSON events; verified
 empirically (2026-08-12) that tool calls (bash/read/etc.) execute without an
@@ -34,8 +38,10 @@ import json
 import logging
 import subprocess
 import threading
+import time
 import uuid
 from collections.abc import Callable
+from pathlib import Path
 
 from speech_to_speech.agent_backend import (
     CATEGORY_OTHER,
@@ -43,7 +49,7 @@ from speech_to_speech.agent_backend import (
     system_prompt_for,
     workspace_instruction,
 )
-from speech_to_speech.config import DEFAULT_WORKSPACE, PI_BIN
+from speech_to_speech.config import DEFAULT_WORKSPACE, PI_BIN, PI_DEFAULT_MODEL
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +60,88 @@ logger = logging.getLogger(__name__)
 # one until this fires.
 TURN_TIMEOUT_S = 300
 
+# -- Available models -------------------------------------------------------
+# `pi --list-models` prints one row per model pi can currently use: every
+# built-in model whose provider has cached credentials (~/.pi/agent/auth.json,
+# here: GitHub Copilot) plus every custom provider declared in
+# ~/.pi/agent/models.json (here: the E.ON endpoint). `--offline` is deliberate
+# -- without it pi first tries to reach each provider over the network, which
+# turns a 2s local read into a multi-second wait behind the corporate proxy, and
+# the list could only ever be as fresh as those cached credentials anyway.
+# Re-read on demand (the cockpit's "Model-Liste aktualisieren") rather than
+# on a timer, so the picker stays responsive; PI_MODELS_CACHE_TTL_S only bounds
+# how long a cached list may be reused by repeated calls.
+PI_MODELS_TIMEOUT_S = 30
+PI_MODELS_CACHE_TTL_S = 300
+
+_models_cache: tuple[float, list[tuple[str, str]]] = (0.0, [])
+_models_cache_lock = threading.Lock()
+
+
+def _custom_model_names() -> dict[str, str]:
+    """`"<provider>/<id>" -> name` for models declared in
+    ~/.pi/agent/models.json. pi's --list-models output prints raw ids only, but
+    a custom provider can carry a friendlier `name` (the E.ON models do: "Smart
+    Router (E.ON)"), which is used here to label the picker. Purely cosmetic:
+    anything unreadable about the file (different location, different schema,
+    not readable) yields {} and the plain ids are used instead."""
+    try:
+        raw = json.loads((Path.home() / ".pi" / "agent" / "models.json").read_text())
+        return {
+            f"{provider}/{model['id']}": model["name"]
+            for provider, cfg in raw["providers"].items()
+            for model in cfg.get("models", [])
+            if model.get("name")
+        }
+    except (OSError, ValueError, TypeError, KeyError, AttributeError):
+        return {}
+
+
+def list_pi_models(force_refresh: bool = False) -> list[tuple[str, str]]:
+    """Available models as `("<provider>/<id>", label)` pairs -- what to pass
+    as `model` (pi's --model argument) and what to show the user, in that
+    order, deliberately not Gradio's (label, value) order since this module
+    knows nothing about the cockpit. The cockpit flips them at its own edge.
+
+    Never raises: if `pi` is missing, fails or times out this returns the
+    previously cached list (possibly empty, e.g. on a first call that fails),
+    so the picker degrades to "empty, but type your own" (its
+    allow_custom_value) instead of breaking the cockpit."""
+    global _models_cache
+    with _models_cache_lock:
+        fetched_at, cached = _models_cache
+        if cached and not force_refresh and time.monotonic() - fetched_at < PI_MODELS_CACHE_TTL_S:
+            return cached
+
+    choices: list[tuple[str, str]] = []
+    try:
+        proc = subprocess.run(
+            [PI_BIN, "--offline", "--list-models"],
+            capture_output=True,
+            text=True,
+            timeout=PI_MODELS_TIMEOUT_S,
+            check=False,
+        )
+        names = _custom_model_names()
+        for line in proc.stdout.splitlines():
+            # Fixed-width table: `provider model context max-out thinking
+            # images`. Only the first two columns matter here; whitespace-split
+            # is safe because neither a provider nor a model id contains spaces.
+            parts = line.split()
+            if len(parts) < 2 or parts[0] == "provider":
+                continue
+            value = f"{parts[0]}/{parts[1]}"
+            choices.append((value, names.get(value, f"{parts[1]} ({parts[0]})")))
+    except (OSError, subprocess.SubprocessError) as exc:
+        logger.warning("Could not list pi models: %s", exc)
+
+    if not choices:
+        logger.warning("pi --list-models returned no models; reusing cached list.")
+        choices = cached
+    with _models_cache_lock:
+        _models_cache = (time.monotonic(), choices)
+    return choices
+
 
 class PiAgentConversation:
     def __init__(
@@ -62,6 +150,7 @@ class PiAgentConversation:
         workspace: str | None = None,
         on_output: Callable[[str, str], None] | None = None,
         voice_output: bool = False,
+        model: str | None = None,
     ) -> None:
         # `resume` is a past session_id (see sessions.py) to continue;
         # otherwise a fresh one, handed to `pi --session-id` on every call
@@ -83,8 +172,25 @@ class PiAgentConversation:
         # Spoken vs. text reply formatting, appended to Pi's own system prompt
         # on every turn (see send()).
         self._voice_output = voice_output
+        # `model` becomes `pi --model <provider>/<id>` on every turn (see
+        # send()/set_model()). Public + plain-assignment on purpose: switching
+        # it mid-session is supported precisely because there is no persistent
+        # pi connection to disturb, only the next subprocess reads it.
+        self.model = model or PI_DEFAULT_MODEL
         self._proc_lock = threading.Lock()
         self._proc: subprocess.Popen | None = None
+
+    def set_model(self, model: str | None) -> None:
+        """Switches the model for every turn from the next one on, without
+        restarting the session: continuity lives in the on-disk transcript that
+        `--session-id` reloads (see module docstring), not in any pi process,
+        so a different model simply continues the same conversation. A turn
+        already in flight is unaffected -- its command line is built -- and
+        finishes on the model it started with. None means "no explicit choice",
+        i.e. PI_DEFAULT_MODEL rather than leaving it to pi's own settings, so
+        the cockpit always shows which model is actually in use."""
+        self.model = model or PI_DEFAULT_MODEL
+        logger.info("Pi model set to %s.", self.model)
 
     def _emit(self, category: str, text: str) -> None:
         text = text.strip()
@@ -93,6 +199,10 @@ class PiAgentConversation:
 
     def send(self, text: str) -> str:
         logger.info("Sending to Pi Agent: %s", text)
+        # Read once for the whole turn, so a set_model() landing mid-turn can't
+        # half-affect it (and the log/warning below name the same model the
+        # command line used).
+        model = self.model
         cmd = [
             PI_BIN,
             "--print",
@@ -100,6 +210,12 @@ class PiAgentConversation:
             "json",
             "--session-id",
             self.session_id,
+            # Always passed explicitly rather than falling back to pi's own
+            # settings default: the surfaces display App.get_model() as the
+            # model in use, which is only honest if it's literally what pi got
+            # told (and self.model is never empty -- see set_model()).
+            "--model",
+            model,
             "--append-system-prompt",
             system_prompt_for(self._voice_output) + "\n\n" + workspace_instruction(self.workspace),
             text,
@@ -203,8 +319,13 @@ class PiAgentConversation:
         # real failure, just means the reply (if any) is a partial one that
         # App discards anyway once its interrupt Event is set.
         if returncode not in (0, -9, -15) and not reply:
+            # A typo'd/expired `model` shows up exactly here (pi exits non-zero
+            # before producing any event), hence the model is named in the log.
             logger.warning(
-                "pi exited with code %s: %s", returncode, "".join(stderr_lines)[:500]
+                "pi exited with code %s (model %s): %s",
+                returncode,
+                model,
+                "".join(stderr_lines)[:500],
             )
         logger.info("Pi Agent reply: %s", reply[:200])
         return reply

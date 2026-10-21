@@ -57,6 +57,15 @@ Diese Datei fasst die Kernfeatures des Projekts zusammen.
   Agent, gemeinsames Interface (`send()`/`cancel()`/`close()`,
   `agent_backend.py`).
 - Wahl per Start-Flag (`--agent`) und pro neuer Session (Cockpit/Telegram).
+- Modellauswahl fürs Pi-Backend (`--model provider/modell` als Start-Flag,
+  Dropdown im Cockpit). Die Auswahlliste kommt aus `pi --list-models`, also
+  aus den lokal hinterlegten Zugangsdaten -- E.ON-Modelle und Copilot tauchen
+  dort von selbst auf, sobald beides in `~/.pi/agent/` eingerichtet ist; ein
+  "Model-Liste aktualisieren"-Knopf liest sie neu, Freitext ist erlaubt.
+  Der Wechsel wirkt ab dem nächsten Turn ohne neue Session, weil Pi pro Turn
+  einen eigenen Subprocess startet und der Gesprächsfaden über `--session-id`
+  läuft. Claude-Backend: keine Modellauswahl (andere Namenssyntax, bewusst
+  ignorierter Wert).
 - Workspace-Scoping pro Session (`cwd` fürs jeweilige Backend), weiche
   System-Prompt-Instruktion zusätzlich zur harten `cwd`-Durchsetzung.
 - Frühere Sessions wieder aufnehmbar (`sessions.py`, backend-spezifisches

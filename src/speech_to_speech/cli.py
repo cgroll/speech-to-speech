@@ -13,6 +13,7 @@ def _parse_args() -> argparse.Namespace:
     # Imported here rather than at module level for the same reason as the
     # lazy imports in main() below -- main_toggle() doesn't need this either.
     from speech_to_speech.agent_backend import AGENT_LABELS, DEFAULT_AGENT
+    from speech_to_speech.config import PI_DEFAULT_MODEL
 
     parser = argparse.ArgumentParser(prog="speech-to-speech")
     parser.add_argument(
@@ -20,6 +21,17 @@ def _parse_args() -> argparse.Namespace:
         choices=sorted(AGENT_LABELS),
         default=DEFAULT_AGENT,
         help=f"LLM backend for the first session (default: {DEFAULT_AGENT}).",
+    )
+    parser.add_argument(
+        "--model",
+        default=None,
+        metavar="PROVIDER/MODEL",
+        help=(
+            "Model for the Pi backend, e.g. 'eon-ai/smart-router' or "
+            "'github-copilot/claude-sonnet-5' (default: "
+            f"{PI_DEFAULT_MODEL}). Ignored by the Claude backend. The cockpit "
+            "offers the full list and can change it later without a restart."
+        ),
     )
     return parser.parse_args()
 
@@ -33,7 +45,7 @@ def main() -> None:
 
     args = _parse_args()
     load_dotenv()
-    app = App(default_agent=args.agent)
+    app = App(default_agent=args.agent, default_model=args.model)
     try:
         app.load()
         app.run()

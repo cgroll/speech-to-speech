@@ -123,6 +123,31 @@ Hotkey), sprechen, nochmal drücken -> Transkript + Antwort erscheinen im
 Log, die Antwort wird gesprochen. Beenden mit Ctrl+C (die Daemons laufen
 danach weiter, unabhängig von der App).
 
+### Modell wählen (Pi-Backend)
+
+Das Pi-Backend redet standardmäßig mit `eon-ai/smart-router`
+(`config.PI_DEFAULT_MODEL`). Zur Auswahl steht alles, wofür lokal
+Zugangsdaten liegen -- auf diesem Rechner also die E.ON-Modelle aus
+`~/.pi/agent/models.json` und die GitHub-Copilot-Modelle aus
+`~/.pi/agent/auth.json`:
+
+```bash
+uv run speech-to-speech --agent pi --model github-copilot/claude-sonnet-5
+```
+
+Im Cockpit (http://127.0.0.1:7860) zeigt das "Modell"-Dropdown dieselbe Liste
+(sie kommt aus `pi --list-models`), "Model-Liste aktualisieren" liest sie neu,
+und Freitext ist erlaubt. Ein Wechsel gilt ab dem nächsten Turn und kostet
+keine neue Session -- der Gesprächsfaden bleibt erhalten, weil Pi pro Turn
+einen eigenen Subprocess startet und die Historie über `--session-id` läuft.
+Ein Modell, das pi nicht kennt (oder dessen Login abgelaufen ist), schlägt
+erst in dem Turn fehl, in dem es benutzt wird: pi endet dann mit Fehlercode,
+und der Grund steht inkl. Modellname im Log.
+
+Das Claude-Backend hat keine Modellauswahl (eigene Namenssyntax statt
+`provider/modell`); das Dropdown weist dort ausdrücklich darauf hin, statt den
+Wechsel stillschweigend zu ignorieren.
+
 ## Architektur
 
 - `stt_client.py` -- dünner Client für den gemeinsamen STT-Daemon

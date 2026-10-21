@@ -118,6 +118,16 @@ PHONON_VOICE = os.environ.get("PHONON_VOICE") or None
 # not raw resampling -- 1.0 = natural speed).
 TTS_PLAYBACK_SPEED = 1.5
 
+# -- LLM: Modellauswahl (Pi-Backend) ---------------------------------------
+# Which model the Pi backend talks to, changeable per turn in the cockpit
+# (pi_agent.list_pi_models() offers the choices, PiAgentConversation.set_model()
+# applies them). Pi itself takes this as `--model <provider>/<id>`; the two
+# providers available on this machine are the E.ON endpoint (declared in
+# ~/.pi/agent/models.json) and GitHub Copilot (cached OAuth in
+# ~/.pi/agent/auth.json) -- see pi_agent.list_pi_models() for how the live list
+# is read.
+PI_DEFAULT_MODEL = "eon-ai/smart-router"
+
 # -- LLM (Gemini via Vertex AI) -------------------------------------------
 # pi-agent-gemini's org policy blocks plain Gemini-Developer-API keys
 # (API_KEY_SERVICE_BLOCKED) -- Vertex AI with Application Default
