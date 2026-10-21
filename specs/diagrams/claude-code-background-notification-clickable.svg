@@ -1,0 +1,227 @@
+<svg viewBox="0 0 1180 500" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" tabindex="0" data-step="1">
+  <title>Claude Code: Hintergrund-Agent, Completion-Notification statt Push (klickbar)</title>
+  <desc>Dieselbe Geschichte wie die automatisch laufende Fassung, aber Schritt für Schritt per Klick oder Pfeiltaste. Acht Schritte: Runde 1 zeigt den Agent fertig werden, während die Hauptsitzung gerade einen Turn aktiv hat -- Zustellung sofort. Runde 2 zeigt denselben Agent fertig werden, während die Hauptsitzung im Leerlauf ist -- die Notification bleibt grau, solange nichts läuft, egal wie lange das dauert, wird aber genau in dem Moment zugestellt, in dem der nächste Turn beginnt, ganz gleich wodurch er ausgelöst wird.</desc>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="arrowhead" />
+    </marker>
+    <marker id="arrow-muted" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="arrowhead-muted" />
+    </marker>
+    <marker id="arrow-deliver" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="arrowhead-deliver" />
+    </marker>
+  </defs>
+
+  <style>
+    .surface    { fill: #fcfcfb; }
+    .border     { stroke: rgba(11,11,11,0.10); }
+    .state-box  { stroke-width: 1.5; transition: fill .35s ease, stroke .35s ease, stroke-width .35s ease; }
+    .state-text { fill: #0b0b0b; font-weight: 600; }
+    .sub-text   { fill: #52514e; font-size: 11.5px; }
+    .edge       { stroke: #52514e; stroke-width: 2; fill: none; }
+    .edge-loop  { stroke: #898781; stroke-width: 1.75; stroke-dasharray: 6 5; fill: none; }
+    .arrowhead  { fill: #52514e; }
+    .arrowhead-muted { fill: #898781; }
+    .arrowhead-deliver { fill: #2a78d6; }
+    .caption    { fill: #898781; font-size: 12.5px; }
+    .legend-text{ fill: #52514e; font-size: 12px; }
+    .lane-label { fill: #898781; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+    .deliver-label { fill: #184f95; font-weight: 600; font-size: 12.5px; }
+    .pull-label { fill: #52514e; font-weight: 600; font-size: 12.5px; }
+    .cap-title  { fill: #0b0b0b; font-weight: 700; font-size: 15px; }
+    .cap-sub    { fill: #52514e; font-size: 13px; }
+    .fade       { transition: opacity .35s ease; }
+
+    .step-indicator { fill: #898781; font-size: 12px; }
+    .btn-bg     { fill: #f2f1ee; stroke: #52514e; stroke-width: 1.5; cursor: pointer; }
+    .btn-bg:hover { fill: #e9e8e4; }
+    .btn-bg-primary { fill: #2a78d6; stroke: #2a78d6; stroke-width: 1.5; cursor: pointer; }
+    .btn-bg-primary:hover { fill: #1f66ba; }
+    .btn-text   { fill: #0b0b0b; font-weight: 600; font-size: 14px; pointer-events: none; }
+    .btn-text-primary { fill: #ffffff; font-weight: 600; font-size: 14px; pointer-events: none; }
+    .clickcatch { fill: transparent; cursor: pointer; }
+
+    @media (prefers-color-scheme: dark) {
+      .surface    { fill: #1a1a19; }
+      .border     { stroke: rgba(255,255,255,0.10); }
+      .state-text { fill: #ffffff; }
+      .sub-text   { fill: #c3c2b7; }
+      .edge       { stroke: #c3c2b7; }
+      .edge-loop  { stroke: #6b6a63; }
+      .arrowhead  { fill: #c3c2b7; }
+      .arrowhead-muted { fill: #6b6a63; }
+      .arrowhead-deliver { fill: #3987e5; }
+      .caption    { fill: #898781; }
+      .legend-text{ fill: #c3c2b7; }
+      .lane-label { fill: #898781; }
+      .deliver-label { fill: #86b6ef; }
+      .pull-label { fill: #c3c2b7; }
+      .cap-title  { fill: #ffffff; }
+      .cap-sub    { fill: #c3c2b7; }
+      .step-indicator { fill: #898781; }
+      .btn-bg     { fill: #2a2a28; stroke: #c3c2b7; }
+      .btn-bg:hover { fill: #333331; }
+      .btn-text   { fill: #ffffff; }
+    }
+  </style>
+
+  <rect class="clickcatch" x="0" y="0" width="1180" height="500" id="bgClick" />
+  <rect x="0" y="0" width="1180" height="500" rx="16" class="surface border" style="pointer-events:none" />
+  <text x="24" y="28" class="caption" style="pointer-events:none">Claude Code -- Hintergrund-Agent: Completion-Notification statt Push, klickbare Fassung (docs/reference-claude-code-turn-taking.md Abschnitt 5)</text>
+
+  <text id="capLine1" x="24" y="54" class="cap-title" style="pointer-events:none">Runde 1 -- Start</text>
+  <text id="capLine2" x="24" y="72" class="cap-sub" style="pointer-events:none">Hauptsitzung im Leerlauf, Agent arbeitet im Hintergrund</text>
+
+  <text x="24" y="100" class="lane-label" style="pointer-events:none">Hauptsitzung</text>
+  <rect id="leerlaufBox" x="60" y="106" width="260" height="70" rx="14" class="state-box" style="pointer-events:none" />
+  <text x="190" y="136" text-anchor="middle" class="state-text" font-size="15" style="pointer-events:none">Leerlauf</text>
+  <text x="190" y="154" text-anchor="middle" class="sub-text" style="pointer-events:none">Tippen, nichts läuft</text>
+
+  <line x1="320" y1="141" x2="414" y2="141" class="edge" marker-end="url(#arrow)" style="pointer-events:none" />
+
+  <rect id="turnAktivBox" x="420" y="106" width="320" height="70" rx="14" class="state-box" style="pointer-events:none" />
+  <text x="580" y="136" text-anchor="middle" class="state-text" font-size="15" style="pointer-events:none">Turn aktiv</text>
+  <text x="580" y="154" text-anchor="middle" class="sub-text" style="pointer-events:none">Verarbeitung / Antwort läuft</text>
+
+  <path d="M740,176 C740,214 190,214 190,176" class="edge-loop" marker-end="url(#arrow-muted)" style="pointer-events:none" />
+
+  <text x="24" y="260" class="lane-label" style="pointer-events:none">Hintergrund-Agent</text>
+  <rect id="agentBox" x="60" y="266" width="320" height="70" rx="14" class="state-box" style="pointer-events:none" />
+  <text x="220" y="296" text-anchor="middle" class="state-text" font-size="15" style="pointer-events:none">Agent läuft</text>
+  <text x="220" y="314" text-anchor="middle" class="sub-text" style="pointer-events:none">z.B. Subagent oder Hintergrund-Befehl</text>
+
+  <line x1="380" y1="301" x2="474" y2="301" class="edge" marker-end="url(#arrow)" style="pointer-events:none" />
+
+  <rect id="notificationBox" x="480" y="266" width="320" height="70" rx="14" class="state-box fade" style="pointer-events:none" />
+  <text x="640" y="296" text-anchor="middle" class="state-text" font-size="15" style="pointer-events:none">Completion-Notification</text>
+  <text x="640" y="314" text-anchor="middle" class="sub-text" style="pointer-events:none">wartet, bis sie abgeholt wird</text>
+
+  <g id="connectorGroup" class="fade" style="pointer-events:none">
+    <path d="M640,266 C640,224 600,204 580,176" class="edge" stroke="#2a78d6" fill="none" marker-end="url(#arrow-deliver)" />
+    <rect x="660" y="204" width="280" height="40" rx="8" class="surface" />
+    <text x="800" y="220" text-anchor="middle" class="deliver-label">zugestellt --</text>
+    <text x="800" y="236" text-anchor="middle" class="deliver-label">fließt in den laufenden Turn</text>
+  </g>
+
+  <g id="pullGroup" class="fade" style="pointer-events:none">
+    <text x="640" y="364" text-anchor="middle" class="pull-label">wartet weiter -- kein Push,</text>
+    <text x="640" y="382" text-anchor="middle" class="pull-label">erst der nächste Turn oder eine Nachfrage holt das Ergebnis</text>
+  </g>
+
+  <!-- legend -->
+  <rect x="60" y="410" width="20" height="14" rx="4" fill="#f1ecfb" stroke="#6b46c1" stroke-width="1.5" style="pointer-events:none" />
+  <text x="88" y="421" class="legend-text" style="pointer-events:none">Agent läuft</text>
+  <rect x="220" y="410" width="20" height="14" rx="4" fill="#f2f1ee" stroke="#52514e" stroke-width="1.5" style="pointer-events:none" />
+  <text x="248" y="421" class="legend-text" style="pointer-events:none">Notification wartet</text>
+  <rect x="420" y="410" width="20" height="14" rx="4" fill="#e7f0fb" stroke="#2a78d6" stroke-width="1.5" style="pointer-events:none" />
+  <text x="448" y="421" class="legend-text" style="pointer-events:none">zugestellt</text>
+  <rect x="560" y="410" width="20" height="14" rx="4" fill="#fdece3" stroke="#d6563f" stroke-width="1.5" style="pointer-events:none" />
+  <text x="588" y="421" class="legend-text" style="pointer-events:none">Hauptsitzung gerade "dran"</text>
+
+  <!-- step controls -->
+  <g id="prevBtn">
+    <rect x="950" y="405" width="40" height="32" rx="8" class="btn-bg" />
+    <text x="970" y="426" text-anchor="middle" class="btn-text">&#9664;</text>
+  </g>
+  <text id="stepIndicator" x="1000" y="426" text-anchor="middle" class="step-indicator" style="pointer-events:none">1 / 8</text>
+  <g id="nextBtn">
+    <rect x="1040" y="405" width="100" height="32" rx="8" class="btn-bg-primary" />
+    <text x="1090" y="426" text-anchor="middle" class="btn-text-primary">Weiter &#9654;</text>
+  </g>
+
+  <text x="24" y="460" class="caption" style="pointer-events:none">Klick auf die Fläche oder auf "Weiter", Pfeiltasten rechts/links funktionieren nach einem Klick in die Grafik.</text>
+  <text x="24" y="478" class="caption" style="pointer-events:none">Eigene Entscheidung fürs eigene System: bewusst nicht wie hier -- ein fertiger Hintergrund-Agent soll aktiv pushen statt zu warten.</text>
+
+  <script><![CDATA[
+    (function () {
+      var svg = document.documentElement;
+      var dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+      var colors = dark ? {
+        neutral:  { fill: '#2a2a28', stroke: '#c3c2b7', width: 1.5 },
+        active:   { fill: '#3a2317', stroke: '#ef7a63', width: 2.5 },
+        agent:    { fill: '#241c35', stroke: '#9b7ee0', width: 2.5 },
+        delivered:{ fill: '#142a42', stroke: '#3987e5', width: 2.5 }
+      } : {
+        neutral:  { fill: '#f2f1ee', stroke: '#52514e', width: 1.5 },
+        active:   { fill: '#fdece3', stroke: '#d6563f', width: 2.5 },
+        agent:    { fill: '#f1ecfb', stroke: '#6b46c1', width: 2.5 },
+        delivered:{ fill: '#e7f0fb', stroke: '#2a78d6', width: 2.5 }
+      };
+
+      function paint(el, c) {
+        el.style.fill = c.fill;
+        el.style.stroke = c.stroke;
+        el.style.strokeWidth = c.width;
+      }
+
+      var steps = [
+        { cap1: 'Runde 1 -- Start', cap2: 'Hauptsitzung im Leerlauf, Agent arbeitet im Hintergrund',
+          leerlauf: true, turnaktiv: false, agent: true, notif: 'hidden', connector: false, pull: false },
+        { cap1: 'Runde 1 -- Turn beginnt', cap2: 'Nutzer schickt eine Nachricht, die Hauptsitzung wird aktiv',
+          leerlauf: false, turnaktiv: true, agent: true, notif: 'hidden', connector: false, pull: false },
+        { cap1: 'Runde 1 -- Agent wird fertig', cap2: 'Completion-Notification erscheint, wartet grau',
+          leerlauf: false, turnaktiv: true, agent: false, notif: 'waiting', connector: false, pull: false },
+        { cap1: 'Runde 1 -- Zustellung', cap2: 'Notification fließt sofort in den laufenden Turn',
+          leerlauf: false, turnaktiv: true, agent: false, notif: 'delivered', connector: true, pull: false },
+        { cap1: 'Runde 2 -- Start', cap2: 'Hauptsitzung wieder im Leerlauf, Agent arbeitet erneut im Hintergrund',
+          leerlauf: true, turnaktiv: false, agent: true, notif: 'hidden', connector: false, pull: false },
+        { cap1: 'Runde 2 -- Agent wird fertig', cap2: 'Hauptsitzung ist noch im Leerlauf -- Notification wartet grau, nichts passiert von selbst',
+          leerlauf: true, turnaktiv: false, agent: false, notif: 'waiting', connector: false, pull: true },
+        { cap1: 'Runde 2 -- Wartezeit', cap2: 'könnte Sekunden oder Stunden dauern -- nichts startet von selbst einen neuen Turn',
+          leerlauf: true, turnaktiv: false, agent: false, notif: 'waiting', connector: false, pull: true },
+        { cap1: 'Runde 2 -- Turn beginnt', cap2: 'und nimmt die wartende Notification gleich mit -- kein zusätzlicher Schritt nötig',
+          leerlauf: false, turnaktiv: true, agent: false, notif: 'delivered', connector: true, pull: false }
+      ];
+
+      var step = 1;
+      var leerlaufBox = document.getElementById('leerlaufBox');
+      var turnAktivBox = document.getElementById('turnAktivBox');
+      var agentBox = document.getElementById('agentBox');
+      var notificationBox = document.getElementById('notificationBox');
+      var connectorGroup = document.getElementById('connectorGroup');
+      var pullGroup = document.getElementById('pullGroup');
+      var capLine1 = document.getElementById('capLine1');
+      var capLine2 = document.getElementById('capLine2');
+      var stepIndicator = document.getElementById('stepIndicator');
+
+      function render() {
+        var s = steps[step - 1];
+        paint(leerlaufBox, s.leerlauf ? colors.active : colors.neutral);
+        paint(turnAktivBox, s.turnaktiv ? colors.active : colors.neutral);
+        paint(agentBox, s.agent ? colors.agent : colors.neutral);
+
+        if (s.notif === 'hidden') {
+          notificationBox.style.opacity = '0';
+        } else if (s.notif === 'waiting') {
+          notificationBox.style.opacity = '1';
+          paint(notificationBox, colors.neutral);
+        } else if (s.notif === 'delivered') {
+          notificationBox.style.opacity = '1';
+          paint(notificationBox, colors.delivered);
+        }
+
+        connectorGroup.style.opacity = s.connector ? '1' : '0';
+        pullGroup.style.opacity = s.pull ? '1' : '0';
+        capLine1.textContent = s.cap1;
+        capLine2.textContent = s.cap2;
+        stepIndicator.textContent = step + ' / ' + steps.length;
+      }
+
+      function next() { step = (step >= steps.length) ? 1 : step + 1; render(); }
+      function prev() { step = (step <= 1) ? steps.length : step - 1; render(); }
+
+      document.getElementById('nextBtn').addEventListener('click', next);
+      document.getElementById('prevBtn').addEventListener('click', prev);
+      document.getElementById('bgClick').addEventListener('click', next);
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'ArrowRight' || e.key === ' ') { next(); e.preventDefault(); }
+        if (e.key === 'ArrowLeft') { prev(); e.preventDefault(); }
+      });
+
+      render();
+    })();
+  ]]></script>
+</svg>

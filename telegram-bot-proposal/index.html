@@ -1,0 +1,874 @@
+
+<!doctype html>
+<html lang="de" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Dokumentation des Sprachassistenten-Projekts">
+      
+      
+      
+      
+        <link rel="prev" href="../architecture-proposal/">
+      
+      
+        <link rel="next" href="../backlog/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Telegram-Bot-Vorschlag - Speech-to-Speech</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#architektur-vorschlag-telegram-bot-als-handy-zugang" class="md-skip">
+          Zum Inhalt
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Kopfzeile">
+    <a href=".." title="Speech-to-Speech" class="md-header__button md-logo" aria-label="Speech-to-Speech" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Speech-to-Speech
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Telegram-Bot-Vorschlag
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Suche" placeholder="Suche" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Suche">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Zurücksetzen" aria-label="Zurücksetzen" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Suche wird initialisiert
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/cgroll/speech-to-speech" title="Zum Repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    cgroll/speech-to-speech
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+  
+
+<nav class="md-nav md-nav--primary md-nav--integrated" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Speech-to-Speech" class="md-nav__button md-logo" aria-label="Speech-to-Speech" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Speech-to-Speech
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/cgroll/speech-to-speech" title="Zum Repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    cgroll/speech-to-speech
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../specification/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Feature-Übersicht
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Spezifikationen
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Spezifikationen
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../specs/core-dialog-loop/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kern-Dialogschleife
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../specs/thinking-channel-and-stop-marker/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Denkprozess-Kanal & Stop-Markierung
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference-claude-code-turn-taking/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Referenz: Turn-Taking in Claude Code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture-proposal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architektur-Vorschlag
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Telegram-Bot-Vorschlag
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Telegram-Bot-Vorschlag
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Inhaltsverzeichnis">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Inhaltsverzeichnis
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#ziel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ziel
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ist-zustand" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ist-Zustand
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#vorschlag" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Vorschlag
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#offene-fragen-entscheidungen-bei-der-umsetzung" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Offene Fragen (Entscheidungen bei der Umsetzung)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nachste-schritte" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Nächste Schritte
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backlog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backlog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../macos-setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    macOS-Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="architektur-vorschlag-telegram-bot-als-handy-zugang">Architektur-Vorschlag: Telegram-Bot als Handy-Zugang<a class="headerlink" href="#architektur-vorschlag-telegram-bot-als-handy-zugang" title="Permanent link">&para;</a></h1>
+<p>Status: Umgesetzt am 2026-08-12 (siehe README.md, Abschnitt
+"Telegram-Bot (Handy-Zugang)", für Setup/Nutzung). Ausgangspunkt war die
+Frage, wie sich der Sprachassistent vom Handy aus per Sprach- oder
+Textnachricht erreichen lässt, ohne eine eigene Mobile-App bauen zu müssen.
+Offen bleibt nur noch der manuelle Teil aus "Nächste Schritte" (Bot bei
+BotFather anlegen, <code>.env</code> befüllen, systemd-Unit installieren, End-to-End
+verifizieren) -- Code und Doku sind fertig.</p>
+<h2 id="ziel">Ziel<a class="headerlink" href="#ziel" title="Permanent link">&para;</a></h2>
+<p>Vom Handy aus per Telegram entweder eine Sprach- oder eine Textnachricht an
+den Assistenten schicken und eine Textantwort zurückbekommen. Keine
+Sprachausgabe auf diesem Weg (kein TTS-Rückkanal) -- bewusst text-only, um
+den Umfang klein zu halten. Zwei Eingabewege, die am Ende in derselben
+Agent-Anbindung zusammenlaufen:</p>
+<ul>
+<li><strong>Textnachricht</strong> -&gt; direkt an den Agenten, Antwort als Text zurück.</li>
+<li><strong>Sprachnachricht</strong> -&gt; erst durch Spracherkennung, das Transkript wird zur
+  Kontrolle als eigene Nachricht zurückgeschickt (damit sich Erkennungs- von
+  Verständnisfehlern unterscheiden lassen), danach genau wie eine
+  Textnachricht an den Agenten weitergereicht, Antwort als Text zurück.</li>
+</ul>
+<p>Kein Audio-Echo der eingehenden Sprachnachricht (verworfen -- die eigene
+gesendete Nachricht bleibt ohnehin im Chatverlauf sichtbar, das nochmal vom
+Bot zurückzuschicken bringt nichts zusätzlich).</p>
+<h2 id="ist-zustand">Ist-Zustand<a class="headerlink" href="#ist-zustand" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Telegram wird in diesem Account bereits zweimal genutzt, aber nur als
+  Einbahnstraße nach draußen, nie zum Empfangen:</li>
+<li><code>~/research/gcp-telegram-reminders</code>: GCP Cloud Function, verschickt
+    zeitgesteuerte Erinnerungen über den Bot (Cloud Tasks -&gt; Cloud Function
+    -&gt; <code>sendMessage</code>).</li>
+<li><code>~/.agents/scripts/send_telegram.sh</code>: einfaches Skript, schickt per curl
+    eine Nachricht über denselben Bot-Token/Chat-ID.</li>
+<li>Beide zusammen bestätigen: ein Bot mit Token und die eigene Chat-ID
+    existieren schon, es gibt aber keinen Listener, der eingehende
+    Nachrichten (Text oder Sprache) entgegennimmt -- weder Polling noch
+    Webhook.</li>
+<li>Der STT-Daemon (<code>speech_to_speech/dictate/daemon.py</code>) ist komplett auf
+  Live-Mikrofon-Aufnahme ausgelegt: er besitzt Mikrofon und VAD-Segmentierung
+  selbst (<code>dictate/audio.py</code>, <code>Recorder</code>), die bestehenden Befehle
+  (<code>toggle_record</code>, <code>start_recording</code>/<code>stop_recording</code>) starten/stoppen
+  jeweils eine eigene Aufnahme. Es gibt aktuell keinen Befehl, der eine
+  bereits vorliegende Audiodatei/-bytes einfach nur transkribiert.</li>
+<li>Telegram-Sprachnachrichten liegen als Ogg/Opus vor, nach Dekodierung 16 kHz
+  Mono -- deckt sich zufällig exakt mit <code>dictate/audio.py</code>s
+  <code>SAMPLE_RATE = 16_000</code>, auf das Parakeet eingestellt ist. Für die
+  Dekodierung von Opus nach PCM wird trotzdem ein externer Schritt (ffmpeg)
+  gebraucht, Telegram liefert kein rohes PCM.</li>
+<li>Agent-Anbindung (<code>agent_backend.create_conversation</code>, <code>llm.py</code>/
+  <code>pi_agent.py</code>) ist bereits Backend-unabhängig und wird unverändert
+  wiederverwendet -- der Bot braucht nur eine eigene, pro Chat gehaltene
+  <code>AgentConversation</code>-Instanz für Kontext über mehrere Nachrichten hinweg,
+  analog zu <code>App</code>s <code>self._llm</code>.</li>
+</ul>
+<h2 id="vorschlag">Vorschlag<a class="headerlink" href="#vorschlag" title="Permanent link">&para;</a></h2>
+<p><strong>1. STT-Daemon: neuer Befehl <code>transcribe</code></strong></p>
+<p>Ergänzung in <code>dictate/daemon.py</code>s <code>handle_command</code> (analog zum bestehenden
+<code>status</code>-Befehl, kein neuer Zustand/Thread nötig, da synchron und kurz):
+nimmt fertige Audiodaten (16 kHz, mono, float32 -- oder base64-kodiertes WAV,
+Details bei Umsetzung) entgegen und ruft direkt <code>self._model.recognize(...)</code>
+auf, ohne <code>Recorder</code>/VAD zu benutzen. Bypass der Live-Aufnahme-Mechanik
+komplett. <code>dictate/protocol.py</code> bleibt unverändert (gleiches
+Socket-JSON-Framing), nur ein neues Kommando.</p>
+<p>Offener Punkt: der Daemon bearbeitet aktuell eine Verbindung nach der
+anderen (<code>server.listen(1)</code>, ein <code>accept()</code>-Loop). Trifft ein
+<code>transcribe</code>-Aufruf vom Bot ein, während der Desktop-Nutzer gerade mitten in
+einer Live-Aufnahme ist (<code>state == "recording"</code>), muss <code>transcribe</code>
+vermutlich denselben "busy"-Fehler zurückgeben wie andere Befehle in dem
+Zustand -- zu klären, ob das in der Praxis stört (eine Person, kann ohnehin
+nicht gleichzeitig ins Mikrofon sprechen und eine Sprachnachricht am Handy
+aufnehmen, vermutlich unproblematisch).</p>
+<p><strong>2. Neues Modul: Telegram-Bot-Daemon</strong></p>
+<p>Neues Paket, z.B. <code>speech_to_speech/telegram_bot/</code>, nach demselben
+Grundmuster wie <code>dictate/</code> und <code>tts_daemon/</code> (eigenständiger Prozess, eigene
+systemd-Unit). Neue Abhängigkeit: <code>python-telegram-bot</code>. Long-Polling statt
+Webhook -- keine offene Portfreigabe, kein öffentlicher Server nötig, der
+Bot macht nur ausgehende Verbindungen zu Telegrams Servern.</p>
+<p>Ablauf pro eingehender Nachricht:
+- Absender-Chat-ID gegen eine Allowlist (nur die eigene Chat-ID) prüfen,
+  alles andere ignorieren.
+- Text -&gt; direkt an Schritt "Agent" (siehe unten).
+- Sprachnachricht -&gt; Datei via Telegram-API herunterladen, mit ffmpeg von
+  Ogg/Opus nach PCM dekodieren, per neuem <code>transcribe</code>-Kommando an den
+  STT-Daemon schicken, Transkript als eigene Telegram-Nachricht
+  zurückschicken (Sichtbarkeit der Erkennungsqualität), Transkript-Text an
+  Schritt "Agent" weiterreichen.
+- Agent: pro Chat-ID eine im Speicher gehaltene <code>AgentConversation</code>-Instanz
+  (<code>agent_backend.create_conversation</code>, Default-Backend wie bisher <code>claude</code>)
+  für Kontext über mehrere Nachrichten; Text an <code>send()</code> übergeben, Antwort
+  als Telegram-Nachricht zurückschicken.</p>
+<p><strong>3. Konfiguration</strong></p>
+<p><code>TELEGRAM_BOT_TOKEN</code>/<code>TELEGRAM_CHAT_ID</code> (oder Allowlist mit mehreren IDs) in
+der Projekt-<code>.env</code>, <code>config.py</code> lädt die ohnehin schon (<code>python-dotenv</code>,
+siehe README Schritt 4 zu Gemini). Empfehlung: eigener, neuer Bot statt
+Wiederverwendung des Reminder-Bots, damit sich Erinnerungen und
+Assistenten-Antworten nicht im selben Chat vermischen -- kostet nur einen
+BotFather-Aufruf, keine technische Notwendigkeit, aber sauberer.</p>
+<p><strong>4. Deployment</strong></p>
+<p>Neue systemd-User-Unit nach dem Muster von <code>parakeet-dictate.service</code>, aber
+mit einem bewussten Unterschied: die bestehenden Daemons starten absichtlich
+<em>nicht</em> automatisch (<code>enable</code>/<code>disable</code> von Hand). Für den Telegram-Bot
+ergibt dagegen Auto-Start beim Login plus <code>Restart=on-failure</code> mehr Sinn,
+weil der ganze Zweck ist, jederzeit vom Handy aus erreichbar zu sein, auch
+wenn niemand gerade am Rechner sitzt (Restart-Vorbild: der bereits
+vorhandene Watchdog-Restart beim TTS-Daemon, <code>systemd/qwen-tts.service</code>).
+Optionaler <code>project.scripts</code>-Eintrag für eine dünne CLI (<code>enable</code>/<code>disable</code>/
+<code>status</code>), falls manuelle Steuerung trotzdem gewünscht ist.</p>
+<h2 id="offene-fragen-entscheidungen-bei-der-umsetzung">Offene Fragen (Entscheidungen bei der Umsetzung)<a class="headerlink" href="#offene-fragen-entscheidungen-bei-der-umsetzung" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Eigener neuer Bot vs. Wiederverwendung des bestehenden Reminder-Bot-Tokens
+  -- Empfehlung oben übernommen: eigener Bot. Muss manuell bei BotFather
+  angelegt werden (Nächste Schritte, Punkt 1).</li>
+<li>Exaktes Datenformat für den neuen <code>transcribe</code>-Befehl: rohe
+  Float32-Bytes, base64-kodiert (<code>dictate/protocol.py</code>, <code>encode_audio</code>/
+  <code>decode_audio</code>) -- kein WAV-Container nötig, Sample-Rate/Kanalzahl sind
+  durch <code>dictate/audio.py</code>s <code>SAMPLE_RATE</code> (16 kHz mono) ohnehin fix
+  vorgegeben.</li>
+<li><code>SYSTEM_PROMPT</code> unverändert übernommen wie vermutet -- unkritisch für den
+  Telegram-Weg.</li>
+<li>STT-Daemon-Busy-Fall: <code>transcribe</code> guardet wie <code>start_recording</code> gegen
+  <code>state != "idle"</code> und gibt denselben <code>busy: &lt;state&gt;</code>-Fehler zurück; der
+  Bot zeigt den dann als Telegram-Fehlermeldung an. Nicht weiter
+  verifiziert (eine Person, kann ohnehin nicht gleichzeitig ins Mikrofon
+  sprechen und eine Sprachnachricht aufnehmen).</li>
+<li>Rate-Limiting/Fehlerverhalten: einfache Fehlermeldung als Textantwort,
+  wie vermutet -- kein Retry/Timeout-Handling über die (großzügigen)
+  Timeouts von <code>stt_client.transcribe()</code>/<code>AgentConversation.send()</code> hinaus.</li>
+</ul>
+<h2 id="nachste-schritte">Nächste Schritte<a class="headerlink" href="#nachste-schritte" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Neuen Telegram-Bot bei BotFather anlegen, Token + eigene Chat-ID in
+   <code>.env</code> eintragen (siehe README.md, Abschnitt "Telegram-Bot", Setup
+   Schritte 1-3) -- einziger noch offener, manueller Schritt.</li>
+<li>~~<code>transcribe</code>-Befehl im STT-Daemon (<code>dictate/daemon.py</code>) ergänzen.~~
+   Umgesetzt.</li>
+<li>~~<code>telegram_bot/</code>-Modul bauen: Long-Polling-Loop, Allowlist-Check,
+   Text-/Sprach-Verzweigung, Agent-Anbindung pro Chat-ID.~~ Umgesetzt.</li>
+<li>~~systemd-Unit + <code>project.scripts</code>-Eintrag.~~ Umgesetzt
+   (<code>systemd/telegram-bot.service</code>, <code>speech-to-speech-telegram-bot</code>/
+   <code>-daemon</code> Scripts).</li>
+<li>Manuell verifizieren: Textnachricht -&gt; Antwort; Sprachnachricht -&gt;
+   Transkript-Nachricht -&gt; Antwort; Zugriff von einer nicht-erlaubten
+   Chat-ID wird ignoriert. Noch zu tun, sobald Schritt 1 erledigt ist.</li>
+</ol>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Zurück zum Seitenanfang
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "toc.integrate", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "In Zwischenablage kopiert", "clipboard.copy": "In Zwischenablage kopieren", "search.result.more.one": "1 weiteres Suchergebnis auf dieser Seite", "search.result.more.other": "# weitere Suchergebnisse auf dieser Seite", "search.result.none": "Keine Suchergebnisse", "search.result.one": "1 Suchergebnis", "search.result.other": "# Suchergebnisse", "search.result.placeholder": "Suchbegriff eingeben", "search.result.term.missing": "Es fehlt", "select.version": "Version ausw\u00e4hlen"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

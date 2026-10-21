@@ -1,0 +1,816 @@
+
+<!doctype html>
+<html lang="de" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Dokumentation des Sprachassistenten-Projekts">
+      
+      
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Spezifikation: Hintergrund-Kanal und Status-Abfrage - Speech-to-Speech</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#spezifikation-hintergrund-kanal-und-status-abfrage" class="md-skip">
+          Zum Inhalt
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Kopfzeile">
+    <a href="../.." title="Speech-to-Speech" class="md-header__button md-logo" aria-label="Speech-to-Speech" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Speech-to-Speech
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Spezifikation: Hintergrund-Kanal und Status-Abfrage
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Suche" placeholder="Suche" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Suche">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Zurücksetzen" aria-label="Zurücksetzen" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Suche wird initialisiert
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/cgroll/speech-to-speech" title="Zum Repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    cgroll/speech-to-speech
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+  
+
+<nav class="md-nav md-nav--primary md-nav--integrated" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Speech-to-Speech" class="md-nav__button md-logo" aria-label="Speech-to-Speech" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Speech-to-Speech
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/cgroll/speech-to-speech" title="Zum Repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    cgroll/speech-to-speech
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../specification/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Feature-Übersicht
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Spezifikationen
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Spezifikationen
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../core-dialog-loop/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kern-Dialogschleife
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../thinking-channel-and-stop-marker/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Denkprozess-Kanal & Stop-Markierung
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference-claude-code-turn-taking/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Referenz: Turn-Taking in Claude Code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture-proposal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architektur-Vorschlag
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../telegram-bot-proposal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Telegram-Bot-Vorschlag
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backlog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backlog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../macos-setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    macOS-Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="spezifikation-hintergrund-kanal-und-status-abfrage">Spezifikation: Hintergrund-Kanal und Status-Abfrage<a class="headerlink" href="#spezifikation-hintergrund-kanal-und-status-abfrage" title="Permanent link">&para;</a></h1>
+<p>Status: Abschnitt 3 (Hintergrund-Kanal) umgesetzt (2026-10-03) -- <code>App.
+deliver_background_result()</code>/<code>_background_queue</code> in <code>app.py</code> (Zustellregeln
+aus 3.3, inklusive Telegram-Variante ohne Leerlauf-Loop in
+<code>telegram_bot/daemon.py</code>'s <code>_make_on_background_result()</code>), gespeist auf der
+Claude-Seite durch einen neuen dauerhaften Nachrichten-Dispatcher in
+<code>llm.py</code> (<code>_dispatch_loop()</code>/<code>_route()</code>), der die vier <code>Task*Message</code>-Typen
+aus dem Claude Agent SDK konsumiert statt sie unbeachtet durchzulassen --
+siehe <code>llm.py</code>'s Moduldocstring. Pi bleibt unberührt (kein eigenes
+Hintergrundaufgaben-Primitiv, siehe <code>agent_backend.create_conversation()</code>s
+Docstring). Tests: <code>tests/test_background_channel.py</code>. <strong>Nicht verifiziert:
+ob auf der SDK-Verbindung nach der Abschluss-Nachricht einer sichtbaren
+Antwort-Runde tatsächlich noch weitere Nachrichten eintreffen, während
+sonst nichts läuft</strong> -- nur aus der Dokumentation abgeleitet, noch nicht
+gegen eine echte, lange laufende Hintergrundaufgabe getestet.</p>
+<p>Abschnitt 4 (Status-Abfrage, <code>ask_status()</code>) ist weiterhin nur Entwurf,
+nicht umgesetzt -- eigenes, unabhängiges Stück Arbeit.</p>
+<p>Ursprünglicher Status: Entwurf (2026-10-02) -- schließt die in
+<code>tests/test_background_and_status_gaps.py</code> gepinnten Lücken ("Hintergrund-
+Agenten / mehr als eine Antwort pro Turn", vormals als Abschnitt 7 in der
+inzwischen aufgeteilten <code>core-dialog-loop.md</code> markiert). Baut auf
+<code>core-text-dialog-loop.md</code>, <code>speech-extension.md</code>,
+<code>thinking-channel-and-stop-marker.md</code> und der externen Recherche in
+<code>../reference-claude-code-turn-taking.md</code> auf.</p>
+<h2 id="1-ausgangslage-verifiziert-2026-10-02">1. Ausgangslage (verifiziert 2026-10-02)<a class="headerlink" href="#1-ausgangslage-verifiziert-2026-10-02" title="Permanent link">&para;</a></h2>
+<p>Zwei offene Fragen, bisher nur als Pytest-Baseline dokumentiert, nicht
+entschieden:</p>
+<ol>
+<li><strong>Hintergrund-Ergebnis ohne laufenden <code>send()</code>-Aufruf</strong>: Es gibt aktuell
+   keinen sanktionierten Weg, ein Ergebnis von außerhalb des normalen
+   Turn-Zyklus in <code>App</code> einzuspeisen. Der einzige strukturell mögliche Weg
+   heute (<code>_append_history()</code> direkt aufrufen) umgeht jede Zustands-Logik --
+   ein so eingefügter Eintrag kann vor einer noch ausstehenden echten Antwort
+   erscheinen, weil <code>_history</code> und <code>_state_lock</code> unabhängig voneinander
+   geschützt sind.</li>
+<li><strong>Status-Nachfrage mitten in der Verarbeitung</strong>: Es gibt keine
+   Unterscheidung zwischen "neue Frage" (Steering) und "nur mal nachfragen,
+   wie weit du bist" (Peek, soll den laufenden Turn nicht beeinflussen).</li>
+</ol>
+<p>Zwischenzeitlich hat sich der Code weiterentwickelt (Barge-in/Steering wurde
+umgebaut, siehe <code>on_toggle()</code>/<code>submit_text()</code> in <code>app.py</code>): ein erneuter Lauf
+von <code>test_asking_for_status_mid_processing_is_barge_in_and_discards_the_task</code>
+zeigt, dass die ursprüngliche Annahme "Status-Frage bricht den laufenden Turn
+ab" nicht mehr zutrifft (<code>cancel_calls</code> bleibt <code>0</code>, nicht <code>1</code> wie im Test
+gepinnt). Heute wird eine Status-Frage still ans Ende der <code>_input_queue</code>
+gehängt und erst beantwortet, <em>nachdem</em> der ursprüngliche Turn fertig ist --
+kein Abbruch mehr, aber auch kein echtes "Peek". Gap 2 besteht also weiter,
+nur mit anderem Symptom; der Test muss bei Umsetzung dieses Konzepts
+aktualisiert werden.</p>
+<h2 id="2-grundprinzipien">2. Grundprinzipien<a class="headerlink" href="#2-grundprinzipien" title="Permanent link">&para;</a></h2>
+<p>Übernommen aus der Claude-Code-Recherche, an das eigene Modell angepasst:</p>
+<ul>
+<li><strong>Queueing statt Abbruch bleibt Standardverhalten</strong> für alles, was wie eine
+  normale Nutzereingabe aussieht (bereits so umgesetzt für Barge-in/Steering,
+  siehe <code>speech-extension.md</code> Abschnitt 3).</li>
+<li><strong>Push statt Pull für Hintergrund-Ergebnisse</strong> (bewusste Abweichung von
+  Claude Codes Pull-Modell, bereits in <code>reference-claude-code-turn-taking.md</code>
+  Abschnitt 5 entschieden, hier erstmals konkretisiert): ein fertiges
+  Hintergrund-Ergebnis soll, wenn das System im Leerlauf ist, aktiv einen
+  neuen Mini-Turn anstoßen -- nicht auf die nächste Nutzeraktion warten.</li>
+<li><strong>Eine einzige Schreibstelle für den Chatverlauf, die mit dem Zustand
+  synchron ist</strong>: Hintergrund-Ergebnisse dürfen nicht mehr direkt in
+  <code>_history</code> geschrieben werden, sondern nur über denselben
+  Serialisierungspunkt, der heute schon reguläre Antworten einträgt (der
+  Responder-Loop). Behebt Gap 1 strukturell statt per Sonderfall.</li>
+<li><strong>Status-Abfrage ist kein Turn</strong>: eigene, zustandslose Operation statt
+  Überladung von Steering/Barge-in.</li>
+</ul>
+<h2 id="3-hintergrund-kanal">3. Hintergrund-Kanal<a class="headerlink" href="#3-hintergrund-kanal" title="Permanent link">&para;</a></h2>
+<p><strong>Klickbare Visualisierung der Zustellregeln aus Abschnitt 3.3</strong> (vierzehn
+Schritte in drei Runden: Sofort-Zustellung im Leerlauf, Vorrang einer schon
+wartenden Nutzer-Folgefrage, keine Audioausgabe über eine laufende Aufnahme):</p>
+<object type="image/svg+xml" data="../diagrams/background-channel-clickable.svg" style="width:100%; max-width:1180px; height:600px;">
+</object>
+
+<h3 id="31-neue-schnittstelle">3.1 Neue Schnittstelle<a class="headerlink" href="#31-neue-schnittstelle" title="Permanent link">&para;</a></h3>
+<p><code>App.deliver_background_result(source: str, text: str) -&gt; None</code> -- Einstieg
+für alles, was nicht aus einem von <code>App</code> selbst gestarteten <code>_llm.send()</code>
+stammt: ein separat laufender Hintergrund-Agent, ein Cloud-Task-Callback
+(analog zum Telegram-<code>reminder</code>-Mechanismus, der heute bewusst an <code>App</code>
+vorbeigeht), perspektivisch ein echter Subagenten-Mechanismus. Thread-/
+Prozess-sicher aufrufbar.</p>
+<h3 id="32-warteschlange-statt-direktschreiben">3.2 Warteschlange statt Direktschreiben<a class="headerlink" href="#32-warteschlange-statt-direktschreiben" title="Permanent link">&para;</a></h3>
+<p>Ergebnisse landen zunächst in einer neuen <code>_background_queue</code>, geschützt
+durch <code>_state_lock</code> (analog <code>_input_queue</code>) -- <strong>nicht</strong> direkt in
+<code>_history</code>. Damit gibt es nur noch einen Schreiber, der Zustand und Verlauf
+gemeinsam sieht, und die in Gap 1 beobachtete Reihenfolge-Verletzung
+(Hintergrund-Eintrag erscheint vor der noch ausstehenden echten Antwort auf
+eine frühere Frage) kann strukturell nicht mehr auftreten.</p>
+<h3 id="33-zustellregeln">3.3 Zustellregeln<a class="headerlink" href="#33-zustellregeln" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Zustand bei Eintreffen</th>
+<th style="text-align: left;">Zustellzeitpunkt</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">Idle, Queues leer</td>
+<td style="text-align: left;">Sofort -- <code>deliver_background_result()</code> stößt selbst einen Mini-Turn an, da kein Responder-Loop läuft, der sonst pollen würde.</td>
+</tr>
+<tr>
+<td style="text-align: left;">Thinking/Speaking</td>
+<td style="text-align: left;">Nach Abarbeitung aller bereits wartenden <code>_input_queue</code>-Einträge -- eine gestellte Frage hat Vorrang vor einer unaufgeforderten Meldung.</td>
+</tr>
+<tr>
+<td style="text-align: left;">Recording</td>
+<td style="text-align: left;">Erst nachdem die daraus entstehende Aufnahme als eigener Turn durchgelaufen ist -- nie Audio über eine laufende Aufnahme legen.</td>
+</tr>
+</tbody>
+</table>
+<p>Technisch prüft der Responder-Loop <code>_background_queue</code> genau dort, wo er
+heute schon beim Leerlaufen von <code>_input_queue</code> den Zustand auf Idle setzt --
+er flusht sie, bevor er sich beendet, statt direkt nach Idle zu wechseln.</p>
+<h3 id="34-darstellung-und-sprachausgabe">3.4 Darstellung und Sprachausgabe<a class="headerlink" href="#34-darstellung-und-sprachausgabe" title="Permanent link">&para;</a></h3>
+<p>Reuse des Denkprozess-Kanal-Musters (<code>metadata.title</code>, siehe
+<code>thinking-channel-and-stop-marker.md</code> Abschnitt 3a): Eintrag bekommt einen
+Titel-Präfix aus <code>source</code> (z.B. "Build-Agent"), optisch unterscheidbar ohne
+neuen <code>role</code>-Wert. Sprachausgabe folgt denselben Unterdrückungsregeln wie
+jede andere Antwort (<code>_audio_suppressed</code>, <code>_voice_muted</code>, nie während
+<code>recording</code>) -- kein Sonderpfad, sondern Wiederverwendung von
+<code>_speak()</code>/<code>_set_state("speaking")</code>, damit Barge-in/Stop während einer
+vorgelesenen Hintergrund-Meldung genauso funktionieren wie bei jeder anderen
+Antwort.</p>
+<h3 id="35-transport-bewusst-offen">3.5 Transport (bewusst offen)<a class="headerlink" href="#35-transport-bewusst-offen" title="Permanent link">&para;</a></h3>
+<p>Wie das Ergebnis physisch zu <code>deliver_background_result()</code> gelangt, ist eine
+separate Entscheidung: In-Process-Callback, wenn <code>App</code> den Hintergrund-Agent
+selbst gestartet hat, oder ein kleiner lokaler Endpunkt (Socket/HTTP, analog
+zum bestehenden STT-/TTS-Daemon-Muster) für externe Prozesse. Nicht Teil
+dieses Konzepts.</p>
+<h2 id="4-status-abfrage">4. Status-Abfrage<a class="headerlink" href="#4-status-abfrage" title="Permanent link">&para;</a></h2>
+<h3 id="41-design-eigene-zustandslose-operation">4.1 Design: eigene, zustandslose Operation<a class="headerlink" href="#41-design-eigene-zustandslose-operation" title="Permanent link">&para;</a></h3>
+<p>Neue Methode <code>App.ask_status() -&gt; str</code>, die <strong>nicht</strong> über <code>_llm</code>/
+<code>_input_queue</code> läuft, sondern lokal eine kurze Zusammenfassung zusammensetzt
+und vorliest: aktueller <code>_state</code>, verstrichene Zeit seit Turn-Start, jüngster
+bereits via <code>on_output</code>/Denkprozess-Kanal bekannter Zwischenstand (steht
+schon als <code>CATEGORY_THINKING</code>-Eintrag in <code>_history</code>). Kein <code>cancel()</code>, keine
+Zustandsänderung, kein Eintrag in <code>_input_queue</code>.</p>
+<h3 id="42-auslosung-input-schicht-nicht-teil-des-zustandsmodells">4.2 Auslösung (Input-Schicht, nicht Teil des Zustandsmodells)<a class="headerlink" href="#42-auslosung-input-schicht-nicht-teil-des-zustandsmodells" title="Permanent link">&para;</a></h3>
+<p>Entscheidend: der gesprochene Inhalt ist erst <strong>nach</strong> der Transkription
+bekannt -- zu dem Zeitpunkt hat eine Aufnahme aber schon begonnen und ggf.
+schon Audio-Suppression ausgelöst. Eine Status-Abfrage kann sich also nicht
+per Spracherkennung vom normalen Steering unterscheiden, ohne dass Aufnahme/
+Unterbrechung längst passiert sind. Zwei Optionen, beide auf Input-Ebene statt
+im Zustandsmodell:</p>
+<ul>
+<li><strong>Cockpit</strong>: dedizierter "Status"-Button (analog zum bestehenden
+  "Stop"-Button), ruft <code>ask_status()</code> direkt auf.</li>
+<li><strong>Sprachsteuerung</strong>: inhaltsunabhängiger Trigger (z.B. langer vs. kurzer
+  Tastendruck am Jabra/Hotkey) statt Erkennung über transkribierten Text.</li>
+</ul>
+<h2 id="5-zusammenspiel-mit-tts-stt-warteschlangen">5. Zusammenspiel mit TTS-/STT-Warteschlangen<a class="headerlink" href="#5-zusammenspiel-mit-tts-stt-warteschlangen" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Hintergrund-Zustellung läuft über dieselbe TTS-Pipeline wie reguläre
+  Antworten -&gt; Barge-in/Stop wirken unverändert.</li>
+<li><code>ask_status()</code> liefert eine kurze, sofortige Antwort, ohne eine laufende
+  TTS-Wiedergabe (regulär oder Hintergrund) zu blockieren -- wie der
+  TTS-Daemon zwei gleichzeitige Anfragen priorisiert, ist ein Detail der
+  Daemon-Queue (<code>speech-extension.md</code> Abschnitt 4), hier nur als Anforderung
+  benannt.</li>
+<li><code>_background_queue</code> bleibt strikt getrennt von <code>_input_queue</code>: eine
+  Transkription darf nie als Hintergrund-Ergebnis interpretiert werden und
+  umgekehrt.</li>
+</ul>
+<h2 id="6-akzeptanzkriterien-entwurf-fur-kunftige-tests">6. Akzeptanzkriterien (Entwurf für künftige Tests)<a class="headerlink" href="#6-akzeptanzkriterien-entwurf-fur-kunftige-tests" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Hintergrund-Ergebnis trifft während Idle ein -&gt; sofort gesprochen/
+  angezeigt, ohne manuellen Trigger.</li>
+<li>Hintergrund-Ergebnis trifft während Thinking ein, mit bereits wartender
+  User-Eingabe in <code>_input_queue</code> -&gt; die User-Eingabe wird zuerst beantwortet,
+  die Hintergrund-Meldung danach.</li>
+<li>Hintergrund-Ergebnis trifft während Recording ein -&gt; keine Audioausgabe,
+  solange die Aufnahme läuft; Zustellung erst nach dem daraus entstehenden
+  Turn.</li>
+<li><code>ask_status()</code> während Thinking liefert eine Antwort, ohne den laufenden
+  Turn zu beeinflussen (<code>_llm</code>/<code>_input_queue</code> unverändert, kein <code>cancel()</code>).</li>
+<li>Zwei Hintergrund-Ergebnisse, die während desselben Turns eintreffen, werden
+  gebündelt zugestellt, nicht einzeln nacheinander (siehe Claude Codes
+  Bündelungsverhalten, <code>reference-claude-code-turn-taking.md</code> Abschnitt 5).</li>
+</ul>
+<h2 id="7-nicht-ziele">7. Nicht-Ziele<a class="headerlink" href="#7-nicht-ziele" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Kein generisches Subagenten-Framework -- nur der Zustellmechanismus für
+  bereits fertige Texte.</li>
+<li>Kein Streaming der Hintergrund-Antwort selbst (bleibt atomar, wie der
+  reguläre Antwort-Kanal, siehe <code>thinking-channel-and-stop-marker.md</code>
+  Abschnitt 6).</li>
+<li>Korrelation einer Hintergrund-Meldung zu einer bestimmten früheren
+  Nutzeranfrage (Turn-ID-Tracking) -- für den aktuellen Anwendungsfall (eine
+  Quelle, lose gekoppelt) nicht nötig; das <code>source</code>-Label im Titel reicht.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Zurück zum Seitenanfang
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "toc.integrate", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "In Zwischenablage kopiert", "clipboard.copy": "In Zwischenablage kopieren", "search.result.more.one": "1 weiteres Suchergebnis auf dieser Seite", "search.result.more.other": "# weitere Suchergebnisse auf dieser Seite", "search.result.none": "Keine Suchergebnisse", "search.result.one": "1 Suchergebnis", "search.result.other": "# Suchergebnisse", "search.result.placeholder": "Suchbegriff eingeben", "search.result.term.missing": "Es fehlt", "select.version": "Version ausw\u00e4hlen"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

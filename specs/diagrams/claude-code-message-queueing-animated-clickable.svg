@@ -1,0 +1,289 @@
+<svg viewBox="0 0 1180 680" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" tabindex="0" data-step="1">
+  <title>Claude Code: Nachricht während der Verarbeitung nachschicken (klickbar)</title>
+  <desc>Dieselbe Geschichte wie die automatisch laufende Fassung, aber Schritt für Schritt per Klick oder Pfeiltaste. 15 Schritte: Szenario A (Schritte 1-8) zeigt eine Nachricht, die während der Tool-Phase eingereiht wird -- die Verarbeitung-Box springt sichtbar auf einen zweiten Anlauf zurück, Zustellung noch im selben Turn. Szenario B (Schritte 9-15) zeigt eine Nachricht, die während der Antwort eingereiht wird -- Zustellung automatisch als nächster Turn, ohne Neustart einer Box.</desc>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="arrowhead" />
+    </marker>
+    <marker id="arrow-muted" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="arrowhead-muted" />
+    </marker>
+    <marker id="arrow-a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="arrowhead-a" />
+    </marker>
+    <marker id="arrow-b" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="arrowhead-b" />
+    </marker>
+  </defs>
+
+  <style>
+    .surface    { fill: #fcfcfb; }
+    .border     { stroke: rgba(11,11,11,0.10); }
+    .state-box  { stroke-width: 1.5; transition: fill .35s ease, stroke .35s ease, stroke-width .35s ease; }
+    .state-text { fill: #0b0b0b; font-weight: 600; }
+    .sub-text   { fill: #52514e; font-size: 11.5px; }
+    .edge       { stroke: #52514e; stroke-width: 2; fill: none; }
+    .edge-loop  { stroke: #898781; stroke-width: 1.75; stroke-dasharray: 6 5; fill: none; }
+    .edge-label-muted { fill: #52514e; font-size: 12px; }
+    .arrowhead  { fill: #52514e; }
+    .arrowhead-muted { fill: #898781; }
+    .arrowhead-a { fill: #eb6834; }
+    .arrowhead-b { fill: #2a78d6; }
+    .caption    { fill: #898781; font-size: 12.5px; }
+    .cap-title  { fill: #0b0b0b; font-weight: 700; font-size: 15px; }
+    .cap-sub    { fill: #52514e; font-size: 13px; }
+    .legend-text{ fill: #52514e; font-size: 12px; }
+    .bubble-text{ fill: #0b0b0b; font-weight: 600; font-size: 13px; }
+    .bubble-sub { fill: #52514e; font-size: 11px; }
+    .flash-text-a { fill: #9a3f18; font-weight: 700; font-size: 12.5px; }
+    .flash-text-b { fill: #184f95; font-weight: 700; font-size: 12.5px; }
+    .restart-icon { fill: #eb6834; font-weight: 700; }
+    .restart-label { fill: #9a3f18; font-weight: 600; font-size: 11.5px; }
+    .fade       { transition: opacity .35s ease; }
+    .bubble-box { stroke-width: 2; transition: fill .35s ease, stroke .35s ease; }
+
+    .step-indicator { fill: #898781; font-size: 12px; }
+    .btn-bg     { fill: #f2f1ee; stroke: #52514e; stroke-width: 1.5; cursor: pointer; }
+    .btn-bg:hover { fill: #e9e8e4; }
+    .btn-bg-primary { fill: #2a78d6; stroke: #2a78d6; stroke-width: 1.5; cursor: pointer; }
+    .btn-bg-primary:hover { fill: #1f66ba; }
+    .btn-text   { fill: #0b0b0b; font-weight: 600; font-size: 14px; pointer-events: none; }
+    .btn-text-primary { fill: #ffffff; font-weight: 600; font-size: 14px; pointer-events: none; }
+    .clickcatch { fill: transparent; cursor: pointer; }
+
+    @media (prefers-color-scheme: dark) {
+      .surface    { fill: #1a1a19; }
+      .border     { stroke: rgba(255,255,255,0.10); }
+      .state-text { fill: #ffffff; }
+      .sub-text   { fill: #c3c2b7; }
+      .edge       { stroke: #c3c2b7; }
+      .edge-loop  { stroke: #6b6a63; }
+      .edge-label-muted { fill: #c3c2b7; }
+      .arrowhead  { fill: #c3c2b7; }
+      .arrowhead-muted { fill: #6b6a63; }
+      .arrowhead-a { fill: #ef7a63; }
+      .arrowhead-b { fill: #3987e5; }
+      .caption    { fill: #898781; }
+      .cap-title  { fill: #ffffff; }
+      .cap-sub    { fill: #c3c2b7; }
+      .legend-text{ fill: #c3c2b7; }
+      .bubble-text{ fill: #ffffff; }
+      .bubble-sub { fill: #c3c2b7; }
+      .flash-text-a { fill: #f0a884; }
+      .flash-text-b { fill: #86b6ef; }
+      .restart-icon { fill: #ef7a63; }
+      .restart-label { fill: #f0a884; }
+      .step-indicator { fill: #898781; }
+      .btn-bg     { fill: #2a2a28; stroke: #c3c2b7; }
+      .btn-bg:hover { fill: #333331; }
+      .btn-text   { fill: #ffffff; }
+    }
+  </style>
+
+  <rect class="clickcatch" x="0" y="0" width="1180" height="680" id="bgClick" />
+  <rect x="0" y="0" width="1180" height="680" rx="16" class="surface border" style="pointer-events:none" />
+  <text x="24" y="28" class="caption" style="pointer-events:none">Claude Code -- Nachricht während der Verarbeitung, klickbare Fassung (docs/reference-claude-code-turn-taking.md Abschnitt 2)</text>
+
+  <text id="capLine1" x="24" y="54" class="cap-title" style="pointer-events:none">Szenario A -- Start</text>
+  <text id="capLine2" x="24" y="72" class="cap-sub" style="pointer-events:none">Normaler Ablauf beginnt</text>
+
+  <g id="restartCue" class="fade" style="pointer-events:none">
+    <text x="545" y="150" text-anchor="middle" class="restart-icon" font-size="30">↺</text>
+    <text x="545" y="168" text-anchor="middle" class="restart-label">neue Nachricht -- Verarbeitung läuft erneut an</text>
+  </g>
+
+  <rect id="box1" x="40" y="180" width="150" height="90" rx="16" class="state-box" style="pointer-events:none" />
+  <text x="115" y="221" text-anchor="middle" class="state-text" font-size="16" style="pointer-events:none">Tippen</text>
+  <text x="115" y="239" text-anchor="middle" class="sub-text" style="pointer-events:none">Entwurf, Autocomplete</text>
+
+  <rect id="box2" x="240" y="180" width="150" height="90" rx="16" class="state-box" style="pointer-events:none" />
+  <text x="315" y="221" text-anchor="middle" class="state-text" font-size="16" style="pointer-events:none">Senden</text>
+  <text x="315" y="239" text-anchor="middle" class="sub-text" style="pointer-events:none">Enter</text>
+
+  <rect id="box3" x="420" y="180" width="250" height="90" rx="16" class="state-box" style="pointer-events:none" />
+  <text x="545" y="216" text-anchor="middle" class="state-text" font-size="16" style="pointer-events:none">Verarbeitung</text>
+  <text x="545" y="234" text-anchor="middle" class="sub-text" style="pointer-events:none">Tool-Nutzung / Denken</text>
+  <text x="545" y="250" text-anchor="middle" class="sub-text" style="pointer-events:none">(esc to interrupt)</text>
+
+  <rect id="box4" x="700" y="180" width="190" height="90" rx="16" class="state-box" style="pointer-events:none" />
+  <text x="795" y="221" text-anchor="middle" class="state-text" font-size="16" style="pointer-events:none">Antwort</text>
+  <text x="795" y="239" text-anchor="middle" class="sub-text" style="pointer-events:none">streamt live</text>
+
+  <rect id="box5" x="930" y="180" width="220" height="90" rx="16" class="state-box" style="pointer-events:none" />
+  <text x="1040" y="221" text-anchor="middle" class="state-text" font-size="16" style="pointer-events:none">Anzeige abgeschlossen</text>
+  <text x="1040" y="239" text-anchor="middle" class="sub-text" style="pointer-events:none">Eingabefeld wieder frei</text>
+
+  <line x1="190" y1="225" x2="234" y2="225" class="edge" marker-end="url(#arrow)" style="pointer-events:none" />
+  <line x1="390" y1="225" x2="414" y2="225" class="edge" marker-end="url(#arrow)" style="pointer-events:none" />
+  <line x1="670" y1="225" x2="694" y2="225" class="edge" marker-end="url(#arrow)" style="pointer-events:none" />
+  <line x1="890" y1="225" x2="924" y2="225" class="edge" marker-end="url(#arrow)" style="pointer-events:none" />
+
+  <path d="M1040,270 C1040,350 115,350 115,270" class="edge-loop" marker-end="url(#arrow-muted)" style="pointer-events:none" />
+  <rect x="440" y="336" width="280" height="22" class="surface" style="pointer-events:none" />
+  <text x="580" y="352" text-anchor="middle" class="edge-label-muted" style="pointer-events:none">nächster Zyklus, sobald Antwort fertig ist</text>
+
+  <!-- Szenario A bubble -->
+  <g id="msgAGroup" class="fade" style="pointer-events:none">
+    <path d="M545,366 L545,270" class="edge fade" stroke="#eb6834" marker-end="url(#arrow-a)" />
+    <rect id="msgABox" x="420" y="366" width="250" height="78" rx="14" class="bubble-box" />
+    <text x="545" y="392" text-anchor="middle" class="bubble-text">Nutzer: weitere Nachricht</text>
+    <text x="545" y="410" text-anchor="middle" class="bubble-sub">Enter gedrückt, während Tools laufen</text>
+    <text x="545" y="428" text-anchor="middle" class="bubble-sub">wartet grau in der Warteschlange ...</text>
+    <text id="flashA" x="545" y="460" text-anchor="middle" class="flash-text-a fade">zugestellt -- noch im selben Turn</text>
+  </g>
+
+  <!-- Szenario B bubble -->
+  <g id="msgBGroup" class="fade" style="pointer-events:none">
+    <path d="M890,366 C890,470 115,470 115,270" class="edge fade" stroke="#2a78d6" fill="none" marker-end="url(#arrow-b)" />
+    <rect id="msgBBox" x="765" y="366" width="250" height="78" rx="14" class="bubble-box" />
+    <text x="890" y="392" text-anchor="middle" class="bubble-text">Nutzer: weitere Nachricht</text>
+    <text x="890" y="410" text-anchor="middle" class="bubble-sub">Enter gedrückt, während Antwort streamt</text>
+    <text x="890" y="428" text-anchor="middle" class="bubble-sub">wartet grau in der Warteschlange ...</text>
+    <text id="flashB" x="500" y="500" text-anchor="middle" class="flash-text-b fade">zugestellt -- startet automatisch als neuer Turn, kein erneutes Enter nötig</text>
+  </g>
+
+  <!-- step controls -->
+  <g id="prevBtn">
+    <rect x="950" y="520" width="40" height="32" rx="8" class="btn-bg" />
+    <text x="970" y="541" text-anchor="middle" class="btn-text">&#9664;</text>
+  </g>
+  <text id="stepIndicator" x="1000" y="541" text-anchor="middle" class="step-indicator" style="pointer-events:none">1 / 15</text>
+  <g id="nextBtn">
+    <rect x="1040" y="520" width="100" height="32" rx="8" class="btn-bg-primary" />
+    <text x="1090" y="541" text-anchor="middle" class="btn-text-primary">Weiter &#9654;</text>
+  </g>
+  <text x="24" y="541" class="caption" style="pointer-events:none">Klick auf die Fläche oder "Weiter", Pfeiltasten nach einem Klick in die Grafik.</text>
+
+  <!-- legend -->
+  <rect x="60" y="580" width="20" height="14" rx="4" fill="#fdece3" stroke="#eb6834" stroke-width="1.5" style="pointer-events:none" />
+  <text x="88" y="591" class="legend-text" style="pointer-events:none">Szenario A: Zustellung im selben Turn (Tool-Phase)</text>
+  <rect x="420" y="580" width="20" height="14" rx="4" fill="#e7f0fb" stroke="#2a78d6" stroke-width="1.5" style="pointer-events:none" />
+  <text x="448" y="591" class="legend-text" style="pointer-events:none">Szenario B: Zustellung als nächster Turn (Antwort-Phase)</text>
+  <rect x="820" y="580" width="20" height="14" rx="4" fill="#ececea" stroke="#898781" stroke-width="1.5" style="pointer-events:none" />
+  <text x="848" y="591" class="legend-text" style="pointer-events:none">dazwischen: grau, in Warteschlange</text>
+
+  <text x="24" y="622" class="caption" style="pointer-events:none">In Szenario A springt Verarbeitung sichtbar auf einen zweiten Anlauf zurück, statt unverändert weiterzulaufen -- die neue Nachricht muss ja erst mitverarbeitet werden.</text>
+  <text x="24" y="640" class="caption" style="pointer-events:none">Esc (jederzeit) und Ctrl+Enter ("send now") greifen hier nicht ein -- siehe Fall C im statischen Diagramm und Abschnitt 2 des Dokuments.</text>
+
+  <script><![CDATA[
+    (function () {
+      var dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+      var colors = dark ? {
+        neutral:  { fill: '#2a2a28', stroke: '#c3c2b7', width: 1.5 },
+        active:   { fill: '#3a2317', stroke: '#ef7a63', width: 2.5 },
+        restart:  { fill: '#3a2317', stroke: '#d95926', width: 3 },
+        sent:     { fill: '#4a3f17', stroke: '#d9ad2f', width: 2 },
+        queued:   { fill: '#333331', stroke: '#6b6a63', width: 2 },
+        deliveredA: { fill: '#3a2317', stroke: '#d95926', width: 2 },
+        deliveredB: { fill: '#142a42', stroke: '#3987e5', width: 2 }
+      } : {
+        neutral:  { fill: '#f2f1ee', stroke: '#52514e', width: 1.5 },
+        active:   { fill: '#fdece3', stroke: '#d6563f', width: 2.5 },
+        restart:  { fill: '#fdece3', stroke: '#eb6834', width: 3 },
+        sent:     { fill: '#fdf3d6', stroke: '#c99a1f', width: 2 },
+        queued:   { fill: '#ececea', stroke: '#898781', width: 2 },
+        deliveredA: { fill: '#fdece3', stroke: '#eb6834', width: 2 },
+        deliveredB: { fill: '#e7f0fb', stroke: '#2a78d6', width: 2 }
+      };
+
+      function paint(el, c) {
+        el.style.fill = c.fill;
+        el.style.stroke = c.stroke;
+        el.style.strokeWidth = c.width;
+      }
+
+      var steps = [
+        { main: 'box1', cap1: 'Szenario A -- Start', cap2: 'Normaler Ablauf beginnt',
+          msgA: 'hidden', msgB: 'hidden', restart: false, connA: false, connB: false },
+        { main: 'box2', cap1: 'Senden', cap2: 'Enter übermittelt den Entwurf',
+          msgA: 'hidden', msgB: 'hidden', restart: false, connA: false, connB: false },
+        { main: 'box3', box3: 'active', cap1: 'Verarbeitung beginnt', cap2: 'Tool-Nutzung / Denken läuft',
+          msgA: 'hidden', msgB: 'hidden', restart: false, connA: false, connB: false },
+        { main: 'box3', box3: 'active', cap1: 'Nutzer schickt nach', cap2: 'Enter gedrückt, während Tools laufen',
+          msgA: 'sent', msgB: 'hidden', restart: false, connA: false, connB: false },
+        { main: 'box3', box3: 'neutral', cap1: 'Wartet in der Warteschlange', cap2: 'noch nicht zugestellt',
+          msgA: 'queued', msgB: 'hidden', restart: false, connA: false, connB: false },
+        { main: 'box3', box3: 'restart', cap1: 'Zugestellt -- Verarbeitung läuft erneut an', cap2: 'kommt noch in diesem Turn an',
+          msgA: 'delivered', msgB: 'hidden', restart: true, connA: true, connB: false },
+        { main: 'box4', cap1: 'Antwort', cap2: 'streamt live',
+          msgA: 'hidden', msgB: 'hidden', restart: false, connA: false, connB: false },
+        { main: 'box5', cap1: 'Anzeige abgeschlossen', cap2: 'nächster Zyklus beginnt',
+          msgA: 'hidden', msgB: 'hidden', restart: false, connA: false, connB: false },
+        { main: 'box1', cap1: 'Szenario B -- Start', cap2: 'Normaler Ablauf beginnt erneut',
+          msgA: 'hidden', msgB: 'hidden', restart: false, connA: false, connB: false },
+        { main: 'box2', cap1: 'Senden', cap2: 'Enter übermittelt den Entwurf',
+          msgA: 'hidden', msgB: 'hidden', restart: false, connA: false, connB: false },
+        { main: 'box3', box3: 'active', cap1: 'Verarbeitung', cap2: 'läuft normal durch, keine Unterbrechung',
+          msgA: 'hidden', msgB: 'hidden', restart: false, connA: false, connB: false },
+        { main: 'box4', cap1: 'Antwort beginnt', cap2: 'streamt live',
+          msgA: 'hidden', msgB: 'hidden', restart: false, connA: false, connB: false },
+        { main: 'box4', cap1: 'Nutzer schickt nach', cap2: 'Enter gedrückt, während Antwort streamt',
+          msgA: 'hidden', msgB: 'sent', restart: false, connA: false, connB: false },
+        { main: 'box4', cap1: 'Wartet in der Warteschlange', cap2: 'noch nicht zugestellt',
+          msgA: 'hidden', msgB: 'queued', restart: false, connA: false, connB: false },
+        { main: 'box5', cap1: 'Zugestellt -- startet automatisch als neuer Turn', cap2: 'kein erneutes Enter nötig',
+          msgA: 'hidden', msgB: 'delivered', restart: false, connA: false, connB: true }
+      ];
+
+      var boxes = { box1: document.getElementById('box1'), box2: document.getElementById('box2'),
+        box3: document.getElementById('box3'), box4: document.getElementById('box4'), box5: document.getElementById('box5') };
+      var msgAGroup = document.getElementById('msgAGroup');
+      var msgBGroup = document.getElementById('msgBGroup');
+      var msgABox = document.getElementById('msgABox');
+      var msgBBox = document.getElementById('msgBBox');
+      var flashA = document.getElementById('flashA');
+      var flashB = document.getElementById('flashB');
+      var restartCue = document.getElementById('restartCue');
+      var capLine1 = document.getElementById('capLine1');
+      var capLine2 = document.getElementById('capLine2');
+      var stepIndicator = document.getElementById('stepIndicator');
+      var step = 1;
+
+      function paintMsg(group, box, flash, state, deliveredKey) {
+        if (state === 'hidden') {
+          group.style.opacity = '0';
+          flash.style.opacity = '0';
+          return;
+        }
+        group.style.opacity = '1';
+        if (state === 'sent') { paint(box, colors.sent); flash.style.opacity = '0'; }
+        else if (state === 'queued') { paint(box, colors.queued); flash.style.opacity = '0'; }
+        else if (state === 'delivered') { paint(box, colors[deliveredKey]); flash.style.opacity = '1'; }
+      }
+
+      function render() {
+        var s = steps[step - 1];
+        Object.keys(boxes).forEach(function (key) {
+          if (key === s.main) {
+            paint(boxes[key], key === 'box3' && s.box3 ? colors[s.box3] : colors.active);
+          } else {
+            paint(boxes[key], colors.neutral);
+          }
+        });
+        paintMsg(msgAGroup, msgABox, flashA, s.msgA, 'deliveredA');
+        paintMsg(msgBGroup, msgBBox, flashB, s.msgB, 'deliveredB');
+        restartCue.style.opacity = s.restart ? '1' : '0';
+        document.querySelector('[marker-end="url(#arrow-a)"]').style.opacity = s.connA ? '1' : '0';
+        document.querySelector('[marker-end="url(#arrow-b)"]').style.opacity = s.connB ? '1' : '0';
+        capLine1.textContent = s.cap1;
+        capLine2.textContent = s.cap2;
+        stepIndicator.textContent = step + ' / ' + steps.length;
+      }
+
+      function next() { step = (step >= steps.length) ? 1 : step + 1; render(); }
+      function prev() { step = (step <= 1) ? steps.length : step - 1; render(); }
+
+      document.getElementById('nextBtn').addEventListener('click', next);
+      document.getElementById('prevBtn').addEventListener('click', prev);
+      document.getElementById('bgClick').addEventListener('click', next);
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'ArrowRight' || e.key === ' ') { next(); e.preventDefault(); }
+        if (e.key === 'ArrowLeft') { prev(); e.preventDefault(); }
+      });
+
+      render();
+    })();
+  ]]></script>
+</svg>

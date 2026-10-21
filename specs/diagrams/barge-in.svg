@@ -1,0 +1,86 @@
+<svg viewBox="0 0 900 460" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">
+  <title>Barge-in als Komposition</title>
+  <desc>Barge-in ist kein eigener Übergang, sondern Audio-Stop unmittelbar gefolgt vom nächsten Eingabe-Schritt -- im Sprachmodus Eingabe-Beginn (neue Aufnahme), im Textmodus direkt Eingabe abgeschlossen. Der abgebrochene Turn läuft im Hintergrund weiter (Steering).</desc>
+
+  <defs>
+    <marker id="bi-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="arrowhead" />
+    </marker>
+    <marker id="bi-arrow-muted" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="arrowhead-muted" />
+    </marker>
+  </defs>
+
+  <style>
+    .surface   { fill: #fcfcfb; }
+    .border    { stroke: rgba(11,11,11,0.10); }
+    .state-box { fill: #f2f1ee; stroke: #52514e; stroke-width: 1.5; }
+    .stop-box  { fill: #f2f1ee; stroke: #898781; stroke-width: 1.5; stroke-dasharray: 5 4; }
+    .state-text{ fill: #0b0b0b; font-weight: 600; }
+    .sub-text  { fill: #52514e; font-size: 12px; }
+    .edge      { stroke: #52514e; stroke-width: 2; fill: none; }
+    .edge-stop { stroke: #898781; stroke-width: 2; stroke-dasharray: 6 5; fill: none; }
+    .edge-label{ fill: #0b0b0b; font-size: 13.5px; }
+    .edge-label-muted{ fill: #52514e; font-size: 12.5px; }
+    .arrowhead { fill: #52514e; }
+    .arrowhead-muted { fill: #898781; }
+    .caption   { fill: #898781; font-size: 12.5px; }
+    .mode-tag  { fill: #52514e; font-size: 12.5px; font-weight: 600; }
+
+    @media (prefers-color-scheme: dark) {
+      .surface   { fill: #1a1a19; }
+      .border    { stroke: rgba(255,255,255,0.10); }
+      .state-box { fill: #2a2a28; stroke: #c3c2b7; }
+      .stop-box  { fill: #2a2a28; stroke: #6b6a63; }
+      .state-text{ fill: #ffffff; }
+      .sub-text  { fill: #c3c2b7; }
+      .edge      { stroke: #c3c2b7; }
+      .edge-stop { stroke: #6b6a63; }
+      .edge-label{ fill: #ffffff; }
+      .edge-label-muted{ fill: #c3c2b7; }
+      .arrowhead { fill: #c3c2b7; }
+      .arrowhead-muted { fill: #6b6a63; }
+      .caption   { fill: #898781; }
+      .mode-tag  { fill: #c3c2b7; }
+    }
+  </style>
+
+  <rect x="0" y="0" width="900" height="460" rx="16" class="surface border" />
+  <text x="24" y="28" class="caption">Barge-in = Stop, unmittelbar gefolgt vom nächsten Eingabe-Schritt (docs/specs/core-dialog-loop.md)</text>
+
+  <!-- current turn -->
+  <rect x="60" y="60" width="300" height="64" rx="12" class="state-box" />
+  <text x="210" y="98" text-anchor="middle" class="state-text" font-size="15">Laufender Turn</text>
+  <text x="210" y="114" text-anchor="middle" class="sub-text">Processing oder Responding</text>
+
+  <!-- stop -->
+  <rect x="470" y="60" width="200" height="64" rx="12" class="stop-box" />
+  <text x="570" y="98" text-anchor="middle" class="state-text" font-size="15">Stop</text>
+  <text x="570" y="114" text-anchor="middle" class="sub-text">Headset-Taste / Senden-Button</text>
+
+  <line x1="360" y1="92" x2="464" y2="92" class="edge" marker-end="url(#bi-arrow)" />
+
+  <!-- branch down to two modes -->
+  <path d="M 570,124 C 570,170 260,170 260,215" class="edge-stop" marker-end="url(#bi-arrow-muted)" />
+  <path d="M 570,124 C 570,170 640,170 640,215" class="edge-stop" marker-end="url(#bi-arrow-muted)" />
+
+  <!-- voice mode -->
+  <rect x="60" y="218" width="400" height="72" rx="12" class="state-box" />
+  <text x="80" y="240" class="mode-tag">Sprach-Modus</text>
+  <text x="80" y="260" class="state-text" font-size="14.5">Eingabe-Beginn</text>
+  <text x="80" y="277" class="sub-text">neue Aufnahme startet direkt, ohne Zwischenschritt</text>
+
+  <!-- text mode -->
+  <rect x="460" y="218" width="400" height="72" rx="12" class="state-box" />
+  <text x="480" y="240" class="mode-tag">Text-Modus</text>
+  <text x="480" y="260" class="state-text" font-size="14.5">Eingabe abgeschlossen</text>
+  <text x="480" y="277" class="sub-text">mit dem Text, der schon fertig getippt dastand</text>
+
+  <!-- converge to new turn -->
+  <path d="M 260,290 C 260,330 380,330 380,360" class="edge" marker-end="url(#bi-arrow)" />
+  <path d="M 660,290 C 660,330 540,330 540,360" class="edge" marker-end="url(#bi-arrow)" />
+
+  <rect x="310" y="362" width="300" height="64" rx="12" class="state-box" />
+  <text x="460" y="390" text-anchor="middle" class="state-text" font-size="15">Processing</text>
+  <text x="460" y="406" text-anchor="middle" class="sub-text">neuer Turn, alter läuft im Hintergrund weiter</text>
+</svg>
