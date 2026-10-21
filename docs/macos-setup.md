@@ -38,6 +38,19 @@ brew install ffmpeg   # für die 1.5×-Wiedergabe (atempo) in playback.py
 Notausgang, falls ffmpeg fehlt: `TTS_PLAYBACK_SPEED=1.0` in `config.py` umgeht
 ffmpeg (dann Wiedergabe in Originalgeschwindigkeit).
 
+### 1a. TTS-Backend: vorerst Qwen3
+
+Der Projekt-Default ist inzwischen Phonon. Solange Phonon auf diesem Mac noch
+nicht end-to-end verifiziert ist, in der `.env` im Projektverzeichnis
+folgendes setzen:
+
+```dotenv
+TTS_BACKEND=qwen3
+```
+
+`qwen-tts` lädt diese Einstellung beim Start; nach einer Änderung den TTS-Daemon
+neu starten. Phonon lässt sich später durch `TTS_BACKEND=phonon` aktivieren.
+
 ### 2. CA-Bundle für Hugging-Face-Downloads (Firmen-Proxy / Zscaler)
 
 In Firmennetzen mit TLS-Interception (hier: E.ON Zscaler) präsentiert der Proxy
