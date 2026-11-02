@@ -43,6 +43,7 @@ def send_command(cmd: dict, timeout: float = 30.0) -> dict | None:
         ConnectionRefusedError,
         ConnectionResetError,
         BrokenPipeError,
+        TimeoutError,
         json.JSONDecodeError,
     ):
         return None

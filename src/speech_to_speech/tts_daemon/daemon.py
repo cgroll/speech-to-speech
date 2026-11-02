@@ -283,7 +283,10 @@ def _handle_conn(conn: socket.socket, daemon: Daemon) -> None:
         except Exception as exc:  # noqa: BLE001 - report to client, keep serving
             logger.exception("Error handling command")
             response = {"ok": False, "error": str(exc)}
-        conn.sendall((json.dumps(response) + "\n").encode())
+        try:
+            conn.sendall((json.dumps(response) + "\n").encode())
+        except OSError:
+            logger.warning("Client went away before the response could be sent")
 
 
 def main() -> None:

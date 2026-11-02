@@ -58,7 +58,7 @@ def cmd_toggle(_args: argparse.Namespace) -> int:
     result = send_command({"cmd": "toggle_record"})
     if result is None:
         feedback.notify(
-            "Not enabled -- run `parakeet-dictate enable` first", error=True
+            "Daemon not reachable (not enabled -- run `parakeet-dictate enable` -- or timed out)", error=True
         )
         return 1
     if not result.get("ok"):

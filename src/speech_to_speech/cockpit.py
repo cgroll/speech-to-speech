@@ -211,6 +211,9 @@ def build(app) -> gr.Blocks:
             # anything" case instead: App.stop() cancels/interrupts and goes
             # back to idle without starting to listen.
             stop_btn = gr.Button("Nur stoppen (ohne neue Aufnahme)")
+            # Un-sticks a stalled turn (e.g. after a TTS error) by
+            # re-submitting the last user message -- see App.resend().
+            resend_btn = gr.Button("Letzte Nachricht nochmal senden")
 
         # Browser-Mikrofon-Ein-/Ausgabe -- erster, bewusst einfacher
         # (nicht-gestreamter) Test-Roundtrip für den mobilen Zugriff
@@ -326,6 +329,10 @@ def build(app) -> gr.Blocks:
             app.stop()
             return _snapshot(app)
 
+        def _resend():
+            gr.Info(app.resend())
+            return _snapshot(app)
+
         def _set_voice_muted(muted: bool):
             app.set_voice_muted(muted)
 
@@ -426,6 +433,7 @@ def build(app) -> gr.Blocks:
 
         toggle_btn.click(_toggle, outputs=outputs)
         stop_btn.click(_stop, outputs=outputs)
+        resend_btn.click(_resend, outputs=outputs)
         voice_mute_box.change(_set_voice_muted, inputs=voice_mute_box)
         restart_stt_btn.click(_restart_stt, outputs=outputs)
         restart_tts_btn.click(_restart_tts, outputs=outputs)

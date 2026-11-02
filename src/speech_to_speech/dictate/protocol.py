@@ -41,7 +41,14 @@ def send_command(cmd: dict, timeout: float = 30.0) -> dict | None:
                     break
                 chunks.append(chunk)
         return json.loads(b"".join(chunks).decode())
-    except (FileNotFoundError, ConnectionRefusedError):
+    except (
+        FileNotFoundError,
+        ConnectionRefusedError,
+        ConnectionResetError,
+        BrokenPipeError,
+        TimeoutError,
+        json.JSONDecodeError,
+    ):
         return None
 
 

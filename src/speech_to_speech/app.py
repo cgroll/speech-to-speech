@@ -303,7 +303,7 @@ class App:
             threading.Thread(target=self._finish_recording_and_ensure_loop, daemon=True).start()
         else:
             logger.info("Barge-in: suppressing audio, starting new recording.")
-            tts_client.stop()
+            self._stop_audio_safely()
             self._start_recording()
 
     def _start_recording(self) -> None:
@@ -587,7 +587,7 @@ class App:
             self._input_queue.append(text)
             # Suppress audio for anything currently playing/pending
             self._audio_suppressed = True
-            tts_client.stop()
+            self._stop_audio_safely()
             # Same purge as a voice barge-in (docs/specs/tts-output-queue.md,
             # section 4) -- typed steering is just as much "new input" as a
             # recording restart. Safe to call while already holding
@@ -735,6 +735,18 @@ class App:
             self._tts_cv.notify()
         return item
 
+    def _stop_audio_safely(self) -> None:
+        """tts_client.stop() that can never raise. It throws
+        DaemonUnavailableError when the TTS daemon is down; callers (queueing
+        a new input under _state_lock, barge-in, abort) used to propagate
+        that and bail out half-way -- e.g. leaving a prompt in _input_queue
+        with no responder loop started. A dead TTS daemon only means there
+        is nothing to stop."""
+        try:
+            tts_client.stop()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Could not stop TTS playback (%s) -- continuing.", exc)
+
     def _purge_tts_queue(self) -> None:
         """Drops every item still waiting in _tts_queue without playing it
         (docs/specs/tts-output-queue.md section 4) -- called wherever new
@@ -780,7 +792,7 @@ class App:
         try:
             item.first_chunk_s = tts_client.speak(item.text)
             item.played = True
-        except RuntimeError as exc:
+        except Exception as exc:  # noqa: BLE001 - the worker thread must survive any TTS failure
             # The daemon can reject or vanish out from under us: a barge-in's
             # tts_client.stop() racing this call (shouldn't happen anymore --
             # this worker is the only caller of tts_client.speak() now -- but
@@ -1010,6 +1022,37 @@ class App:
         flight."""
         self._abort_current_turn()
 
+    def resend(self) -> str:
+        """Cockpit "Nochmal senden" button: gets a stalled conversation moving
+        again without typing a new message. Returns a short status string for
+        the UI.
+
+        - Input is waiting in _input_queue but nothing is processing it
+          (state not busy / no responder loop): just kick the loop.
+        - Otherwise: cancel whatever is running and re-submit the last user
+          text from the history (does not add a second history entry)."""
+        with self._state_lock:
+            stalled = bool(self._input_queue) and not self._responder_loop_running
+            if stalled:
+                self._audio_suppressed = False
+                if self._state in ("idle", "speaking"):
+                    self._set_state("thinking")
+        if stalled:
+            self._ensure_responder_loop()
+            return "Wartende Eingabe wird jetzt verarbeitet."
+
+        with self._history_lock:
+            last_user = next(
+                (m["content"] for m in reversed(self._history) if m["role"] == "user" and isinstance(m["content"], str)),
+                None,
+            )
+        if last_user is None:
+            return "Keine Nachricht zum erneuten Senden vorhanden."
+
+        self._abort_current_turn()
+        self._enqueue_input(last_user)
+        return "Letzte Nachricht wird erneut gesendet."
+
     def restart_stt_daemon(self) -> None:
         """Manual escape hatch (docs/backlog.md, "Daemon-Neustart aus der
         App/dem Cockpit heraus") for when the STT daemon is still answering
@@ -1037,7 +1080,7 @@ class App:
             if state == "speaking":
                 self._set_state("idle")
         if state == "speaking":
-            tts_client.stop()
+            self._stop_audio_safely()
         daemon_control.restart_tts_daemon()
         logger.info("TTS daemon restarted.")
 
@@ -1052,13 +1095,21 @@ class App:
             # tts-output-queue.md section 4).
             self._purge_tts_queue()
 
-        if stt_client.is_recording():
-            stt_client.stop_recording()
-        tts_client.stop()
-
+        # Cancel the agent first: a dead TTS/STT daemon must never be able
+        # to keep a wrongly-running agent alive.
         old_llm = self._llm
         if old_llm is not None:
-            old_llm.cancel()
+            try:
+                old_llm.cancel()
+            except Exception:  # noqa: BLE001
+                logger.warning("Cancelling the agent failed", exc_info=True)
+
+        try:
+            if stt_client.is_recording():
+                stt_client.stop_recording()
+        except Exception:  # noqa: BLE001
+            logger.warning("Stopping the recording failed", exc_info=True)
+        self._stop_audio_safely()
         return old_llm
 
     def reset(

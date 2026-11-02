@@ -256,7 +256,14 @@ def main() -> None:
                 except Exception as exc:  # noqa: BLE001 - report to client, keep serving
                     logger.exception("Error handling command")
                     response = {"ok": False, "error": str(exc)}
-                conn.sendall((json.dumps(response) + "\n").encode())
+                try:
+                    conn.sendall((json.dumps(response) + "\n").encode())
+                except OSError:
+                    # The client gave up (e.g. its timeout elapsed during a
+                    # long stop+transcribe) before we answered. That must
+                    # never take the daemon down -- Restart=no in the
+                    # systemd unit means it would stay dead.
+                    logger.warning("Client went away before the response could be sent")
     finally:
         _cleanup()
 
