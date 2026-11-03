@@ -196,7 +196,12 @@ def build(app) -> gr.Blocks:
                 label="Text eingeben (statt Sprache) oder Bild/Screenshot anhängen",
                 placeholder="Text eingeben, Bild per Strg+V einfügen, Enter zum Senden …",
                 sources=["upload"],
-                file_types=["image"],
+                file_types=["image", ".txt"],
+                # Gradio turns pasted text longer than this into a
+                # "pasted_text.txt" attachment (default 1000 chars); keep
+                # it effectively inline. submit_multimodal() still inlines
+                # any text-file attachment as a fallback.
+                max_plain_text_length=1_000_000,
                 submit_btn=False,
                 scale=4,
             )

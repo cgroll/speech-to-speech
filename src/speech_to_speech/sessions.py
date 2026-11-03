@@ -185,23 +185,26 @@ def session_choices(workspace: str, agent: str | None = None) -> list[tuple[str,
     ]
 
 
-def load_session_history(agent: str, session_id: str) -> list[dict[str, str]]:
+def load_session_history(
+    agent: str, session_id: str, workspace: str | None = None
+) -> list[dict[str, str]]:
     """Rebuilds the cockpit's simple {role, content} turn list from a past
     session's full transcript, dispatched to the right backend's format.
     Text turns only -- tool calls, thinking blocks etc. are part of the
     resumed conversation (the LLM still has that context) but were never
     shown in the cockpit for live turns either, so dropping them here keeps
     resumed history visually consistent with that."""
+    workspace_path = Path(workspace).expanduser().resolve() if workspace else PROJECT_DIR
     if agent == AGENT_CLAUDE:
-        return _load_claude_session_history(session_id)
+        return _load_claude_session_history(session_id, workspace_path)
     if agent == AGENT_PI:
-        return _load_pi_session_history(session_id)
+        return _load_pi_session_history(session_id, workspace_path)
     raise ValueError(f"Unknown agent backend: {agent!r}")
 
 
-def _load_claude_session_history(session_id: str) -> list[dict[str, str]]:
+def _load_claude_session_history(session_id: str, workspace: Path) -> list[dict[str, str]]:
     history: list[dict[str, str]] = []
-    for msg in get_session_messages(session_id, directory=str(PROJECT_DIR)):
+    for msg in get_session_messages(session_id, directory=str(workspace)):
         if msg.type not in ("user", "assistant"):
             continue
         text = _extract_text(msg.message)
@@ -210,8 +213,8 @@ def _load_claude_session_history(session_id: str) -> list[dict[str, str]]:
     return history
 
 
-def _load_pi_session_history(session_id: str) -> list[dict[str, str]]:
-    session_dir = _pi_project_session_dir()
+def _load_pi_session_history(session_id: str, workspace: Path) -> list[dict[str, str]]:
+    session_dir = _pi_project_session_dir(workspace)
     path = next(session_dir.glob(f"*_{session_id}.jsonl"), None)
     if path is None:
         return []

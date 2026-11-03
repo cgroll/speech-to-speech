@@ -86,6 +86,7 @@ class _TtsQueueItem:
 # Anthropic's own documented long-side cap for vision input anyway, so this
 # costs nothing in image quality Claude could actually use.
 _MAX_IMAGE_DIMENSION = 1568
+_TEXT_ATTACHMENT_SUFFIXES = {".txt", ".md", ".log"}
 _JPEG_QUALITY = 85
 
 _image_cache_dir: Path | None = None
@@ -518,7 +519,24 @@ class App:
         The chat history shows the pasted image inline too, reusing
         _append_image()'s file-dict/image-cache mechanism (copy into a dir
         Gradio is already allowed to serve from)."""
-        text = text.strip()
+        # Gradio converts long pasted text into a "pasted_text.txt" file
+        # attachment -- that is text, not an image, so inline it instead of
+        # running it through the image pipeline (which would fail).
+        text_parts = [text.strip()] if text.strip() else []
+        real_images: list[str] = []
+        for p in image_paths:
+            if Path(p).suffix.lower() in _TEXT_ATTACHMENT_SUFFIXES:
+                try:
+                    content = Path(p).read_text(encoding="utf-8", errors="replace").strip()
+                except OSError:
+                    logger.warning("Could not read text attachment %s", p, exc_info=True)
+                    continue
+                if content:
+                    text_parts.append(content)
+            else:
+                real_images.append(p)
+        image_paths = real_images
+        text = "\n\n".join(text_parts)
         if not text and not image_paths:
             return
 
@@ -1223,7 +1241,7 @@ class App:
         if old_llm is not None:
             old_llm.close()
 
-        restored = sessions.load_session_history(agent, session_id)
+        restored = sessions.load_session_history(agent, session_id, workspace)
         with self._history_lock:
             self._history = restored
             self._stats = {
